@@ -2,7 +2,7 @@
 
 [English](./README.md)
 
-[pi 编程智能体](https://github.com/badlogic/pi-mono) 的本地网页界面。它会读取本机的 pi 会话文件，在浏览器里提供会话管理、实时对话、模型配置、技能管理和项目文件预览。
+[pi 编程智能体](https://github.com/earendil-works/pi) 的本地网页界面。它会读取本机的 pi 会话文件，在浏览器里提供会话管理、实时对话、模型配置、技能管理和项目文件预览。
 
 ## 快速开始
 
@@ -41,6 +41,7 @@ PI_WEB_NO_OPEN=1 pi-web         # 适用于后台服务或开机自启
 - **边聊边看项目文件**：左侧浏览项目文件，右侧打开源码、文档、图片、音频和 PDF；文件变化会自动刷新，适合边让 agent 改边检查结果。
 - **随时掌握会话状态**：在顶部就能看到上下文占用、花费、压缩结果和系统提示，长会话不再像黑箱。
 - **少离开当前界面**：模型、登录/API key、模型测试和技能开关都能在网页里处理，配置 agent 时不用在多个工具之间来回切换。
+- **上游更新提醒**：每周检查一次 Pi 与 Pi Web 的官方 Release，有新版本时显示非阻塞提醒。
 
 ## 注意事项
 
@@ -68,6 +69,17 @@ npm run lint
 ```
 
 开发时不要运行 `next build` / `npm run build`，它会写入 `.next/`，容易影响正在运行的 dev server。发布流程再执行构建。
+
+## macOS App
+
+项目已包含基于 Tauri 的 macOS 桌面壳。它会把本地 Next.js 服务和 Node runtime 一起打进 App，无需用户手动启动 Web 服务。
+
+```bash
+npm run desktop:dev     # 桌面窗口开发模式
+npm run desktop:build   # 生成 .app 与 .dmg
+```
+
+完整说明见 [macOS App 构建文档](./docs/desktop.zh-CN.md)。
 
 ## 项目结构
 

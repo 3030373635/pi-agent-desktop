@@ -1,0 +1,35 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Pi Web",
+  "version": "../package.json",
+  "identifier": "com.agegr.pi-web",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://127.0.0.1:30141",
+    "frontendDist": "../desktop/frontend"
+  },
+  "app": {
+    "windows": [],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg"],
+    "category": "DeveloperTool",
+    "copyright": "Copyright © Pi Web contributors",
+    "shortDescription": "Desktop UI for the pi coding agent",
+    "longDescription": "Pi Web desktop app for browsing sessions and working with the local pi coding agent.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns"
+    ],
+    "resources": ["resources/server", "resources/Pi Web Server.app"],
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    }
+  }
+}

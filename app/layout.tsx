@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Noto_Sans_Mono } from "next/font/google";
 import "katex/dist/katex.min.css";
 import "./globals.css";
+import { PRODUCT_NAME } from "@/lib/branding";
 
 const notoSansMono = Noto_Sans_Mono({
   subsets: ["latin", "cyrillic"],
@@ -10,8 +11,8 @@ const notoSansMono = Noto_Sans_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Pi Web",
-  description: "Pi Web interface for the pi coding agent",
+  title: PRODUCT_NAME,
+  description: `${PRODUCT_NAME} interface for the pi coding agent`,
 };
 
 export default function RootLayout({

@@ -2,7 +2,7 @@
 
 [中文文档](./README.zh-CN.md)
 
-Local web UI for the [pi coding agent](https://github.com/badlogic/pi-mono). Pi Web reads your local pi session files and gives you a browser workspace for session browsing, real-time chat, model configuration, skill management, and project file preview.
+Local web UI for the [pi coding agent](https://github.com/earendil-works/pi). Pi Web reads your local pi session files and gives you a browser workspace for session browsing, real-time chat, model configuration, skill management, and project file preview.
 
 ![Pi Web shows the same pi session with structured Markdown, tool calls, and project navigation beside the CLI](https://raw.githubusercontent.com/agegr/pi-web/main/docs/screenshot2.png)
 
@@ -45,6 +45,7 @@ PI_WEB_NO_OPEN=1 pi-web         # useful when running as a background service
 - **Chat beside the project**: browse files on the left and preview source, docs, images, audio, and PDFs on the right while the agent works.
 - **See session state clearly**: context usage, cost, compaction state, and system prompt details are visible from the top bar.
 - **Configure less from the terminal**: manage models, login/API keys, model tests, and skill switches from the web UI.
+- **Stay informed**: check official Pi and Pi Web releases weekly and show a non-blocking reminder when an update is available.
 
 ## Notes
 
@@ -72,6 +73,17 @@ npm run lint
 ```
 
 Avoid running `next build` / `npm run build` during local development. It writes to `.next/` and can interfere with the dev server; leave builds for release work.
+
+## macOS App
+
+The repository includes a Tauri desktop shell that bundles the local Next.js server and a Node runtime, so the App does not require a separately started web server.
+
+```bash
+npm run desktop:dev     # native-window development mode
+npm run desktop:build   # build the .app and .dmg
+```
+
+See the [macOS App build guide](./docs/desktop.zh-CN.md) for requirements, artifacts, and release-signing notes.
 
 ## Project Structure
 

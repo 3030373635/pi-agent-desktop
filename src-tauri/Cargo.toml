@@ -1,0 +1,30 @@
+[package]
+name = "pi-web-desktop"
+version = "0.7.17"
+description = "macOS desktop shell for Pi Web"
+authors = ["Pi Web contributors"]
+license = "MIT"
+edition = "2021"
+rust-version = "1.85.0"
+
+[lib]
+name = "pi_web_desktop_lib"
+crate-type = ["staticlib", "cdylib", "lib"]
+
+[build-dependencies]
+tauri-build = { version = "2.5.5", features = [] }
+
+[dependencies]
+libc = "0.2"
+tauri = { version = "2.10.2", features = [] }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = "thin"
+opt-level = "s"
+strip = true

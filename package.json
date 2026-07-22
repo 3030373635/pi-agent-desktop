@@ -28,7 +28,11 @@
     "dev": "next dev -p 30141",
     "build": "next build --webpack",
     "start": "next start -p 30141",
-    "lint": "eslint .",
+    "desktop:dev": "tauri dev --config src-tauri/tauri.dev.conf.json",
+    "desktop:prepare": "node scripts/prepare-desktop.mjs",
+    "desktop:build": "npm run desktop:prepare && tauri build",
+    "lint": "eslint . && npm run check:branding",
+    "check:branding": "node --test lib/branding.test.mjs",
     "release": "npm version patch --no-git-tag-version && npm run build && npm publish --access public"
   },
   "dependencies": {
@@ -53,6 +57,7 @@
     "remark-math": "^6.0.0"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.10.0",
     "@tailwindcss/postcss": "^4.2.2",
     "@types/node": "^25",
     "@types/react": "^19",

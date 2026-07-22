@@ -89,3 +89,23 @@ export interface PluginsResponse {
   totals: PluginResourceCounts;
   diagnostics: PluginDiagnostic[];
 }
+
+export type AppUpdateProjectId = "pi" | "pi-web";
+
+export interface AppUpdateInfo {
+  project: AppUpdateProjectId;
+  name: string;
+  currentVersion: string;
+  latestVersion: string;
+  releaseUrl: string;
+}
+
+export interface AppUpdatesResponse {
+  checkedAt: string;
+  nextCheckAt: string;
+  updates: AppUpdateInfo[];
+  errors?: Array<{
+    project: AppUpdateProjectId;
+    message: string;
+  }>;
+}
