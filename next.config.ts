@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   // `.next` prevents a Tauri release build from disrupting `npm run dev`.
   ...(isDesktopBuild ? { output: "standalone" as const, distDir: ".next-desktop" } : {}),
   serverExternalPackages: [
+    "undici",
     "@earendil-works/pi-coding-agent",
     "@earendil-works/pi-agent-core",
     "@earendil-works/pi-ai",

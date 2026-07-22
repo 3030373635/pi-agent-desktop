@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "appVersion": "0.1.0",
+  "appVersion": "0.1.1",
   "components": [
     {
       "id": "pi-gui",
       "repository": "abcwyc/pi-gui",
-      "version": "0.1.0"
+      "version": "0.1.1"
     },
     {
       "id": "pi",
@@ -15,7 +15,7 @@
     {
       "id": "pi-web",
       "repository": "agegr/pi-web",
-      "version": "0.7.17"
+      "version": "0.8.0"
     }
   ]
 }

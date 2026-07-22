@@ -18,6 +18,7 @@ interface Props {
   onSelectSession: (session: SessionInfo, isRestore?: boolean) => void;
   onNewSession?: (sessionId: string, cwd: string) => void;
   initialSessionId?: string | null;
+  skipInitialProjectSelection?: boolean;
   onInitialRestoreDone?: () => void;
   refreshKey?: number;
   onSessionDeleted?: (sessionId: string) => void;
@@ -249,7 +250,7 @@ function ProductTitle() {
   );
 }
 
-export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onExplorerRefresh, onAtMention, onAtMentions }: Props) {
+export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onExplorerRefresh, onAtMention, onAtMentions }: Props) {
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -464,7 +465,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
 
   // Auto-select cwd and restore session from URL on first load
   useEffect(() => {
-    if (allSessions.length === 0) return;
+    if (allSessions.length === 0 || skipInitialProjectSelection) return;
 
     if (selectedCwd === null) {
       // If restoring a session, set cwd to match that session
@@ -482,7 +483,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       const projects = getRecentProjects(allSessions);
       if (projects.length > 0) setSelectedCwd(projects[0]);
     }
-  }, [allSessions, selectedCwd, initialSessionId, onSelectSession, onInitialRestoreDone]);
+  }, [allSessions, selectedCwd, initialSessionId, skipInitialProjectSelection, onSelectSession, onInitialRestoreDone]);
 
   const commitCustomPath = useCallback(async (candidate?: string) => {
     const path = (candidate ?? customPathValue).trim();

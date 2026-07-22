@@ -1,6 +1,6 @@
 [package]
 name = "pi-web-desktop"
-version = "0.1.0"
+version = "0.1.1"
 description = "macOS desktop shell for Pi Agent"
 authors = ["pi-gui contributors"]
 license = "MIT"

@@ -84,6 +84,17 @@ Pi Agent 最多每七天检查一次以下仓库的最新稳定 Release：
 
 更完整的同步、签名和 Release 配置见 [桌面升级与发布说明](./docs/desktop-updates.md)。
 
+## HTTP 代理
+
+Pi Agent 的服务端模型和 API 请求支持标准的 `HTTP_PROXY`、`HTTPS_PROXY` 和 `NO_PROXY` 环境变量。例如从终端启动开发服务时：
+
+```bash
+HTTP_PROXY=http://127.0.0.1:7890 \
+HTTPS_PROXY=http://127.0.0.1:7890 \
+NO_PROXY=localhost,127.0.0.1 \
+npm run dev
+```
+
 ## 本地开发
 
 ### 环境要求
@@ -172,13 +183,14 @@ app/
   api/                  Next.js API：Agent、会话、模型、文件和更新检查
 components/             页面、聊天、侧边栏、设置和版本提醒
 hooks/                  会话流、音频、拖放、主题等客户端状态
-lib/                    AgentSession、会话读取、文件安全和升级逻辑
+lib/                    AgentSession、HTTP 代理、会话读取、文件安全和升级逻辑
 scripts/                桌面打包、组件版本同步和 Release 校验脚本
 src-tauri/
   capabilities/         Tauri 权限配置
   resources/            桌面资源与组件版本清单
   src/                   macOS 窗口、本地服务和 updater 注册
 .github/workflows/      每周组件同步与签名 Release 自动化
+instrumentation.ts     Next.js 服务端 HTTP 代理初始化
 ```
 
 ## 相关文档
