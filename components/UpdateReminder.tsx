@@ -7,7 +7,7 @@ import { PRODUCT_NAME } from "@/lib/branding";
 const RETRY_AFTER_ERROR_MS = 6 * 60 * 60 * 1000;
 const MAX_TIMER_MS = 2_147_000_000;
 
-export function UpdateReminder() {
+export function UpdateReminder({ onOpenSettings }: { onOpenSettings: () => void }) {
   const [updates, setUpdates] = useState<AppUpdateInfo[]>([]);
 
   useEffect(() => {
@@ -51,6 +51,11 @@ export function UpdateReminder() {
   }, []);
 
   if (updates.length === 0) return null;
+
+  const handleOpenSettings = () => {
+    setUpdates([]);
+    onOpenSettings();
+  };
 
   return (
     <aside
@@ -131,8 +136,25 @@ export function UpdateReminder() {
           </div>
         ))}
         <div style={{ color: "var(--text-dim)", fontSize: 10, lineHeight: 1.45 }}>
-          {PRODUCT_NAME} checks official GitHub releases once a week. Updates are not installed automatically.
+          {PRODUCT_NAME} checks official GitHub releases once a week. Review and install one complete signed app update in Settings.
         </div>
+        <button
+          type="button"
+          onClick={handleOpenSettings}
+          style={{
+            alignSelf: "flex-end",
+            padding: "7px 11px",
+            border: 0,
+            borderRadius: 7,
+            background: "var(--accent)",
+            color: "#fff",
+            cursor: "pointer",
+            fontSize: 11,
+            fontWeight: 650,
+          }}
+        >
+          Open Settings
+        </button>
       </div>
     </aside>
   );

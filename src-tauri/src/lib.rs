@@ -255,7 +255,22 @@ fn start_development_server(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
+            // The updater public key is embedded at compile time by the release
+            // workflow. Local development builds intentionally omit it, which
+            // keeps unsigned builds from accepting production updates.
+            if let Some(public_key) = option_env!("PI_GUI_UPDATER_PUBLIC_KEY")
+                .map(str::trim)
+                .filter(|key| !key.is_empty())
+            {
+                app.handle().plugin(
+                    tauri_plugin_updater::Builder::new()
+                        .pubkey(public_key)
+                        .build(),
+                )?;
+            }
+
             #[cfg(feature = "custom-protocol")]
             let (url, server) = start_packaged_server(app.handle())?;
             #[cfg(not(feature = "custom-protocol"))]

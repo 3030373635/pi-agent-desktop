@@ -5,11 +5,14 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import {
   APP_UPDATE_PROJECTS,
   APP_UPDATE_RETRY_INTERVAL_MS,
-  checkAppUpdate,
+  compareAppVersions,
   getNextAppUpdateCheckAt,
+  getLatestAppRelease,
+  getUnknownAppReleaseInfo,
   isAppUpdateDue,
 } from "@/lib/app-updates";
 import type {
+  AppComponentReleaseInfo,
   AppUpdateInfo,
   AppUpdateProjectId,
   AppUpdatesResponse,
@@ -17,13 +20,16 @@ import type {
 
 export const dynamic = "force-dynamic";
 
-const STATE_VERSION = 1;
+const STATE_VERSION = 2;
 const STATE_FILE = "pi-web-update-check.json";
 
 interface UpdateCheckState {
   version: number;
   lastCheckedAt: Partial<Record<AppUpdateProjectId, number>>;
+  releases: Partial<Record<AppUpdateProjectId, AppComponentReleaseInfo>>;
 }
+
+type UpdateProject = (typeof APP_UPDATE_PROJECTS)[number];
 
 declare global {
   var __piWebAppUpdateCheck: Promise<AppUpdatesResponse> | undefined;
@@ -34,7 +40,42 @@ function statePath(): string {
 }
 
 function emptyState(): UpdateCheckState {
-  return { version: STATE_VERSION, lastCheckedAt: {} };
+  return { version: STATE_VERSION, lastCheckedAt: {}, releases: {} };
+}
+
+function restoreCachedRelease(
+  project: UpdateProject,
+  value: unknown,
+): AppComponentReleaseInfo | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Partial<AppComponentReleaseInfo>;
+  const base = getUnknownAppReleaseInfo(project);
+
+  if (raw.project !== project.id) return null;
+  if (raw.releaseStatus === "unpublished") {
+    return { ...base, releaseStatus: "unpublished" };
+  }
+  if (
+    raw.releaseStatus !== "available"
+    || typeof raw.latestVersion !== "string"
+    || typeof raw.releaseUrl !== "string"
+  ) {
+    return null;
+  }
+
+  try {
+    const releaseUrl = new URL(raw.releaseUrl);
+    if (releaseUrl.protocol !== "https:" || releaseUrl.hostname !== "github.com") return null;
+    return {
+      ...base,
+      latestVersion: raw.latestVersion,
+      releaseUrl: releaseUrl.toString(),
+      updateAvailable: compareAppVersions(raw.latestVersion, base.currentVersion) > 0,
+      releaseStatus: "available",
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function readState(): Promise<UpdateCheckState> {
@@ -42,20 +83,32 @@ async function readState(): Promise<UpdateCheckState> {
     const parsed = JSON.parse(await readFile(statePath(), "utf8")) as {
       version?: unknown;
       lastCheckedAt?: unknown;
+      releases?: unknown;
     };
-    if (parsed.version !== STATE_VERSION || !parsed.lastCheckedAt || typeof parsed.lastCheckedAt !== "object") {
+    if (
+      parsed.version !== STATE_VERSION
+      || !parsed.lastCheckedAt
+      || typeof parsed.lastCheckedAt !== "object"
+      || !parsed.releases
+      || typeof parsed.releases !== "object"
+    ) {
       return emptyState();
     }
 
     const raw = parsed.lastCheckedAt as Record<string, unknown>;
+    const rawReleases = parsed.releases as Record<string, unknown>;
     const lastCheckedAt: UpdateCheckState["lastCheckedAt"] = {};
+    const releases: UpdateCheckState["releases"] = {};
     for (const project of APP_UPDATE_PROJECTS) {
       const value = raw[project.id];
       if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
         lastCheckedAt[project.id] = value;
       }
+      const release = rawReleases[project.id];
+      const restored = restoreCachedRelease(project, release);
+      if (restored) releases[project.id] = restored;
     }
-    return { version: STATE_VERSION, lastCheckedAt };
+    return { version: STATE_VERSION, lastCheckedAt, releases };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return emptyState();
     return emptyState();
@@ -84,7 +137,7 @@ async function performUpdateCheck(): Promise<AppUpdatesResponse> {
 
   const settled = await Promise.allSettled(dueProjects.map(async (project) => ({
     project,
-    update: await checkAppUpdate(project),
+    release: await getLatestAppRelease(project),
   })));
   const updates: AppUpdateInfo[] = [];
   const errors: NonNullable<AppUpdatesResponse["errors"]> = [];
@@ -95,8 +148,18 @@ async function performUpdateCheck(): Promise<AppUpdatesResponse> {
     const project = dueProjects[index];
     if (result.status === "fulfilled") {
       state.lastCheckedAt[project.id] = now;
+      state.releases[project.id] = result.value.release;
       stateChanged = true;
-      if (result.value.update) updates.push(result.value.update);
+      const release = result.value.release;
+      if (release.updateAvailable && release.latestVersion && release.releaseUrl) {
+        updates.push({
+          project: release.project,
+          name: release.name,
+          currentVersion: release.currentVersion,
+          latestVersion: release.latestVersion,
+          releaseUrl: release.releaseUrl,
+        });
+      }
     } else {
       errors.push({
         project: project.id,
@@ -113,6 +176,9 @@ async function performUpdateCheck(): Promise<AppUpdatesResponse> {
   return {
     checkedAt: new Date(now).toISOString(),
     nextCheckAt: new Date(nextCheck).toISOString(),
+    components: APP_UPDATE_PROJECTS.map((project) => (
+      state.releases[project.id] ?? getUnknownAppReleaseInfo(project)
+    )),
     updates,
     ...(errors.length > 0 && { errors }),
   };
