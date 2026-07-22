@@ -1,8 +1,8 @@
 [package]
 name = "pi-web-desktop"
 version = "0.1.0"
-description = "macOS desktop shell for Pi Web"
-authors = ["Pi Web contributors"]
+description = "macOS desktop shell for Pi Agent"
+authors = ["pi-gui contributors"]
 license = "MIT"
 edition = "2021"
 rust-version = "1.85.0"

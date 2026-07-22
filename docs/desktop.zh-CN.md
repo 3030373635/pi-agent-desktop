@@ -1,6 +1,6 @@
-# macOS App
+# Pi Agent macOS App
 
-Pi Web 的桌面版本使用 Tauri（与 Pake 相同的轻量 WebView 技术路线）封装。由于 Pi Web 包含本地 API 和 AgentSession，安装包也会携带 Next.js standalone 服务和当前架构的 Node.js runtime；打开 App 时服务自动启动，退出 App 时自动停止，无需另开终端。
+Pi Agent 使用 Tauri（与 Pake 相同的轻量 WebView 技术路线）封装。由于应用包含本地 API 和 AgentSession，安装包也会携带 Next.js standalone 服务和当前架构的 Node.js runtime；打开 App 时服务自动启动，退出 App 时自动停止，无需另开终端。
 
 ## 要求
 
@@ -34,20 +34,20 @@ npm run desktop:build
 默认产物位于：
 
 ```text
-src-tauri/target/release/bundle/macos/Pi Web.app
-src-tauri/target/release/bundle/dmg/Pi Web_<version>_<arch>.dmg
+src-tauri/target/release/bundle/macos/Pi Agent.app
+src-tauri/target/release/bundle/dmg/Pi Agent_<version>_<arch>.dmg
 ```
 
 构建结果是当前机器架构的原生应用：Apple Silicon 构建 `aarch64`，Intel Mac 构建 `x86_64`。发布给其他用户前，应使用 Apple Developer ID 签名并公证；本地开发和测试不要求签名。
 
-桌面版会检查 Pi 与 Pi Web 的官方 GitHub Release。检查时间保存在 Pi Agent 数据目录中的 `pi-web-update-check.json`，每个项目最多每 7 天检查一次；有新版本时只显示提醒，不会自动安装更新。
+桌面版会检查 `pi-gui`、Pi 与 Pi Web 的官方 GitHub Release。每个项目最多每 7 天检查一次；发现任一组件有新版后，用户可以从设置中安装包含全部最新组件的完整签名 App 并重启。详细机制见 [桌面升级与发布说明](./desktop-updates.md)。
 
 ## 运行日志
 
 内置服务的 stdout/stderr 写入：
 
 ```text
-~/Library/Logs/com.agegr.pi-web/server.log
+~/Library/Logs/com.abcwyc.pi-agent/server.log
 ```
 
 App 会把登录 shell 的 `PATH` 传给内置服务，以便从 Finder 启动时仍能找到用户通过 Homebrew、nvm、Volta 等方式安装的命令行工具。

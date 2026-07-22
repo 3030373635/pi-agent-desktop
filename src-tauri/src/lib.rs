@@ -100,7 +100,7 @@ fn build_window(app: &tauri::AppHandle, app_url: Url) -> tauri::Result<WebviewWi
         .inner_size(1440.0, 900.0)
         .min_inner_size(900.0, 600.0)
         .resizable(true)
-        // Pi Web already handles browser drag/drop for image attachments.
+        // Pi Agent already handles browser drag/drop for image attachments.
         .disable_drag_drop_handler()
         .on_navigation(move |url| {
             if same_origin(url, &navigation_origin) {
@@ -156,7 +156,7 @@ fn wait_for_server(child: &mut Child, address: SocketAddr, log_path: &Path) -> i
 
         if let Some(status) = child.try_wait()? {
             return Err(io::Error::other(format!(
-                "Pi Web server exited early with {status}; see {}",
+                "Pi Agent server exited early with {status}; see {}",
                 log_path.display()
             )));
         }
@@ -166,7 +166,7 @@ fn wait_for_server(child: &mut Child, address: SocketAddr, log_path: &Path) -> i
     Err(io::Error::new(
         io::ErrorKind::TimedOut,
         format!(
-            "Pi Web server did not start within {} seconds; see {}",
+            "Pi Agent server did not start within {} seconds; see {}",
             SERVER_START_TIMEOUT.as_secs(),
             log_path.display()
         ),
@@ -180,7 +180,7 @@ fn start_packaged_server(
     let node_path = app
         .path()
         .resource_dir()?
-        .join("resources/Pi Web Server.app/Contents/MacOS/node");
+        .join("resources/Pi Agent Server.app/Contents/MacOS/node");
     if !node_path.is_file() {
         return Err(io::Error::new(
             io::ErrorKind::NotFound,
@@ -289,7 +289,7 @@ pub fn run() {
             }
         })
         .build(tauri::generate_context!())
-        .expect("failed to build Pi Web desktop app");
+        .expect("failed to build Pi Agent desktop app");
 
     app.run(|app_handle, event| match event {
         RunEvent::Exit => {

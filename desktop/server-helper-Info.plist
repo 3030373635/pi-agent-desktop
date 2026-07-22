@@ -5,21 +5,21 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>English</string>
     <key>CFBundleDisplayName</key>
-    <string>Pi Web Server</string>
+    <string>Pi Agent Server</string>
     <key>CFBundleExecutable</key>
     <string>node</string>
     <key>CFBundleIdentifier</key>
-    <string>com.agegr.pi-web.server</string>
+    <string>com.abcwyc.pi-agent.server</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>Pi Web Server</string>
+    <string>Pi Agent Server</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.7.17</string>
+    <string>0.1.0</string>
     <key>CFBundleVersion</key>
-    <string>0.7.17</string>
+    <string>0.1.0</string>
     <key>LSBackgroundOnly</key>
     <true/>
     <key>LSMinimumSystemVersion</key>

@@ -45,5 +45,6 @@ next-env.d.ts
 # generated macOS desktop bundle inputs and Rust build output
 /src-tauri/gen/
 /src-tauri/resources/Pi Web Server.app/
+/src-tauri/resources/Pi Agent Server.app/
 /src-tauri/resources/server/
 /src-tauri/target/

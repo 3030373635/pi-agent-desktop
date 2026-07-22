@@ -9,7 +9,7 @@ const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const desktopBuildDir = join(rootDir, ".next-desktop");
 const standaloneDir = join(desktopBuildDir, "standalone");
 const serverResourcesDir = join(rootDir, "src-tauri", "resources", "server");
-const serverHelperDir = join(rootDir, "src-tauri", "resources", "Pi Web Server.app");
+const serverHelperDir = join(rootDir, "src-tauri", "resources", "Pi Agent Server.app");
 const externalPackages = [
   "pi-coding-agent",
   "pi-agent-core",
