@@ -45,6 +45,11 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Configure updater public key
+        env:
+          TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
+        run: node scripts/configure-updater-public-key.mjs
+
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
