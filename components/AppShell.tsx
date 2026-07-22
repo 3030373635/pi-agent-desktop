@@ -10,12 +10,16 @@ import { TabBar, type Tab } from "./TabBar";
 import { ModelsConfig } from "./ModelsConfig";
 import { SkillsConfig } from "./SkillsConfig";
 import { PluginsConfig } from "./PluginsConfig";
+import { AppSettings } from "./AppSettings";
 import { BranchNavigator } from "./BranchNavigator";
+import { UpdateReminder } from "./UpdateReminder";
 import { useTheme } from "@/hooks/useTheme";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { copyText } from "@/lib/clipboard";
 import { getFileName } from "@/lib/file-paths";
 import { buildAtMentionText, buildFileAtMentionsText } from "@/lib/file-fuzzy";
+import { PRODUCT_NAME } from "@/lib/branding";
+import { getInitialNavigation } from "@/lib/initial-navigation";
 import type { SessionInfo, SessionTreeNode } from "@/lib/types";
 import type { ChatInputHandle } from "./ChatInput";
 import type { SessionStatsInfo } from "@/lib/pi-types";
@@ -30,11 +34,16 @@ type AutoNameStatus =
 export function AppShell() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [initialNavigation] = useState(() => getInitialNavigation(searchParams));
   const { isDark, toggleTheme } = useTheme();
   const isMobile = useIsMobile();
   const [selectedSession, setSelectedSession] = useState<SessionInfo | null>(null);
   // When user clicks +, we only store the cwd — no fake session id
   const [newSessionCwd, setNewSessionCwd] = useState<string | null>(null);
+  const [initialCwdStatus, setInitialCwdStatus] = useState<"idle" | "validating" | "ready" | "error">(
+    () => initialNavigation.requestedCwd ? "validating" : "idle",
+  );
+  const [initialCwdError, setInitialCwdError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [sessionKey, setSessionKey] = useState(0);
   const [explorerRefreshKey, setExplorerRefreshKey] = useState(0);
@@ -42,6 +51,7 @@ export function AppShell() {
   const [modelsRefreshKey, setModelsRefreshKey] = useState(0);
   const [skillsConfigOpen, setSkillsConfigOpen] = useState(false);
   const [pluginsConfigOpen, setPluginsConfigOpen] = useState(false);
+  const [appSettingsOpen, setAppSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileSidebarReady, setMobileSidebarReady] = useState(false);
   // On mobile the sidebar is an overlay drawer; hide it by default so the chat
@@ -156,12 +166,47 @@ export function AppShell() {
     if (mentions) chatInputRef.current?.insertText(mentions);
   }, []);
 
-  const [initialSessionId] = useState<string | null>(() => searchParams.get("session"));
+  const initialSessionId = initialNavigation.sessionId;
   const [activeCwd, setActiveCwd] = useState<string | null>(null);
   // True once the initial ?session= URL param has been resolved (or confirmed absent)
-  const [initialSessionRestored, setInitialSessionRestored] = useState<boolean>(() => !searchParams.get("session"));
+  const [initialSessionRestored, setInitialSessionRestored] = useState<boolean>(() => !initialSessionId);
   // Suppresses sessionKey bump in handleCwdChange during the initial URL restore
   const suppressCwdBumpRef = useRef(false);
+
+  useEffect(() => {
+    const requestedCwd = initialNavigation.requestedCwd;
+    if (!requestedCwd) return;
+
+    const controller = new AbortController();
+    setInitialCwdStatus("validating");
+    setInitialCwdError(null);
+
+    void fetch("/api/cwd/validate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cwd: requestedCwd }),
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({})) as { cwd?: string; error?: string };
+        if (!response.ok || !data.cwd) {
+          throw new Error(data.error ?? `HTTP ${response.status}`);
+        }
+
+        // The sidebar will notify us when it adopts this cwd. Avoid remounting
+        // the just-created empty chat during that initial synchronization.
+        suppressCwdBumpRef.current = true;
+        setNewSessionCwd(data.cwd);
+        setInitialCwdStatus("ready");
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setInitialCwdError(error instanceof Error ? error.message : String(error));
+        setInitialCwdStatus("error");
+      });
+
+    return () => controller.abort();
+  }, [initialNavigation]);
 
   const handleCwdChange = useCallback((cwd: string | null, projectRoot?: string | null) => {
     setActiveCwd(cwd);
@@ -379,7 +424,7 @@ export function AppShell() {
 
   const activeFileTab = fileTabs.find((t) => t.id === activeFileTabId) ?? null;
   const activeCwdName = activeCwd ? getFileName(activeCwd) || activeCwd : null;
-  const windowTitle = activeCwdName ? `${activeCwdName} - Pi Web` : "Pi Web";
+  const windowTitle = activeCwdName ? `${activeCwdName} - ${PRODUCT_NAME}` : PRODUCT_NAME;
 
   useEffect(() => {
     const syncWindowTitle = () => {
@@ -399,6 +444,7 @@ export function AppShell() {
         onSelectSession={handleSelectSession}
         onNewSession={handleNewSession}
         initialSessionId={initialSessionId}
+        skipInitialProjectSelection={initialNavigation.requestedCwd !== null}
         onInitialRestoreDone={handleInitialRestoreDone}
         refreshKey={refreshKey}
         onSessionDeleted={handleSessionDeleted}
@@ -451,14 +497,27 @@ export function AppShell() {
               </svg>
             ),
           },
-        ] as { label: string; onClick: () => void; disabled: boolean; icon: React.ReactNode }[]).map(({ label, onClick, disabled, icon }) => (
+          {
+            label: "Settings",
+            onClick: () => setAppSettingsOpen(true),
+            disabled: false,
+            iconOnly: true,
+            icon: (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 8.94 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.57 15a1.7 1.7 0 0 0-1.56-1.03H3v-4h.08A1.7 1.7 0 0 0 4.6 8.94a1.7 1.7 0 0 0-.34-1.88L4.2 7l2.83-2.83.06.06A1.7 1.7 0 0 0 8.97 4.6 1.7 1.7 0 0 0 10 3.04V3h4v.08a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06L19.8 7l-.06.06a1.7 1.7 0 0 0-.34 1.88A1.7 1.7 0 0 0 20.96 10H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z" />
+              </svg>
+            ),
+          },
+        ] as { label: string; onClick: () => void; disabled: boolean; iconOnly?: boolean; icon: React.ReactNode }[]).map(({ label, onClick, disabled, iconOnly, icon }) => (
           <button
             key={label}
             onClick={onClick}
             disabled={disabled}
             title={label}
+            aria-label={label}
             style={{
-              flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              flex: iconOnly ? "0 0 32px" : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
               height: 32, padding: 0, background: "none", border: "none",
               borderRadius: 9, color: "var(--text-muted)", cursor: disabled ? "default" : "pointer",
               fontSize: 12, opacity: disabled ? 0.35 : 1,
@@ -468,7 +527,7 @@ export function AppShell() {
             onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-muted)"; }}
           >
             {icon}
-            {label}
+            {!iconOnly && label}
           </button>
         ))}
       </div>
@@ -701,14 +760,14 @@ export function AppShell() {
                 const isSuccess = autoNameStatus.kind === "success";
                 const isError = autoNameStatus.kind === "error";
                 const label = autoNameStatus.kind === "naming"
-                  ? "Naming..."
+                  ? "Generating..."
                   : isSuccess
-                    ? "Named"
+                    ? "Title updated"
                     : isError
-                      ? "Name failed"
-                      : "Auto name";
+                      ? "Generation failed"
+                      : "Generate title";
                 const title = !selectedSession
-                  ? "Auto naming is available after the session is saved"
+                  ? "Title generation is available after the session is saved"
                   : !hasMessages
                     ? "Send a message before naming this session"
                     : isError
@@ -1122,6 +1181,27 @@ export function AppShell() {
               onContextUsageChange={handleContextUsageChange}
               onOpenFile={handleOpenLinkedFile}
             />
+          ) : initialCwdStatus === "validating" ? (
+            <div
+              role="status"
+              style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: 24, color: "var(--text-muted)", textAlign: "center" }}
+            >
+              <div style={{ fontSize: 14, color: "var(--text)" }}>Opening workspace...</div>
+              <div style={{ maxWidth: "min(720px, 100%)", overflowWrap: "anywhere", fontFamily: "var(--font-mono)", fontSize: 12 }}>
+                {initialNavigation.requestedCwd}
+              </div>
+            </div>
+          ) : initialCwdStatus === "error" ? (
+            <div
+              role="alert"
+              style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: 24, color: "var(--text-muted)", textAlign: "center" }}
+            >
+              <div style={{ fontSize: 14, color: "#dc2626" }}>Unable to open workspace</div>
+              <div style={{ maxWidth: "min(720px, 100%)", overflowWrap: "anywhere", fontFamily: "var(--font-mono)", fontSize: 12 }}>
+                {initialNavigation.requestedCwd}
+              </div>
+              <div style={{ maxWidth: 720, fontSize: 12 }}>{initialCwdError}</div>
+            </div>
           ) : showPlaceholder ? (
             activeCwd ? (
               <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: 15 }}>
@@ -1222,6 +1302,8 @@ export function AppShell() {
         onReloaded={() => setSessionKey((k) => k + 1)}
       />
     )}
+    {appSettingsOpen && <AppSettings onClose={() => setAppSettingsOpen(false)} />}
+    <UpdateReminder onOpenSettings={() => setAppSettingsOpen(true)} />
     </>
   );
 }

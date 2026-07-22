@@ -1,0 +1,96 @@
+name: Publish signed macOS release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - src-tauri/pi-gui-package.json
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pi-gui-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - runner: macos-15
+            target: aarch64-apple-darwin
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Check out pi-gui
+        uses: actions/checkout@v4
+
+      - name: Require updater signing secrets
+        env:
+          UPDATER_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
+        run: |
+          test -n "$UPDATER_PRIVATE_KEY"
+          test -n "$UPDATER_PUBLIC_KEY"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify bundled component releases
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          npm run release:manifest
+          npm run release:verify
+
+      - name: Prepare packaged Next.js server
+        run: npm run desktop:prepare
+
+      - name: Build, sign, and upload updater artifacts
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PI_GUI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: "-"
+        with:
+          tagName: v__VERSION__
+          releaseName: pi-gui v__VERSION__
+          releaseBody: A signed Pi Agent desktop release containing the latest verified pi-gui, pi, and pi-web components.
+          releaseDraft: true
+          prerelease: false
+          uploadUpdaterJson: true
+          args: --target ${{ matrix.target }}
+
+  manifest:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out pi-gui
+        uses: actions/checkout@v4
+
+      - name: Upload component manifest to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(node -p "require('./src-tauri/pi-gui-package.json').version")"
+          gh release upload "v$version" src-tauri/resources/component-versions.json --clobber
+          gh release edit "v$version" --draft=false --latest

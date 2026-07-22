@@ -1,0 +1,33 @@
+[package]
+name = "pi-web-desktop"
+version = "0.1.1"
+description = "macOS desktop shell for Pi Agent"
+authors = ["pi-gui contributors"]
+license = "MIT"
+edition = "2021"
+rust-version = "1.85.0"
+
+[lib]
+name = "pi_web_desktop_lib"
+crate-type = ["staticlib", "cdylib", "lib"]
+
+[build-dependencies]
+tauri-build = { version = "2.5.5", features = [] }
+
+[dependencies]
+libc = "0.2"
+serde_json = "1.0.151"
+tauri = { version = "2.10.2", features = [] }
+tauri-plugin-process = "^2"
+tauri-plugin-updater = "^2"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = "thin"
+opt-level = "s"
+strip = true

@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useState, useCallback, useRef, type CSSProperties, type ReactNode } from "react";
 import type { SessionInfo } from "@/lib/types";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
+import { PRODUCT_NAME } from "@/lib/branding";
 
 declare global {
   interface Window {
@@ -17,6 +18,7 @@ interface Props {
   onSelectSession: (session: SessionInfo, isRestore?: boolean) => void;
   onNewSession?: (sessionId: string, cwd: string) => void;
   initialSessionId?: string | null;
+  skipInitialProjectSelection?: boolean;
   onInitialRestoreDone?: () => void;
   refreshKey?: number;
   onSessionDeleted?: (sessionId: string) => void;
@@ -232,95 +234,23 @@ function buildSessionTree(sessions: SessionInfo[]): SessionTreeNode[] {
   return roots;
 }
 
-const SCRAMBLE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
-
-function useScramble(target: string, running: boolean): string {
-  const [display, setDisplay] = useState(target);
-  const frameRef = useRef<number | null>(null);
-  const iterRef = useRef(0);
-
-  useEffect(() => {
-    if (!running) {
-      setDisplay(target);
-      return;
-    }
-    iterRef.current = 0;
-    const totalFrames = target.length * 4;
-
-    const step = () => {
-      iterRef.current += 1;
-      const progress = iterRef.current / totalFrames;
-      const resolved = Math.floor(progress * target.length);
-
-      setDisplay(
-        target
-          .split("")
-          .map((char, i) => {
-            if (char === " ") return " ";
-            if (i < resolved) return char;
-            return SCRAMBLE_CHARS[Math.floor(Math.random() * SCRAMBLE_CHARS.length)];
-          })
-          .join("")
-      );
-
-      if (iterRef.current < totalFrames) {
-        frameRef.current = requestAnimationFrame(step);
-      } else {
-        setDisplay(target);
-      }
-    };
-
-    frameRef.current = requestAnimationFrame(step);
-    return () => { if (frameRef.current) cancelAnimationFrame(frameRef.current); };
-  }, [target, running]);
-
-  return display;
-}
-
-function PiWebTitle() {
-  const [showVersion, setShowVersion] = useState(false);
-  const [scrambling, setScrambling] = useState(false);
-  const revertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const target = showVersion ? `${process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0"}p${process.env.NEXT_PUBLIC_PI_VERSION ?? "0.0.0"}` : "Pi Web";
-  const display = useScramble(target, scrambling);
-
-  const triggerScramble = useCallback((toVersion: boolean) => {
-    setShowVersion(toVersion);
-    setScrambling(true);
-    setTimeout(() => setScrambling(false), (toVersion ? 6 : 8) * 4 * (1000 / 60) + 100);
-  }, []);
-
-  const handleClick = useCallback(() => {
-    if (revertTimerRef.current) clearTimeout(revertTimerRef.current);
-
-    const next = !showVersion;
-    triggerScramble(next);
-
-    if (next) {
-      revertTimerRef.current = setTimeout(() => triggerScramble(false), 3000);
-    }
-  }, [showVersion, triggerScramble]);
-
-  useEffect(() => () => { if (revertTimerRef.current) clearTimeout(revertTimerRef.current); }, []);
-
+function ProductTitle() {
   return (
-    <button
-      onClick={handleClick}
+    <div
       style={{
-        background: "none", border: "none", padding: 0, cursor: "default",
+        padding: 0,
         fontWeight: 700, fontSize: 15, letterSpacing: "-0.01em",
-        color: showVersion ? "var(--accent)" : "var(--text)",
+        color: "var(--text)",
         fontFamily: "var(--font-mono)",
-        minWidth: "6ch",
+        whiteSpace: "nowrap",
       }}
     >
-      {display}
-    </button>
+      {PRODUCT_NAME}
+    </div>
   );
 }
 
-export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onExplorerRefresh, onAtMention, onAtMentions }: Props) {
+export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onExplorerRefresh, onAtMention, onAtMentions }: Props) {
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -535,7 +465,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
 
   // Auto-select cwd and restore session from URL on first load
   useEffect(() => {
-    if (allSessions.length === 0) return;
+    if (allSessions.length === 0 || skipInitialProjectSelection) return;
 
     if (selectedCwd === null) {
       // If restoring a session, set cwd to match that session
@@ -553,7 +483,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       const projects = getRecentProjects(allSessions);
       if (projects.length > 0) setSelectedCwd(projects[0]);
     }
-  }, [allSessions, selectedCwd, initialSessionId, onSelectSession, onInitialRestoreDone]);
+  }, [allSessions, selectedCwd, initialSessionId, skipInitialProjectSelection, onSelectSession, onInitialRestoreDone]);
 
   const commitCustomPath = useCallback(async (candidate?: string) => {
     const path = (candidate ?? customPathValue).trim();
@@ -784,7 +714,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         }}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-          <PiWebTitle />
+          <ProductTitle />
           <div style={{ display: "flex", gap: 6 }}>
             <button
               onClick={handleNewSession}

@@ -89,3 +89,38 @@ export interface PluginsResponse {
   totals: PluginResourceCounts;
   diagnostics: PluginDiagnostic[];
 }
+
+export type AppUpdateProjectId = "pi-gui" | "pi" | "pi-web";
+
+export type AppReleaseStatus = "available" | "unpublished" | "unknown";
+
+export interface AppComponentReleaseInfo {
+  project: AppUpdateProjectId;
+  name: string;
+  repository: string;
+  repositoryUrl: string;
+  currentVersion: string;
+  latestVersion: string | null;
+  releaseUrl: string | null;
+  updateAvailable: boolean;
+  releaseStatus: AppReleaseStatus;
+}
+
+export interface AppUpdateInfo {
+  project: AppUpdateProjectId;
+  name: string;
+  currentVersion: string;
+  latestVersion: string;
+  releaseUrl: string;
+}
+
+export interface AppUpdatesResponse {
+  checkedAt: string;
+  nextCheckAt: string;
+  components: AppComponentReleaseInfo[];
+  updates: AppUpdateInfo[];
+  errors?: Array<{
+    project: AppUpdateProjectId;
+    message: string;
+  }>;
+}

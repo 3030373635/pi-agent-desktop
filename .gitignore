@@ -15,6 +15,7 @@
 
 # next.js
 /.next/
+/.next-desktop/
 /out/
 
 # production
@@ -40,3 +41,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .factory
+
+# generated macOS desktop bundle inputs and Rust build output
+/src-tauri/gen/
+/src-tauri/resources/Pi Web Server.app/
+/src-tauri/resources/Pi Agent Server.app/
+/src-tauri/resources/server/
+/src-tauri/target/

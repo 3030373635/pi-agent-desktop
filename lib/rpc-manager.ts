@@ -5,6 +5,7 @@ import { existsSync, writeFileSync } from "fs";
 import { invalidateModelsCache } from "./models-cache";
 import { cacheSessionPath, invalidateSessionListCache } from "./session-reader";
 import type { SlashCommandInfo } from "@earendil-works/pi-coding-agent";
+import { PRODUCT_NAME } from "@/lib/branding";
 import type { AgentSessionLike, ExtensionUiContextLike, ToolInfo } from "./pi-types";
 import type { ExtensionUiRequest, ExtensionUiResponse, ExtensionWidgetItem } from "./types";
 import { createHeadlessCustomUiTui, DEFAULT_CUSTOM_UI_COLUMNS } from "./custom-ui-terminal";
@@ -199,7 +200,7 @@ export class AgentSessionWrapper {
             id: randomUUID(),
             method: "notify",
             notifyType: "warning",
-            message: "Extension requested shutdown, but shutdown is not supported in Pi Web.",
+            message: `Extension requested shutdown, but shutdown is not supported in ${PRODUCT_NAME}.`,
           } as ExtensionUiRequest as AgentEvent),
           onError: (error) => this.emit({
             type: "extension_error",
@@ -913,7 +914,7 @@ export class AgentSessionWrapper {
       get theme() { return PLAIN_TEXT_THEME; },
       getAllThemes: () => [],
       getTheme: () => undefined,
-      setTheme: () => ({ success: false, error: "Theme switching is not supported in Pi Web extension UI yet" }),
+      setTheme: () => ({ success: false, error: `Theme switching is not supported in ${PRODUCT_NAME} extension UI yet` }),
       getToolsExpanded: () => false,
       setToolsExpanded: () => {},
     };

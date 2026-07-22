@@ -1,0 +1,97 @@
+name: Check component releases
+
+on:
+  schedule:
+    - cron: "17 2 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: component-release-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out pi-gui
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install current dependencies
+        run: npm ci
+
+      - name: Resolve latest component releases
+        id: releases
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/resolve-component-releases.mjs
+
+      - name: Synchronize released components in dependency order
+        if: steps.releases.outputs.needs_update == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PI_VERSION: ${{ steps.releases.outputs.pi_version }}
+          PI_WEB_TAG: ${{ steps.releases.outputs.pi_web_tag }}
+          PI_UPDATE: ${{ steps.releases.outputs.pi_update }}
+          PI_WEB_UPDATE: ${{ steps.releases.outputs.pi_web_update }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B codex/component-updates "origin/${GITHUB_REF_NAME}"
+
+          if [ "$PI_UPDATE" = "true" ]; then
+            npm install --save-exact \
+              "@earendil-works/pi-agent-core@$PI_VERSION" \
+              "@earendil-works/pi-ai@$PI_VERSION" \
+              "@earendil-works/pi-coding-agent@$PI_VERSION" \
+              "@earendil-works/pi-tui@$PI_VERSION"
+          fi
+
+          if [ "$PI_WEB_UPDATE" = "true" ]; then
+            git remote add pi-web-upstream https://github.com/agegr/pi-web.git
+            git fetch --no-tags pi-web-upstream "refs/tags/$PI_WEB_TAG:refs/tags/pi-web-release"
+            git merge --no-edit --no-ff refs/tags/pi-web-release
+            npm install
+            if [ "$PI_UPDATE" = "true" ]; then
+              npm install --save-exact \
+                "@earendil-works/pi-agent-core@$PI_VERSION" \
+                "@earendil-works/pi-ai@$PI_VERSION" \
+                "@earendil-works/pi-coding-agent@$PI_VERSION" \
+                "@earendil-works/pi-tui@$PI_VERSION"
+            fi
+          fi
+
+          node scripts/bump-pi-gui-version.mjs
+          npm run release:manifest
+          node --test lib/*.test.mjs scripts/*.test.mjs
+          node_modules/.bin/tsc --noEmit
+          npm run lint
+
+          git add --all
+          git commit -m "chore: sync released pi components"
+          git push --force-with-lease origin codex/component-updates
+
+          existing_pr="$(gh pr list --head codex/component-updates --state open --json number --jq '.[0].number // empty')"
+          if [ -z "$existing_pr" ]; then
+            gh pr create \
+              --base "$GITHUB_REF_NAME" \
+              --head codex/component-updates \
+              --title "chore: sync released pi components" \
+              --body "Automated weekly sync of the latest stable pi and pi-web GitHub Releases. Merge this PR to make the complete signed pi-gui update available."
+          else
+            gh pr edit "$existing_pr" \
+              --title "chore: sync released pi components" \
+              --body "Automated weekly sync of the latest stable pi and pi-web GitHub Releases. Merge this PR to make the complete signed pi-gui update available."
+          fi
