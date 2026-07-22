@@ -33,7 +33,11 @@ Store these repository Actions secrets:
 
 - `TAURI_SIGNING_PRIVATE_KEY`: contents of the private key file;
 - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: password chosen during generation;
-- `TAURI_UPDATER_PUBLIC_KEY`: the printed public key.
+- `TAURI_UPDATER_PUBLIC_KEY`: the exact Base64 contents of the `.pub` file generated next to the private key.
+
+The release workflow validates this public key before installing dependencies and
+injects it into Tauri's updater configuration for both bundle signing and runtime
+verification. The key is never printed by the workflow.
 
 Never commit the private key or its password. The public key is embedded at compile time only in release builds. Local builds deliberately do not register the updater plugin.
 
