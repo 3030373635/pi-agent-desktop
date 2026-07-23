@@ -17,16 +17,7 @@ concurrency:
 
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      max-parallel: 1
-      matrix:
-        include:
-          - runner: macos-15
-            target: aarch64-apple-darwin
-          - runner: macos-15-intel
-            target: x86_64-apple-darwin
-    runs-on: ${{ matrix.runner }}
+    runs-on: macos-15
     steps:
       - name: Check out pi-agent-desktop
         uses: actions/checkout@v4
@@ -53,7 +44,7 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: aarch64-apple-darwin
 
       - name: Install dependencies
         run: npm ci
@@ -83,7 +74,7 @@ jobs:
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
-          args: --target ${{ matrix.target }}
+          args: --target aarch64-apple-darwin
 
   manifest:
     needs: build

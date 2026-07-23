@@ -34,11 +34,11 @@ Pi Agent 由三个开源项目共同组成：
 
 发布版本可从 [GitHub Releases](https://github.com/abcwyc/pi-agent-desktop/releases) 下载：
 
-1. 根据 Mac 架构下载 Apple Silicon 或 Intel 版本的 `.dmg`。
+1. 下载 Apple Silicon 版本的 `.dmg`（正式 Release 不再构建 Intel 版本）。
 2. 打开 DMG，将 App 拖入 `Applications`。
 3. 从“应用程序”启动，界面产品名称为 Pi Agent。
 
-App 支持 macOS 11 或更高版本。桌面包内包含运行 Pi Agent 所需的 Next.js 服务、Node.js runtime 和当前版本的 Pi SDK，打开 App 时会自动启动本地服务，不需要用户另开终端或单独启动 Web Server。
+正式 Release 支持运行 macOS 11 或更高版本的 Apple Silicon Mac。桌面包内包含运行 Pi Agent 所需的 Next.js 服务、Node.js runtime 和当前版本的 Pi SDK，打开 App 时会自动启动本地服务，不需要用户另开终端或单独启动 Web Server。
 
 > 安装 Pi Agent 后，可以直接使用 App 中的 Pi Agent 功能；但它不会在系统全局安装 `pi` 命令。如果还需要在终端中使用 Pi CLI，请按照 [pi 项目](https://github.com/earendil-works/pi) 的说明单独安装。
 
@@ -166,7 +166,7 @@ npm run desktop:build
 仓库包含两条串联的自动化工作流，更新过程只使用 `main`：
 
 - [`component-updates.yml`](./.github/workflows/component-updates.yml)：每天检查 `pi` 和 `pi-web` 的稳定 Release；发现新版后直接更新 `main` 中的依赖、合并 `pi-web` Release Tag、更新组件清单并运行完整检查，成功后提交到 `main` 并触发发布。
-- [`release.yml`](./.github/workflows/release.yml)：收到组件同步工作流的显式触发后，串行构建 Apple Silicon 和 Intel 产物。Release 在两个架构、签名文件、`latest.json` 和组件清单全部上传完成前保持草稿状态。
+- [`release.yml`](./.github/workflows/release.yml)：收到组件同步工作流的显式触发后，仅构建 Apple Silicon (`aarch64`) 产物，不构建 Intel 版本。Release 在签名文件、`latest.json` 和组件清单全部上传完成前保持草稿状态。
 
 上游同步使用 Git 合并，因此本仓库维护的 Pi Agent 品牌、设置入口和升级逻辑会作为本地修改保留。如果上游与本地修改发生冲突，工作流会停止，必须审核和解决冲突后才能发布。
 

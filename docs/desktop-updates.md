@@ -42,6 +42,6 @@ Never commit the private key or its password. The public key is embedded at comp
 
 ## Publishing
 
-After a successful component sync updates `main`, it explicitly starts **Publish signed macOS release**. The release workflow can also be started manually. It verifies that the bundled `pi` and `pi-web` versions exactly match their latest stable Releases, then sequentially creates Apple Silicon and Intel app artifacts so their shared `latest.json` cannot race. The Release stays in draft until both signed updater archives and the component manifest are present; only then is `v<pi-agent-desktop version>` published as the latest Release.
+After a successful component sync updates `main`, it explicitly starts **Publish signed macOS release**. The release workflow can also be started manually. It verifies that the bundled `pi` and `pi-web` versions exactly match their latest stable Releases, then creates the signed Apple Silicon (`aarch64`) app artifacts and `latest.json`. Intel (`x86_64`) artifacts are not built. The Release stays in draft until the signed updater archive and component manifest are present; only then is `v<pi-agent-desktop version>` published as the latest Release.
 
 The workflow currently uses ad-hoc macOS application signing. Before distributing outside a controlled environment, configure an Apple Developer ID certificate and notarization in the release workflow as well.
