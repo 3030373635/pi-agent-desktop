@@ -163,10 +163,10 @@ npm run desktop:build
 
 ## 上游同步与 Release
 
-仓库包含两条自动化工作流：
+仓库包含两条串联的自动化工作流，更新过程只使用 `main`：
 
-- [`component-updates.yml`](./.github/workflows/component-updates.yml)：每周一检查 `pi` 和 `pi-web` 的稳定 Release；发现新版后更新依赖、合并 `pi-web` Release Tag、更新组件清单、运行检查，并创建或刷新 `codex/component-updates` PR。
-- [`release.yml`](./.github/workflows/release.yml)：组件同步 PR 合并并修改 App 版本后，串行构建 Apple Silicon 和 Intel 产物。Release 在两个架构、签名文件、`latest.json` 和组件清单全部上传完成前保持草稿状态。
+- [`component-updates.yml`](./.github/workflows/component-updates.yml)：每天检查 `pi` 和 `pi-web` 的稳定 Release；发现新版后直接更新 `main` 中的依赖、合并 `pi-web` Release Tag、更新组件清单并运行完整检查，成功后提交到 `main` 并触发发布。
+- [`release.yml`](./.github/workflows/release.yml)：收到组件同步工作流的显式触发后，串行构建 Apple Silicon 和 Intel 产物。Release 在两个架构、签名文件、`latest.json` 和组件清单全部上传完成前保持草稿状态。
 
 上游同步使用 Git 合并，因此本仓库维护的 Pi Agent 品牌、设置入口和升级逻辑会作为本地修改保留。如果上游与本地修改发生冲突，工作流会停止，必须审核和解决冲突后才能发布。
 

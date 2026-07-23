@@ -8,18 +8,17 @@
 
 The settings screen checks the three repositories' latest stable GitHub Releases once a week. If any bundled version is older, its single **Upgrade** button downloads the newest signed `pi-agent-desktop` release, installs the complete app, and restarts it. It never replaces JavaScript or dependencies inside an already installed signed app.
 
-## Weekly component sync
+## Automatic component sync
 
-`.github/workflows/component-updates.yml` runs every Monday and can also be started manually. It applies updates in dependency order:
+`.github/workflows/component-updates.yml` runs every day and can also be started manually. It applies updates in dependency order:
 
 1. update all `@earendil-works/pi-*` packages to the released `pi` version;
 2. merge the released `pi-web` tag;
 3. bump `pi-agent-desktop`, regenerate the component manifest, and run tests, typecheck, and lint;
-4. open or refresh `codex/component-updates` as a reviewable pull request.
+4. commit and push the verified result directly to `main`;
+5. explicitly dispatch the signed macOS release workflow.
 
-Merge that pull request only after reviewing any upstream conflicts or UI changes.
-
-The repository must allow GitHub Actions to create pull requests. If that setting is disabled, the version check still fails visibly in Actions but cannot open the sync pull request.
+The repository intentionally keeps only `main`; the automation does not create a component-update branch or pull request. Pushes use no force option. If an upstream merge conflicts or any validation fails, the workflow stops before updating `main` or publishing a Release, and the failed Actions run must be resolved manually.
 
 ## One-time signing setup
 
@@ -43,6 +42,6 @@ Never commit the private key or its password. The public key is embedded at comp
 
 ## Publishing
 
-Merging a component sync pull request changes `src-tauri/pi-agent-desktop-package.json` and automatically starts **Publish signed macOS release**. It can also be started manually. The workflow verifies that the bundled `pi` and `pi-web` versions exactly match their latest stable Releases, then sequentially creates Apple Silicon and Intel app artifacts so their shared `latest.json` cannot race. The Release stays in draft until both signed updater archives and the component manifest are present; only then is `v<pi-agent-desktop version>` published as the latest Release.
+After a successful component sync updates `main`, it explicitly starts **Publish signed macOS release**. The release workflow can also be started manually. It verifies that the bundled `pi` and `pi-web` versions exactly match their latest stable Releases, then sequentially creates Apple Silicon and Intel app artifacts so their shared `latest.json` cannot race. The Release stays in draft until both signed updater archives and the component manifest are present; only then is `v<pi-agent-desktop version>` published as the latest Release.
 
 The workflow currently uses ad-hoc macOS application signing. Before distributing outside a controlled environment, configure an Apple Developer ID certificate and notarization in the release workflow as well.

@@ -1,13 +1,13 @@
-name: Check component releases
+name: Update released components
 
 on:
   schedule:
-    - cron: "17 2 * * 1"
+    - cron: "17 2 * * *"
   workflow_dispatch:
 
 permissions:
+  actions: write
   contents: write
-  pull-requests: write
 
 concurrency:
   group: component-release-sync
@@ -21,6 +21,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: main
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -37,7 +38,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/resolve-component-releases.mjs
 
-      - name: Synchronize released components in dependency order
+      - name: Synchronize released components into main
         if: steps.releases.outputs.needs_update == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -49,7 +50,6 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -B codex/component-updates "origin/${GITHUB_REF_NAME}"
 
           if [ "$PI_UPDATE" = "true" ]; then
             npm install --save-exact \
@@ -81,17 +81,8 @@ jobs:
 
           git add --all
           git commit -m "chore: sync released pi components"
-          git push --force-with-lease origin codex/component-updates
+          git push origin HEAD:main
 
-          existing_pr="$(gh pr list --head codex/component-updates --state open --json number --jq '.[0].number // empty')"
-          if [ -z "$existing_pr" ]; then
-            gh pr create \
-              --base "$GITHUB_REF_NAME" \
-              --head codex/component-updates \
-              --title "chore: sync released pi components" \
-              --body "Automated weekly sync of the latest stable pi and pi-web GitHub Releases. Merge this PR to make the complete signed pi-agent-desktop update available."
-          else
-            gh pr edit "$existing_pr" \
-              --title "chore: sync released pi components" \
-              --body "Automated weekly sync of the latest stable pi and pi-web GitHub Releases. Merge this PR to make the complete signed pi-agent-desktop update available."
-          fi
+          # Pushes made with GITHUB_TOKEN do not trigger other push workflows,
+          # so dispatch the signed release build explicitly after main updates.
+          gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref main
