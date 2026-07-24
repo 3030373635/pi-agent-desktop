@@ -2,7 +2,15 @@
 
 `pi-agent-desktop` 是一个面向 macOS 和 Windows 的本地 AI Agent 桌面应用。它将 [pi](https://github.com/earendil-works/pi) 的 Agent 能力、[pi-web](https://github.com/agegr/pi-web) 的 Web 界面与本仓库的桌面封装、品牌和升级逻辑组合为一个可独立安装的 App，产品界面统一使用 **Pi Agent** 名称。
 
-项目仓库：[abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop) · [Releases](https://github.com/abcwyc/pi-agent-desktop/releases)
+![Pi Agent 深色模式界面](./docs/screenshots/pi-agent-dark.png)
+
+![Pi Agent 浅色模式界面](./docs/screenshots/pi-agent-light.png)
+
+<p align="center">
+  <a href="https://github.com/abcwyc/pi-agent-desktop/releases"><strong>⬇️ 下载 Pi Agent（macOS / Windows）</strong></a>
+</p>
+
+项目仓库：[abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop)
 
 ## 项目组成
 
