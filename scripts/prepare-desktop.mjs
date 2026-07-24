@@ -4,28 +4,20 @@ import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { desktopTargetTriple } from "./desktop-platform.mjs";
 
 const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const desktopBuildDir = join(rootDir, ".next-desktop");
 const standaloneDir = join(desktopBuildDir, "standalone");
 const serverResourcesDir = join(rootDir, "src-tauri", "resources", "server");
 const serverHelperDir = join(rootDir, "src-tauri", "resources", "Pi Agent Server.app");
+const windowsNodeDir = join(rootDir, "src-tauri", "resources", "node");
 const externalPackages = [
   "pi-coding-agent",
   "pi-agent-core",
   "pi-ai",
   "pi-tui",
 ];
-
-function targetTriple() {
-  if (process.platform !== "darwin") {
-    throw new Error("The desktop bundle currently targets macOS only.");
-  }
-
-  if (process.arch === "arm64") return "aarch64-apple-darwin";
-  if (process.arch === "x64") return "x86_64-apple-darwin";
-  throw new Error(`Unsupported macOS architecture: ${process.arch}`);
-}
 
 async function runNextBuild() {
   const require = createRequire(import.meta.url);
@@ -92,18 +84,54 @@ async function assembleServer() {
   }
 }
 
+async function findNpmSource() {
+  const npmFromCurrentRun = process.env.npm_execpath
+    ? dirname(dirname(process.env.npm_execpath))
+    : null;
+  const candidates = [
+    npmFromCurrentRun,
+    join(dirname(process.execPath), "node_modules", "npm"),
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    try {
+      await access(join(candidate, "bin", "npx-cli.js"), constants.R_OK);
+      return candidate;
+    } catch {
+      // Try the next Node installation layout.
+    }
+  }
+
+  throw new Error("Could not locate npm next to the Windows Node.js runtime.");
+}
+
 async function bundleNodeRuntime() {
-  const triple = targetTriple();
-  const contentsDir = join(serverHelperDir, "Contents");
-  const binaryPath = join(contentsDir, "MacOS", "node");
+  const triple = desktopTargetTriple();
   await rm(serverHelperDir, { recursive: true, force: true });
-  await mkdir(dirname(binaryPath), { recursive: true });
-  await copyFile(process.execPath, binaryPath);
-  await chmod(binaryPath, 0o755);
-  await copyFile(
-    join(rootDir, "desktop", "server-helper-Info.plist"),
-    join(contentsDir, "Info.plist"),
-  );
+  await rm(windowsNodeDir, { recursive: true, force: true });
+
+  let binaryPath;
+  if (process.platform === "darwin") {
+    const contentsDir = join(serverHelperDir, "Contents");
+    binaryPath = join(contentsDir, "MacOS", "node");
+    await mkdir(dirname(binaryPath), { recursive: true });
+    await copyFile(process.execPath, binaryPath);
+    await chmod(binaryPath, 0o755);
+    await copyFile(
+      join(rootDir, "desktop", "server-helper-Info.plist"),
+      join(contentsDir, "Info.plist"),
+    );
+  } else {
+    binaryPath = join(windowsNodeDir, "node.exe");
+    await mkdir(windowsNodeDir, { recursive: true });
+    await copyFile(process.execPath, binaryPath);
+    await cp(
+      await findNpmSource(),
+      join(windowsNodeDir, "node_modules", "npm"),
+      { recursive: true },
+    );
+  }
+
   return { binaryPath, triple };
 }
 

@@ -1,6 +1,6 @@
 # Pi Agent
 
-`pi-agent-desktop` 是一个面向 macOS 的本地 AI Agent 桌面应用。它将 [pi](https://github.com/earendil-works/pi) 的 Agent 能力、[pi-web](https://github.com/agegr/pi-web) 的 Web 界面与本仓库的桌面封装、品牌和升级逻辑组合为一个可独立安装的 App，产品界面统一使用 **Pi Agent** 名称。
+`pi-agent-desktop` 是一个面向 macOS 和 Windows 的本地 AI Agent 桌面应用。它将 [pi](https://github.com/earendil-works/pi) 的 Agent 能力、[pi-web](https://github.com/agegr/pi-web) 的 Web 界面与本仓库的桌面封装、品牌和升级逻辑组合为一个可独立安装的 App，产品界面统一使用 **Pi Agent** 名称。
 
 项目仓库：[abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop) · [Releases](https://github.com/abcwyc/pi-agent-desktop/releases)
 
@@ -10,7 +10,7 @@ Pi Agent 由三个开源项目共同组成：
 
 | 组件 | 仓库 | 在 App 中的职责 |
 | --- | --- | --- |
-| `pi-agent-desktop` | [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop) | macOS 桌面封装、Pi Agent 品牌、设置界面、版本管理和整包升级 |
+| `pi-agent-desktop` | [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop) | macOS/Windows 桌面封装、Pi Agent 品牌、设置界面、版本管理和整包升级 |
 | `pi` | [earendil-works/pi](https://github.com/earendil-works/pi) | AgentSession、模型调用、工具执行、会话与配置能力 |
 | `pi-web` | [agegr/pi-web](https://github.com/agegr/pi-web) | Web UI、会话浏览、聊天交互、模型、Skills、Plugins 和文件预览 |
 
@@ -30,15 +30,14 @@ Pi Agent 由三个开源项目共同组成：
 
 ## 安装与使用
 
-### 安装 macOS App
+### 安装桌面 App
 
 发布版本可从 [GitHub Releases](https://github.com/abcwyc/pi-agent-desktop/releases) 下载：
 
-1. 下载 Apple Silicon 版本的 `.dmg`（正式 Release 不再构建 Intel 版本）。
-2. 打开 DMG，将 App 拖入 `Applications`。
-3. 从“应用程序”启动，界面产品名称为 Pi Agent。
+- Apple Silicon Mac：下载 `aarch64.dmg`，打开后将 App 拖入 `Applications`。正式 Release 不构建 Intel Mac 版本。
+- Windows x64：下载名称以 `x64-setup.exe` 结尾的安装程序并运行。安装器会在需要时安装 Microsoft WebView2。
 
-正式 Release 支持运行 macOS 11 或更高版本的 Apple Silicon Mac。桌面包内包含运行 Pi Agent 所需的 Next.js 服务、Node.js runtime 和当前版本的 Pi SDK，打开 App 时会自动启动本地服务，不需要用户另开终端或单独启动 Web Server。
+正式 Release 支持运行 macOS 11 或更高版本的 Apple Silicon Mac，以及 Windows 10/11 x64。桌面包内包含运行 Pi Agent 所需的 Next.js 服务、Node.js runtime 和当前版本的 Pi SDK，打开 App 时会自动启动本地服务，不需要用户另开终端、安装 Node.js 或单独启动 Web Server。
 
 > 安装 Pi Agent 后，可以直接使用 App 中的 Pi Agent 功能；但它不会在系统全局安装 `pi` 命令。如果还需要在终端中使用 Pi CLI，请按照 [pi 项目](https://github.com/earendil-works/pi) 的说明单独安装。
 
@@ -78,7 +77,7 @@ Pi Agent 最多每七天检查一次以下仓库的最新稳定 Release：
 4. 用户侧不会修改已安装 App 内的单个 JavaScript 包，而是下载一个同时包含三个最新版组件的完整签名 App。
 5. 安装完成后 App 自动重启，使三个组件一次性进入同一个经过验证的发布状态。
 
-这种方式可以保持 macOS App 的代码签名和组件一致性，也能避免独立替换 `pi` 或 `pi-web` 导致运行时不兼容。
+这种方式可以保持桌面安装包的组件一致性，也能避免独立替换 `pi` 或 `pi-web` 导致运行时不兼容。
 
 如果上游新版已经被检测到，但包含该版本的签名 `pi-agent-desktop` Release 尚未发布，设置页会提示暂时没有可安装的签名整包；App 不会退回到下载未签名文件或局部覆盖依赖。
 
@@ -99,11 +98,12 @@ npm run dev
 
 ### 环境要求
 
-- macOS 11+
+- macOS 11+（Apple Silicon）或 Windows 10/11 x64
 - Node.js 22（推荐）
 - npm
 - Rust 1.85+
-- Xcode Command Line Tools
+- macOS：Xcode Command Line Tools
+- Windows：Microsoft C++ Build Tools 与 WebView2
 
 ### 启动 Web 开发服务器
 
@@ -146,7 +146,7 @@ npm run release:verify
 
 `release:verify` 会访问 GitHub，并要求内置的 `pi`、`pi-web` 精确匹配各自最新稳定 Release，同时检查组件清单是否与实际依赖一致。
 
-## macOS 打包
+## 桌面打包
 
 ```bash
 npm run desktop:build
@@ -157,7 +157,7 @@ npm run desktop:build
 1. 在隔离目录中生成 Next.js standalone 服务。
 2. 打包当前架构的 Node.js runtime。
 3. 将服务和运行时作为 Tauri Resources 放入 App。
-4. 生成 `.app`、`.dmg` 和用于自动升级的 `.app.tar.gz` 签名产物。
+4. 在 Apple Silicon Mac 上生成 `.app`、`.dmg` 和 updater 产物；在 Windows x64 上生成 NSIS `-setup.exe` 和 updater 产物。
 
 本地构建默认不注册生产 updater，不能接受正式更新。正式 Release 必须通过 GitHub Actions 注入 updater 公钥，并使用对应私钥签名。
 
@@ -166,15 +166,15 @@ npm run desktop:build
 仓库包含两条串联的自动化工作流，更新过程只使用 `main`：
 
 - [`component-updates.yml`](./.github/workflows/component-updates.yml)：每天检查 `pi` 和 `pi-web` 的稳定 Release；发现新版后直接更新 `main` 中的依赖、合并 `pi-web` Release Tag、更新组件清单并运行完整检查，成功后提交到 `main` 并触发发布。
-- [`release.yml`](./.github/workflows/release.yml)：收到组件同步工作流的显式触发后，仅构建 Apple Silicon (`aarch64`) 产物，不构建 Intel 版本。Release 在签名文件、`latest.json` 和组件清单全部上传完成前保持草稿状态。
+- [`release.yml`](./.github/workflows/release.yml)：收到组件同步工作流的显式触发后，串行构建 Apple Silicon (`aarch64`) DMG 和 Windows x64 NSIS `-setup.exe`，仍不构建 Intel Mac 版本。Release 在两个平台的 updater 签名文件、`latest.json` 和组件清单全部上传完成前保持草稿状态。
 
 上游同步使用 Git 合并，因此本仓库维护的 Pi Agent 品牌、设置入口和升级逻辑会作为本地修改保留。如果上游与本地修改发生冲突，工作流会停止，必须审核和解决冲突后才能发布。
 
 正式发布前需要配置：
 
 - Tauri updater 公私钥；
-- GitHub Actions 创建 Pull Request 的权限；
-- 面向外部用户分发时所需的 Apple Developer ID 签名和公证。
+- 面向外部用户分发时所需的 Apple Developer ID 签名和公证；
+- 面向 Windows 外部用户分发时建议配置 Authenticode 代码签名证书；未签名的 `.exe` 可能触发 SmartScreen 提示。
 
 ## 项目结构
 
@@ -188,8 +188,8 @@ scripts/                桌面打包、组件版本同步和 Release 校验脚�
 src-tauri/
   capabilities/         Tauri 权限配置
   resources/            桌面资源与组件版本清单
-  src/                   macOS 窗口、本地服务和 updater 注册
-.github/workflows/      每周组件同步与签名 Release 自动化
+  src/                   桌面窗口、本地服务和 updater 注册
+.github/workflows/      每日组件同步与桌面 Release 自动化
 instrumentation.ts     Next.js 服务端 HTTP 代理初始化
 ```
 

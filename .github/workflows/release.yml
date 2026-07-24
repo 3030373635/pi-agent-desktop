@@ -1,4 +1,4 @@
-name: Publish signed macOS release
+name: Publish signed desktop release
 
 on:
   push:
@@ -17,12 +17,26 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - runner: macos-15
+            target: aarch64-apple-darwin
+            args: --target aarch64-apple-darwin
+            apple_signing_identity: "-"
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            args: --target x86_64-pc-windows-msvc --bundles nsis
+            apple_signing_identity: ""
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Check out pi-agent-desktop
         uses: actions/checkout@v4
 
       - name: Require updater signing secrets
+        shell: bash
         env:
           UPDATER_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
@@ -44,7 +58,7 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-darwin
+          targets: ${{ matrix.target }}
 
       - name: Install dependencies
         run: npm ci
@@ -66,7 +80,7 @@ jobs:
           PI_AGENT_DESKTOP_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: "-"
+          APPLE_SIGNING_IDENTITY: ${{ matrix.apple_signing_identity }}
         with:
           tagName: v__VERSION__
           releaseName: pi-agent-desktop v__VERSION__
@@ -74,7 +88,7 @@ jobs:
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
-          args: --target aarch64-apple-darwin
+          args: ${{ matrix.args }}
 
   manifest:
     needs: build

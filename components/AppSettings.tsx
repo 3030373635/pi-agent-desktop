@@ -182,7 +182,7 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
               </span>
             </div>
             <div style={{ marginTop: 5, color: "var(--text-muted)", fontSize: 12, lineHeight: 1.5 }}>
-              {PRODUCT_NAME} for macOS, packaged and maintained by {APP_DISTRIBUTION_NAME}.
+              {PRODUCT_NAME} for macOS and Windows, packaged and maintained by {APP_DISTRIBUTION_NAME}.
             </div>
           </div>
           <button

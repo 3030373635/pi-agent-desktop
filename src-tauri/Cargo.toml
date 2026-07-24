@@ -1,7 +1,7 @@
 [package]
 name = "pi-agent-desktop"
 version = "0.1.2"
-description = "macOS desktop shell for Pi Agent"
+description = "Desktop shell for Pi Agent"
 authors = ["pi-agent-desktop contributors"]
 license = "MIT"
 edition = "2021"

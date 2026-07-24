@@ -3,7 +3,7 @@ use std::{
     fs::{self, OpenOptions},
     io,
     net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream},
-    path::Path,
+    path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::Mutex,
     thread,
@@ -11,7 +11,9 @@ use std::{
 };
 
 #[cfg(unix)]
-use std::os::unix::process::CommandExt;
+use std::os::unix::process::CommandExt as _;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt as _;
 
 use tauri::{
     webview::NewWindowResponse, Manager, RunEvent, Url, WebviewUrl, WebviewWindow,
@@ -22,6 +24,8 @@ const WINDOW_LABEL: &str = "main";
 #[cfg(not(feature = "custom-protocol"))]
 const DEV_SERVER_URL: &str = "http://127.0.0.1:30141";
 const SERVER_START_TIMEOUT: Duration = Duration::from_secs(30);
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 struct DesktopServer {
     child: Mutex<Option<Child>>,
@@ -49,7 +53,13 @@ impl DesktopServer {
             return;
         };
 
-        #[cfg(unix)]
+        terminate_process_tree(&mut child);
+    }
+}
+
+fn terminate_process_tree(child: &mut Child) {
+    #[cfg(unix)]
+    {
         unsafe {
             // The Node server owns its process group, so this also stops any
             // agent/tool subprocesses that are active when the App quits.
@@ -65,10 +75,21 @@ impl DesktopServer {
             }
         }
 
-        #[cfg(unix)]
         unsafe {
             libc::kill(-(child.id() as i32), libc::SIGKILL);
         }
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+
+    #[cfg(windows)]
+    {
+        // taskkill /T terminates the packaged Node server and any agent/tool
+        // subprocesses it started. CREATE_NO_WINDOW avoids flashing a console.
+        let _ = Command::new("taskkill.exe")
+            .args(["/PID", &child.id().to_string(), "/T", "/F"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .status();
         let _ = child.kill();
         let _ = child.wait();
     }
@@ -81,8 +102,21 @@ impl Drop for DesktopServer {
 }
 
 fn open_external(url: &Url) {
-    if matches!(url.scheme(), "http" | "https" | "mailto") {
+    if !matches!(url.scheme(), "http" | "https" | "mailto") {
+        return;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
         let _ = Command::new("/usr/bin/open").arg(url.as_str()).spawn();
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let _ = Command::new("rundll32.exe")
+            .args(["url.dll,FileProtocolHandler", url.as_str()])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn();
     }
 }
 
@@ -120,9 +154,9 @@ fn build_window(app: &tauri::AppHandle, app_url: Url) -> tauri::Result<WebviewWi
         .build()
 }
 
-#[cfg(feature = "custom-protocol")]
+#[cfg(all(feature = "custom-protocol", unix))]
 fn login_shell_path() -> Option<String> {
-    let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+    let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
     let output = Command::new(shell)
         .args(["-l", "-c", "/usr/bin/env"])
         .output()
@@ -138,6 +172,29 @@ fn login_shell_path() -> Option<String> {
         .find_map(|line| line.strip_prefix("PATH="))
         .map(str::to_string)
         .filter(|path| !path.is_empty())
+}
+
+#[cfg(all(feature = "custom-protocol", windows))]
+fn login_shell_path() -> Option<String> {
+    env::var("PATH").ok().filter(|path| !path.is_empty())
+}
+
+#[cfg(all(feature = "custom-protocol", target_os = "macos"))]
+fn bundled_node_path(resource_dir: &Path) -> PathBuf {
+    resource_dir.join("resources/Pi Agent Server.app/Contents/MacOS/node")
+}
+
+#[cfg(all(feature = "custom-protocol", target_os = "windows"))]
+fn bundled_node_path(resource_dir: &Path) -> PathBuf {
+    resource_dir.join("resources/node/node.exe")
+}
+
+#[cfg(feature = "custom-protocol")]
+fn server_process_path(node_path: &Path) -> Option<std::ffi::OsString> {
+    let inherited = login_shell_path().unwrap_or_default();
+    let mut paths = vec![node_path.parent()?.to_path_buf()];
+    paths.extend(env::split_paths(&inherited));
+    env::join_paths(paths).ok()
 }
 
 #[cfg(feature = "custom-protocol")]
@@ -177,10 +234,8 @@ fn wait_for_server(child: &mut Child, address: SocketAddr, log_path: &Path) -> i
 fn start_packaged_server(
     app: &tauri::AppHandle,
 ) -> Result<(Url, DesktopServer), Box<dyn std::error::Error>> {
-    let node_path = app
-        .path()
-        .resource_dir()?
-        .join("resources/Pi Agent Server.app/Contents/MacOS/node");
+    let resource_dir = app.path().resource_dir()?;
+    let node_path = bundled_node_path(&resource_dir);
     if !node_path.is_file() {
         return Err(io::Error::new(
             io::ErrorKind::NotFound,
@@ -189,7 +244,7 @@ fn start_packaged_server(
         .into());
     }
 
-    let server_dir = app.path().resource_dir()?.join("resources/server");
+    let server_dir = resource_dir.join("resources/server");
     let server_script = server_dir.join("desktop-server.cjs");
     if !server_script.is_file() {
         return Err(io::Error::new(
@@ -225,12 +280,14 @@ fn start_packaged_server(
         .stdout(Stdio::from(stdout))
         .stderr(Stdio::from(stderr));
 
-    if let Some(path) = login_shell_path() {
+    if let Some(path) = server_process_path(&node_path) {
         command.env("PATH", path);
     }
 
     #[cfg(unix)]
     command.process_group(0);
+    #[cfg(windows)]
+    command.creation_flags(CREATE_NO_WINDOW);
 
     let mut child = command.spawn()?;
 

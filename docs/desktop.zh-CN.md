@@ -1,13 +1,13 @@
-# Pi Agent macOS App
+# Pi Agent 桌面 App
 
-Pi Agent 使用 Tauri（与 Pake 相同的轻量 WebView 技术路线）封装。由于应用包含本地 API 和 AgentSession，安装包也会携带 Next.js standalone 服务和当前架构的 Node.js runtime；打开 App 时服务自动启动，退出 App 时自动停止，无需另开终端。
+Pi Agent 使用 Tauri（与 Pake 相同的轻量 WebView 技术路线）封装，支持 Apple Silicon Mac 和 Windows x64。由于应用包含本地 API 和 AgentSession，安装包也会携带 Next.js standalone 服务和当前平台的 Node.js runtime；打开 App 时服务自动启动，退出 App 时自动停止，无需另开终端或安装 Node.js。
 
 ## 要求
 
-- macOS 11 或更新版本
+- macOS 11 或更新版本（Apple Silicon），或 Windows 10/11 x64
 - Node.js 20.9 或更新版本
 - Rust 1.85 或更新版本
-- Xcode Command Line Tools
+- macOS 使用 Xcode Command Line Tools；Windows 使用 Microsoft C++ Build Tools
 
 ## 开发模式
 
@@ -38,7 +38,7 @@ src-tauri/target/release/bundle/macos/Pi Agent.app
 src-tauri/target/release/bundle/dmg/Pi Agent_<version>_<arch>.dmg
 ```
 
-构建结果是当前机器架构的原生应用：Apple Silicon 构建 `aarch64`，Intel Mac 构建 `x86_64`。发布给其他用户前，应使用 Apple Developer ID 签名并公证；本地开发和测试不要求签名。
+构建结果是当前机器架构的原生应用：Apple Silicon 构建 `aarch64` DMG，Windows x64 构建 NSIS `-setup.exe`。正式流水线不构建 Intel Mac 版本。发布给其他用户前，macOS 应使用 Apple Developer ID 签名并公证，Windows 应使用 Authenticode 证书签名；本地开发和测试不要求平台代码签名。
 
 桌面版会检查 `pi-agent-desktop`、Pi 与 Pi Web 的官方 GitHub Release。每个项目最多每 7 天检查一次；发现任一组件有新版后，用户可以从设置中安装包含全部最新组件的完整签名 App 并重启。详细机制见 [桌面升级与发布说明](./desktop-updates.md)。
 

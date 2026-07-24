@@ -26,7 +26,7 @@ export async function installLatestDesktopRelease(
   onProgress: (progress: DesktopUpgradeProgress) => void,
 ): Promise<DesktopUpgradeResult> {
   if (!isTauriDesktop()) {
-    throw new Error("Automatic installation is only available in the packaged macOS app.");
+    throw new Error("Automatic installation is only available in the packaged desktop app.");
   }
 
   onProgress({ phase: "checking" });
