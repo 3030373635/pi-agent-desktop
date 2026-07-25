@@ -54,9 +54,9 @@ function findInstalledPackage(
 
 function statusColor(status: PluginPackageInfo["status"]): string {
   if (status === "loaded") return "var(--accent)";
-  if (status === "installed") return "#f59e0b";
+  if (status === "installed") return "var(--warning)";
   if (status === "disabled") return "var(--text-dim)";
-  return "#ef4444";
+  return "var(--danger)";
 }
 
 function ResourceList({ pkg }: { pkg: PluginPackageInfo }) {
@@ -83,6 +83,7 @@ function ResourceList({ pkg }: { pkg: PluginPackageInfo }) {
 
   return (
     <div
+      className="native-modal-backdrop"
       style={{
         display: "flex",
         flexDirection: "column",
@@ -167,10 +168,10 @@ function ScopeTag({ scope }: { scope: PluginScope }) {
 function buttonStyle(disabled?: boolean, danger?: boolean): React.CSSProperties {
   return {
     padding: "6px 12px",
-    background: danger ? "rgba(239,68,68,0.08)" : "none",
+    background: danger ? "color-mix(in srgb, var(--danger) 8%, transparent)" : "none",
     border: "1px solid var(--border)",
     borderRadius: 6,
-    color: danger ? "#ef4444" : "var(--text-muted)",
+    color: danger ? "var(--danger)" : "var(--text-muted)",
     cursor: disabled ? "not-allowed" : "pointer",
     fontSize: 12,
     opacity: disabled ? 0.5 : 1,
@@ -337,6 +338,7 @@ function AddPluginPanel({
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <SegmentedScope value={scope} onChange={onScopeChange} />
         <button
+          className="native-button native-button-primary"
           type="button"
           onClick={onInstall}
           disabled={busy || !source.trim()}
@@ -390,7 +392,7 @@ function AddPluginPanel({
       </div>
 
       {actionError && (
-        <div style={{ fontSize: 12, color: "#ef4444", whiteSpace: "pre-wrap" }}>
+        <div style={{ fontSize: 12, color: "var(--danger)", whiteSpace: "pre-wrap" }}>
           {actionError}
         </div>
       )}
@@ -452,7 +454,7 @@ function PackageDetail({
                 padding: "1px 5px",
                 borderRadius: 3,
                 background: "rgba(245,158,11,0.12)",
-                color: "#d97706",
+                color: "var(--warning)",
               }}
             >
               filtered
@@ -474,6 +476,7 @@ function PackageDetail({
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button
+            className="native-button native-button-compact"
             onClick={() => onAction("update", pkg)}
             disabled={busy || reloadBusy}
             style={buttonStyle(busy || reloadBusy)}
@@ -481,6 +484,7 @@ function PackageDetail({
             {busyKey === `update:${key}` ? "Updating..." : "Update"}
           </button>
           <button
+            className="native-button native-button-compact"
             onClick={onReloadSession}
             disabled={!sessionId || reloadBusy || busy}
             style={buttonStyle(!sessionId || reloadBusy || busy)}
@@ -489,6 +493,7 @@ function PackageDetail({
             {reloadBusy ? "Reloading..." : "Reload session"}
           </button>
           <button
+            className="native-button native-button-compact native-button-danger"
             onClick={() => onAction("remove", pkg)}
             disabled={busy || reloadBusy}
             style={buttonStyle(busy || reloadBusy, true)}
@@ -499,6 +504,7 @@ function PackageDetail({
       </div>
 
       <div
+        className="native-settings-card settings-metadata-card"
         style={{
           display: "grid",
           gridTemplateColumns: "minmax(96px, 130px) minmax(0, 1fr)",
@@ -520,7 +526,7 @@ function PackageDetail({
         <div style={{ color: "var(--text-dim)" }}>Installed path</div>
         <div
           style={{
-            color: pkg.installedPath ? "var(--text-muted)" : "#ef4444",
+            color: pkg.installedPath ? "var(--text-muted)" : "var(--danger)",
             fontFamily: "var(--font-mono)",
             overflowWrap: "anywhere",
           }}
@@ -541,12 +547,12 @@ function PackageDetail({
       </div>
 
       {actionMessage && (
-        <div style={{ fontSize: 12, color: "#16a34a" }}>
+        <div style={{ fontSize: 12, color: "var(--success)" }}>
           {actionMessage}
         </div>
       )}
       {actionError && (
-        <div style={{ fontSize: 12, color: "#ef4444", whiteSpace: "pre-wrap" }}>
+        <div style={{ fontSize: 12, color: "var(--danger)", whiteSpace: "pre-wrap" }}>
           {actionError}
         </div>
       )}
@@ -693,6 +699,7 @@ export function PluginsConfig({
 
   return (
     <div
+      className="native-modal-backdrop"
       style={{
         position: "fixed",
         inset: 0,
@@ -707,6 +714,7 @@ export function PluginsConfig({
       }}
     >
       <div
+        className="native-modal settings-modal"
         style={{
           width: isMobile ? "calc(100vw - 16px)" : 860,
           maxWidth: "calc(100vw - 16px)",
@@ -722,6 +730,7 @@ export function PluginsConfig({
         }}
       >
         <div
+          className="native-modal-header"
           style={{
             display: "flex",
             alignItems: "center",
@@ -732,7 +741,7 @@ export function PluginsConfig({
           }}
         >
           <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>
+            <span className="native-modal-title" style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>
               Plugins
             </span>
             <code
@@ -749,6 +758,7 @@ export function PluginsConfig({
             </code>
           </div>
           <button
+            className="native-modal-close"
             onClick={onClose}
             style={{
               background: "none",
@@ -764,8 +774,9 @@ export function PluginsConfig({
           </button>
         </div>
 
-        <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", overflow: "hidden" }}>
+        <div className="settings-modal-body" style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", overflow: "hidden" }}>
           <div
+            className="settings-sidebar"
             style={{
               width: isMobile ? "100%" : 245,
               maxHeight: isMobile ? "40vh" : undefined,
@@ -777,13 +788,13 @@ export function PluginsConfig({
               background: "var(--bg-panel)",
             }}
           >
-            <div style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
+            <div className="settings-sidebar-scroll" style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
               {loading ? (
                 <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-muted)" }}>
                   Loading...
                 </div>
               ) : error ? (
-                <div style={{ padding: "10px 8px", fontSize: 11, color: "#ef4444" }}>
+                <div style={{ padding: "10px 8px", fontSize: 11, color: "var(--danger)" }}>
                   {error}
                 </div>
               ) : packages.length === 0 ? (
@@ -809,6 +820,7 @@ export function PluginsConfig({
                       const isSelected = !addMode && selected === key;
                       return (
                         <div
+                          className={`settings-list-row${isSelected ? " is-selected" : ""}`}
                           key={key}
                           onClick={() => {
                             setSelected(key);
@@ -891,6 +903,7 @@ export function PluginsConfig({
             </div>
             <div style={{ padding: "8px 6px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
               <button
+                className={`settings-list-row settings-list-add${addMode ? " is-selected" : ""}`}
                 type="button"
                 onClick={() => {
                   setAddMode(true);
@@ -935,7 +948,7 @@ export function PluginsConfig({
             </div>
           </div>
 
-          <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+          <div className="settings-detail" style={{ flex: 1, overflowY: "auto", padding: 20 }}>
             {addMode ? (
               <AddPluginPanel
                 cwd={cwd}
@@ -961,6 +974,7 @@ export function PluginsConfig({
               />
             ) : (
               <div
+                className="settings-empty-state"
                 style={{
                   height: "100%",
                   display: "flex",
@@ -977,6 +991,7 @@ export function PluginsConfig({
         </div>
 
         <div
+          className="settings-footer"
           style={{
             display: "flex",
             alignItems: "center",
@@ -990,8 +1005,9 @@ export function PluginsConfig({
           <div style={{ minWidth: 0, flex: 1, fontSize: 11, color: "var(--text-dim)", overflow: "hidden" }}>
             {data?.diagnostics.length ? (
               <span
+                className={`settings-footer-status ${data.diagnostics.some((d) => d.type === "error") ? "is-error" : "is-warning"}`}
                 title={data.diagnostics.map((d) => `${d.type}: ${d.source ? `${d.source}: ` : ""}${d.message}`).join("\n")}
-                style={{ color: data.diagnostics.some((d) => d.type === "error") ? "#ef4444" : "#d97706" }}
+                style={{ color: data.diagnostics.some((d) => d.type === "error") ? "var(--danger)" : "var(--warning)" }}
               >
                 {data.diagnostics.length} diagnostic{data.diagnostics.length === 1 ? "" : "s"}
               </span>
@@ -1001,10 +1017,10 @@ export function PluginsConfig({
               </span>
             )}
           </div>
-          <button onClick={() => void loadPlugins()} disabled={loading || busyKey !== null} style={buttonStyle(loading || busyKey !== null)}>
+          <button className="native-button" onClick={() => void loadPlugins()} disabled={loading || busyKey !== null} style={buttonStyle(loading || busyKey !== null)}>
             Refresh
           </button>
-          <button onClick={onClose} style={buttonStyle(false)}>
+          <button className="native-button" onClick={onClose} style={buttonStyle(false)}>
             Close
           </button>
         </div>

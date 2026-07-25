@@ -1,10 +1,11 @@
-// Flat monochrome file & folder icons — all use currentColor / var(--text-dim)
+// Flat monochrome file & folder icons. Color is inherited from the surrounding
+// control so selected, hovered, and muted states stay visually consistent.
 
 interface IconProps {
   size?: number;
 }
 
-const DIM = "var(--text-dim)";
+const DIM = "currentColor";
 
 // ── Folder ────────────────────────────────────────────────────────────────
 

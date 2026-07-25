@@ -276,6 +276,7 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
     return (
       <div style={{ height: "100%", display: "flex", alignItems: "stretch" }}>
         <button
+          className="native-toolbar-button"
           ref={btnRef}
           onClick={() => onToggle ? onToggle() : setOpenInternal((v) => !v)}
           style={{

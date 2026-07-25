@@ -874,6 +874,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
   return (
     <div
+      className="chat-input-shell"
       style={{
         flexShrink: 0,
         background: "transparent",
@@ -895,7 +896,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           e.target.value = "";
         }}
       />
-      <div style={{ maxWidth: 820, margin: "0 auto" }}>
+      <div className="chat-composer-wrap" style={{ maxWidth: 820, margin: "0 auto" }}>
         {/* Queued steering / follow-up messages (delivered by pi on upcoming turns) */}
         {((queuedMessages?.steering.length ?? 0) + (queuedMessages?.followUp.length ?? 0)) > 0 && (
           <div style={{
@@ -1026,6 +1027,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         <div style={{ position: "relative" }}>
           {slashMenuOpen && slashQuery !== null && (
             <div
+              className="native-popover"
               style={{
                 position: "absolute",
                 left: 0,
@@ -1250,7 +1252,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               </div>
             );
           })()}
+          <div className="chat-composer">
           <div
+            className="chat-composer-editor"
             style={{
               display: "flex",
               gap: 8,
@@ -1363,6 +1367,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             </div>
           ) : (
             <button
+              className="native-primary-button composer-send-button"
               onClick={handleSend}
               disabled={!value.trim() && !attachedImages.length}
               style={{
@@ -1390,7 +1395,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             </button>
           )}
           </div>
-        </div>
 
         {/* Bash mode status label */}
         {bashMode && (
@@ -1400,7 +1404,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         )}
 
         {/* Bottom bar: left | center (context) | right */}
-        <div style={{
+        <div className="chat-composer-controls" style={{
           marginTop: 8,
           display: isMobile ? "grid" : "flex",
           gridTemplateColumns: isMobile ? "minmax(0, 1fr) auto" : undefined,
@@ -1411,6 +1415,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           {/* LEFT: attach + model selector (idle) or steer/followup toggle (streaming) */}
           <div style={{ flex: isMobile ? "1 1 auto" : "0 0 auto", minWidth: 0, display: "flex", alignItems: "center", gap: 2 }}>
             <button
+              className="native-toolbar-button"
               onClick={() => fileInputRef.current?.click()}
               disabled={isStreaming}
               title="Attach image"
@@ -1444,6 +1449,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             {modelOptions.length > 0 && currentName && onModelChange && (
                 <div ref={dropdownRef} style={{ position: "relative", flex: isMobile ? "1 1 auto" : undefined, minWidth: 0 }}>
                   <button
+                    className="native-toolbar-button"
                     onClick={(e) => {
                       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                       setModelDropdownRect({ top: rect.top, left: rect.left, width: rect.width });
@@ -1497,7 +1503,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       ? { left: 8, right: 8, maxWidth: "calc(100vw - 16px)" }
                       : { left: modelDropdownRect.left, width: "max-content", minWidth: modelDropdownRect.width };
                     return (
-                      <div ref={modelDropdownPanelRef} style={{
+                      <div ref={modelDropdownPanelRef} className="native-popover" style={{
                       position: "fixed",
                       bottom,
                       ...panelPos,
@@ -1632,6 +1638,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             {!isStreaming && onThinkingLevelChange && (
               <div ref={thinkingDropdownRef} style={{ position: "relative" }}>
                 <button
+                  className="native-toolbar-button"
                   onClick={() => !isStreaming && setThinkingDropdownOpen((v) => !v)}
                   disabled={isStreaming}
                   title={`Change reasoning level: ${thinkingDisplayLabel}`}
@@ -1668,7 +1675,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   {(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{thinkingDisplayLabel}</span>}
                 </button>
                 {thinkingDropdownOpen && (
-                  <div style={{
+                  <div className="native-popover" style={{
                     position: "absolute", bottom: "calc(100% + 6px)", right: 0,
                     zIndex: 100, background: "var(--bg)", border: "1px solid var(--border)",
                     borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
@@ -1719,6 +1726,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             {!isStreaming && onToolPresetChange && (
               <div ref={toolDropdownRef} style={{ position: "relative" }}>
                 <button
+                  className="native-toolbar-button"
                   onClick={() => !isStreaming && setToolDropdownOpen((v) => !v)}
                   disabled={isStreaming}
                   title={`Change tool preset: ${toolPresetLabel}`}
@@ -1753,7 +1761,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   {(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{toolPresetLabel}</span>}
                 </button>
                 {toolDropdownOpen && (
-                  <div style={{
+                  <div className="native-popover" style={{
                     position: "absolute", bottom: "calc(100% + 6px)", right: 0,
                     zIndex: 100, background: "var(--bg)", border: "1px solid var(--border)",
                     borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
@@ -1798,7 +1806,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 {compactError && (
                   <div style={{
                     position: "absolute", bottom: "calc(100% + 6px)", right: 0,
-                    background: "#1f2937", color: "#f87171",
+                    background: "#1f2937", color: "var(--danger)",
                     fontSize: 11, padding: "4px 8px", borderRadius: 5,
                     whiteSpace: "nowrap", pointerEvents: "none",
                     boxShadow: "0 2px 8px rgba(0,0,0,0.2)", zIndex: 50,
@@ -1807,6 +1815,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   </div>
                 )}
                 <button
+                  className="native-toolbar-button"
                   onClick={isCompacting ? onAbortCompaction : onCompact}
                   disabled={isStreaming && !isCompacting}
                   style={{
@@ -1814,22 +1823,22 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     padding: isMobile ? "0 6px" : "8px 12px",
                     width: isMobile ? "auto" : undefined,
                     height: 32,
-                    background: isCompacting ? "rgba(239,68,68,0.08)" : "none",
+                    background: isCompacting ? "color-mix(in srgb, var(--danger) 8%, transparent)" : "none",
                     border: "none",
                     borderRadius: 9,
-                    color: isCompacting ? "#ef4444" : "var(--text-muted)",
+                    color: isCompacting ? "var(--danger)" : "var(--text-muted)",
                     cursor: (isStreaming && !isCompacting) ? "not-allowed" : "pointer",
                     fontSize: 12, opacity: (isStreaming && !isCompacting) ? 0.5 : 1,
                     transition: "background 0.12s, color 0.12s",
                   }}
                   onMouseEnter={(e) => {
                     if (isStreaming && !isCompacting) return;
-                    e.currentTarget.style.background = isCompacting ? "rgba(239,68,68,0.16)" : "var(--bg-hover)";
-                    e.currentTarget.style.color = isCompacting ? "#ef4444" : "var(--text)";
+                    e.currentTarget.style.background = isCompacting ? "color-mix(in srgb, var(--danger) 16%, transparent)" : "var(--bg-hover)";
+                    e.currentTarget.style.color = isCompacting ? "var(--danger)" : "var(--text)";
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.background = isCompacting ? "rgba(239,68,68,0.08)" : "none";
-                    e.currentTarget.style.color = isCompacting ? "#ef4444" : "var(--text-muted)";
+                    e.currentTarget.style.background = isCompacting ? "color-mix(in srgb, var(--danger) 8%, transparent)" : "none";
+                    e.currentTarget.style.color = isCompacting ? "var(--danger)" : "var(--text-muted)";
                   }}
                   title={isCompacting ? "Stop compaction" : "Compact context"}
                   aria-label={isCompacting ? "Stop compaction" : "Compact context"}
@@ -1854,17 +1863,17 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   display: "flex", alignItems: "center", gap: 6,
                   padding: "8px 14px",
                   height: 32,
-                  background: "rgba(239,68,68,0.08)",
-                  border: "1px solid rgba(239,68,68,0.3)",
+                  background: "color-mix(in srgb, var(--danger) 8%, transparent)",
+                  border: "1px solid color-mix(in srgb, var(--danger) 30%, transparent)",
                   borderRadius: 9,
-                  color: "#ef4444",
+                  color: "var(--danger)",
                   cursor: "pointer",
                   fontSize: 12, fontWeight: 600,
                   whiteSpace: "nowrap", letterSpacing: "-0.01em",
                   transition: "background 0.12s",
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(239,68,68,0.16)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(239,68,68,0.08)"; }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "color-mix(in srgb, var(--danger) 16%, transparent)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "color-mix(in srgb, var(--danger) 8%, transparent)"; }}
               >
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                   <rect x="1.5" y="1.5" width="7" height="7" rx="1.5" fill="currentColor" />
@@ -1875,6 +1884,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
             {onSoundToggle !== undefined && (
               <button
+                className="native-toolbar-button"
                 onClick={onSoundToggle}
                 title={soundEnabled ? "Disable completion sound" : "Enable completion sound"}
                 aria-label={soundEnabled ? "Disable completion sound" : "Enable completion sound"}
@@ -1960,8 +1970,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             </div>
           </div>
 
+          </div>
         </div>
       </div>
+    </div>
     </div>
   );
 });

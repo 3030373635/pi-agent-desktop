@@ -25,6 +25,7 @@ interface Props {
   selectedCwd?: string | null;
   onCwdChange?: (cwd: string | null, projectRoot?: string | null) => void;
   onOpenFile?: (filePath: string, fileName: string) => void;
+  selectedFilePath?: string | null;
   explorerRefreshKey?: number;
   onExplorerRefresh?: () => void;
   onAtMention?: (relativePath: string, isDir: boolean) => void;
@@ -140,7 +141,7 @@ function PathLabel({ text, style }: { text: string; style?: CSSProperties }) {
 
 const DROPDOWN_ANIMATION_MS = 140;
 
-function AnimatedDropdown({ open, children, style }: { open: boolean; children: ReactNode; style: CSSProperties }) {
+function AnimatedDropdown({ open, children, style, className }: { open: boolean; children: ReactNode; style: CSSProperties; className?: string }) {
   const [mounted, setMounted] = useState(open);
   const [visible, setVisible] = useState(open);
 
@@ -169,6 +170,7 @@ function AnimatedDropdown({ open, children, style }: { open: boolean; children: 
 
   return (
     <div
+      className={`${className ?? ""} animated-native-popover`.trim()}
       style={{
         ...style,
         opacity: visible ? 1 : 0,
@@ -239,9 +241,9 @@ function ProductTitle() {
     <div
       style={{
         padding: 0,
-        fontWeight: 700, fontSize: 15, letterSpacing: "-0.01em",
+        fontWeight: 650, fontSize: 16, letterSpacing: "-0.02em",
         color: "var(--text)",
-        fontFamily: "var(--font-mono)",
+        fontFamily: "var(--font-display)",
         whiteSpace: "nowrap",
       }}
     >
@@ -250,7 +252,7 @@ function ProductTitle() {
   );
 }
 
-export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, explorerRefreshKey, onExplorerRefresh, onAtMention, onAtMentions }: Props) {
+export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, selectedFilePath, explorerRefreshKey, onExplorerRefresh, onAtMention, onAtMentions }: Props) {
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -275,7 +277,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const [worktreeLoadingCwd, setWorktreeLoadingCwd] = useState<string | null>(null);
   const wtDropdownRef = useRef<HTMLDivElement>(null);
   const wtNewInputRef = useRef<HTMLInputElement>(null);
-  const [explorerOpen, setExplorerOpen] = useState(true);
+  const [sidebarView, setSidebarView] = useState<"chats" | "files">("chats");
   const [explorerKey, setExplorerKey] = useState(0);
   const [explorerUploadBusy, setExplorerUploadBusy] = useState(false);
   const [sessionRefreshDone, setSessionRefreshDone] = useState(false);
@@ -704,9 +706,10 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const sessionTree = buildSessionTree(filteredSessions);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+    <div className="session-sidebar" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       {/* Header */}
       <div
+        className="session-sidebar-header"
         style={{
           padding: "12px 10px 10px",
           borderBottom: "1px solid var(--border)",
@@ -717,6 +720,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           <ProductTitle />
           <div style={{ display: "flex", gap: 6 }}>
             <button
+              className="sidebar-new-button"
               onClick={handleNewSession}
               disabled={!selectedCwd}
               style={{
@@ -755,12 +759,13 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               New
             </button>
             <button
+              className="native-icon-button sidebar-refresh-button"
               onClick={() => loadSessions(false)}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
                 background: sessionRefreshDone ? "rgba(74,222,128,0.18)" : "var(--bg-hover)",
                 border: `1px solid ${sessionRefreshDone ? "rgba(74,222,128,0.4)" : "var(--border)"}`,
-                color: sessionRefreshDone ? "#4ade80" : "var(--text-muted)",
+                color: sessionRefreshDone ? "var(--success)" : "var(--text-muted)",
                 cursor: "pointer",
                 width: 32, height: 32,
                 borderRadius: 7,
@@ -783,7 +788,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               title="Refresh"
             >
               {sessionRefreshDone ? (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
               ) : (
@@ -799,6 +804,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         {/* CWD picker */}
         <div ref={dropdownRef} style={{ position: "relative" }}>
           <button
+            className="sidebar-project-button"
             onClick={() => setDropdownOpen((v) => !v)}
             title={selectedProject ?? selectedCwd ?? ""}
             style={{
@@ -844,6 +850,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           </button>
 
           <AnimatedDropdown
+            className="native-popover"
             open={dropdownOpen}
             style={{
               position: "absolute",
@@ -1128,6 +1135,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               </button>
 
               <AnimatedDropdown
+                className="native-popover"
                 open={wtDropdownOpen}
                 style={{
                   position: "absolute",
@@ -1147,14 +1155,14 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                       const isCurrent = wt.path === selectedCwd || (wt.isMain && !worktreeState.worktrees.some((w) => w.path === selectedCwd));
                       if (wtConfirmRemove === wt.path) {
                         return (
-                          <div key={wt.path} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", borderBottom: "1px solid var(--border)", background: "rgba(239,68,68,0.06)" }}>
+                          <div key={wt.path} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", borderBottom: "1px solid var(--border)", background: "color-mix(in srgb, var(--danger) 6%, transparent)" }}>
                             <span style={{ flex: 1, fontSize: 11, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               Uncommitted changes. Force remove checkout?
                             </span>
                             <button
                               onClick={() => void handleRemoveWorktree(wt.path, true)}
                               disabled={wtBusy}
-                              style={{ padding: "3px 9px", background: "#ef4444", border: "none", borderRadius: 5, color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
+                              style={{ padding: "3px 9px", background: "var(--danger)", border: "none", borderRadius: 5, color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
                             >
                               Force
                             </button>
@@ -1219,7 +1227,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                                 borderRadius: 5, flexShrink: 0,
                                 transition: "color 0.12s, background 0.12s",
                               }}
-                              onMouseEnter={(e) => { e.currentTarget.style.color = "#ef4444"; e.currentTarget.style.background = "rgba(239,68,68,0.08)"; }}
+                              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--danger)"; e.currentTarget.style.background = "color-mix(in srgb, var(--danger) 8%, transparent)"; }}
                               onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
                             >
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1388,15 +1396,38 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         )}
       </div>
 
+      {(selectedCwdProp || selectedCwd) && (
+        <div className="sidebar-view-switcher" role="tablist" aria-label="Sidebar view">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={sidebarView === "chats"}
+            className={sidebarView === "chats" ? "is-active" : undefined}
+            onClick={() => setSidebarView("chats")}
+          >
+            Chats
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={sidebarView === "files"}
+            className={sidebarView === "files" ? "is-active" : undefined}
+            onClick={() => setSidebarView("files")}
+          >
+            Files
+          </button>
+        </div>
+      )}
+
       {/* Session list */}
-      <div style={{ flex: explorerOpen && (selectedCwdProp || selectedCwd) ? "1 1 0" : "1 1 auto", overflowY: "auto", padding: "0", minHeight: 80 }}>
+      <div className="sidebar-session-list" style={{ display: sidebarView === "chats" ? "block" : "none", flex: "1 1 auto", overflowY: "auto", padding: "0", minHeight: 80 }}>
         {loading && (
           <div style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: 12 }}>
             Loading...
           </div>
         )}
         {error && (
-          <div style={{ padding: "12px 14px", color: "#f87171", fontSize: 12 }}>
+          <div style={{ padding: "12px 14px", color: "var(--danger)", fontSize: 12 }}>
             {error}
           </div>
         )}
@@ -1424,20 +1455,20 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       </div>
 
       {/* File Explorer section */}
-      {(selectedCwdProp || selectedCwd) && (
+      {(selectedCwdProp || selectedCwd) && sidebarView === "files" && (
         <div
+          className="sidebar-files-pane"
           style={{
-            borderTop: "1px solid var(--border)",
             display: "flex",
             flexDirection: "column",
-            flex: explorerOpen ? "1 1 0" : "0 0 auto",
+            flex: "1 1 0",
             minHeight: 0,
             overflow: "hidden",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
-            <button
-              onClick={() => setExplorerOpen((v) => !v)}
+          <div className="sidebar-files-toolbar">
+            <div
+              className="sidebar-section-label"
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -1447,7 +1478,6 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 background: "none",
                 border: "none",
                 color: "var(--text-muted)",
-                cursor: "pointer",
                 fontSize: 11,
                 fontWeight: 600,
                 letterSpacing: "0.05em",
@@ -1455,17 +1485,11 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 textAlign: "left",
               }}
             >
-              <svg
-                width="9" height="9" viewBox="0 0 10 10" fill="none"
-                stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-                style={{ transform: explorerOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s", flexShrink: 0 }}
-              >
-                <polyline points="3 2 7 5 3 8" />
-              </svg>
-              Explorer
-            </button>
-            {explorerOpen && (
-              <button
+              Project files
+            </div>
+            <button
+                type="button"
+                className="sidebar-file-action-button"
                 onClick={() => fileExplorerRef.current?.openUploadPicker()}
                 disabled={explorerUploadBusy}
                 title="Upload files to project root"
@@ -1490,9 +1514,10 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                   <path d="m17 8-5-5-5 5" />
                   <path d="M12 3v12" />
                 </svg>
-              </button>
-            )}
+            </button>
             <button
+              type="button"
+              className={`sidebar-file-action-button${explorerRefreshDone ? " is-done" : ""}`}
               onClick={() => {
                 if (onExplorerRefresh) onExplorerRefresh();
                 else setExplorerKey((k) => k + 1);
@@ -1501,12 +1526,13 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 explorerRefreshTimerRef.current = setTimeout(() => setExplorerRefreshDone(false), 2000);
               }}
               title="Refresh explorer"
+              aria-label="Refresh explorer"
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
                 width: 26, height: 26, padding: 0, marginRight: 6,
                 background: explorerRefreshDone ? "rgba(74,222,128,0.18)" : "none",
                 border: "none",
-                color: explorerRefreshDone ? "#4ade80" : "var(--text-dim)",
+                color: explorerRefreshDone ? "var(--success)" : "var(--text-dim)",
                 cursor: "pointer",
                 borderRadius: 5,
                 flexShrink: 0,
@@ -1516,7 +1542,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               onMouseLeave={(e) => { if (explorerRefreshDone) return; e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
             >
               {explorerRefreshDone ? (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
               ) : (
@@ -1527,19 +1553,18 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               )}
             </button>
           </div>
-          {explorerOpen && (
-            <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
-              <FileExplorer
-                ref={fileExplorerRef}
-                cwd={selectedCwd ?? selectedCwdProp!}
-                onOpenFile={onOpenFile ?? (() => {})}
-                refreshKey={explorerKey}
-                onAtMention={onAtMention}
-                onAtMentions={onAtMentions}
-                onUploadBusyChange={setExplorerUploadBusy}
-              />
-            </div>
-          )}
+          <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
+            <FileExplorer
+              ref={fileExplorerRef}
+              cwd={selectedCwd ?? selectedCwdProp!}
+              onOpenFile={onOpenFile ?? (() => {})}
+              selectedFilePath={selectedFilePath}
+              refreshKey={explorerKey}
+              onAtMention={onAtMention}
+              onAtMentions={onAtMentions}
+              onUploadBusyChange={setExplorerUploadBusy}
+            />
+          </div>
         </div>
       )}
     </div>
@@ -1764,6 +1789,7 @@ function SessionItem({
 
   return (
     <div
+      className={`session-item${isSelected ? " is-selected" : ""}${isRunning ? " is-running" : ""}${isUnread ? " is-unread" : ""}`}
       onClick={confirmDelete || renaming ? undefined : onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => { setHovered(false); }}
@@ -1775,10 +1801,10 @@ function SessionItem({
         paddingRight: 8,
         cursor: confirmDelete || renaming ? "default" : "pointer",
         background: confirmDelete
-          ? "rgba(239,68,68,0.06)"
+          ? "color-mix(in srgb, var(--danger) 6%, transparent)"
           : isSelected ? "var(--bg-selected)" : hovered ? "var(--bg-hover)" : "transparent",
         borderLeft: confirmDelete
-          ? "2px solid #ef4444"
+          ? "2px solid var(--danger)"
           : isSelected ? "2px solid var(--accent)" : "2px solid transparent",
         transition: "background 0.1s",
         opacity: deleting ? 0.5 : 1,
@@ -1798,7 +1824,7 @@ function SessionItem({
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
                 height: 30, padding: "0 11px",
-                background: "#ef4444", border: "none",
+                background: "var(--danger)", border: "none",
                 borderRadius: 6, color: "#fff",
                 cursor: "pointer", fontSize: 12, fontWeight: 600,
                 whiteSpace: "nowrap",
@@ -1865,6 +1891,7 @@ function SessionItem({
           )}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div
+              className="session-item-title"
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -1881,7 +1908,7 @@ function SessionItem({
                 {title}
               </span>
             </div>
-            <div style={{ marginTop: 2, display: "flex", alignItems: "center", gap: 8, color: "var(--text-dim)", fontSize: 11, minWidth: 0 }}>
+            <div className="session-item-meta" style={{ marginTop: 2, display: "flex", alignItems: "center", gap: 8, color: "var(--text-dim)", fontSize: 11, minWidth: 0 }}>
               {isRunning ? (
                 <RunningSessionIndicator />
               ) : isUnread ? (
@@ -1968,9 +1995,9 @@ function SessionItem({
                   transition: "background 0.12s, color 0.12s, border-color 0.12s",
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "rgba(239,68,68,0.08)";
-                  e.currentTarget.style.color = "#ef4444";
-                  e.currentTarget.style.borderColor = "rgba(239,68,68,0.35)";
+                  e.currentTarget.style.background = "color-mix(in srgb, var(--danger) 8%, transparent)";
+                  e.currentTarget.style.color = "var(--danger)";
+                  e.currentTarget.style.borderColor = "color-mix(in srgb, var(--danger) 35%, transparent)";
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = "var(--bg-hover)";

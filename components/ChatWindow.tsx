@@ -105,8 +105,9 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, children }: { messag
   if (toolCallCount > 0) parts.push(`${toolCallCount} ${toolCallCount === 1 ? "tool call" : "tool calls"}`);
 
   return (
-    <div style={{ marginBottom: 14 }}>
+    <div className="process-details" style={{ marginBottom: 14 }}>
       <button
+        className="process-details-trigger"
         type="button"
         aria-expanded={expanded}
         onClick={() => setExpanded((v) => !v)}
@@ -134,7 +135,7 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, children }: { messag
         </span>
       </button>
       {expanded && (
-        <div style={{ marginTop: 8 }}>
+        <div className="process-details-content" style={{ marginTop: 8 }}>
           {children}
         </div>
       )}
@@ -350,7 +351,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
   return (
     <div
-      className="relative flex h-full flex-col overflow-hidden"
+      className="chat-window relative flex h-full flex-col overflow-hidden"
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -404,9 +405,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
       {isEmptyNew ? (
         <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-4 py-8">
-          <div className="w-full max-w-[820px]">
+          <div className="chat-empty-state w-full max-w-[820px]">
             <div
-              className="mb-3"
+              className="chat-empty-brand mb-3"
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -414,12 +415,12 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                 gap: 12,
                 marginLeft: 16,
                 marginRight: 16,
-                fontFamily: "var(--font-mono)",
               }}
             >
-              <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0, flex: 1, lineHeight: 1.4, overflow: "hidden" }}>
-                <span style={{ fontSize: 28, fontWeight: 700, letterSpacing: 0, color: "var(--text)", flexShrink: 0, whiteSpace: "nowrap" }}>π</span>
-                <span style={{ fontSize: 22, color: "var(--text)", fontWeight: 700, letterSpacing: 0, flexShrink: 0, whiteSpace: "nowrap" }}>{PRODUCT_NAME}</span>
+              <span className="chat-empty-brand-mark">π</span>
+              <div className="chat-empty-brand-copy">
+                <strong>Start a task</strong>
+                <span>{PRODUCT_NAME} can explore, edit, and run this project with you.</span>
               </div>
             </div>
             <NoticeShelf notices={notices} align="right" />
@@ -751,26 +752,26 @@ function NoticeShelf({ notices, floating = false, align = "left" }: { notices: N
     >
       {notices.map((notice, index) => {
         const color = notice.type === "error"
-          ? "#ef4444"
+          ? "var(--danger)"
           : notice.type === "warning"
-            ? "#d97706"
+            ? "var(--warning)"
             : notice.type === "success"
               ? "#10b981"
               : "var(--accent)";
         return (
           <div
             key={notice.id}
-            className="notice-shelf-item"
+            className={`notice-shelf-item is-${notice.type}${floating ? " is-floating" : ""}`}
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 10,
-              minHeight: 60,
-              height: 60,
-              maxHeight: 60,
+              gap: 8,
+              minHeight: 46,
+              height: 46,
+              maxHeight: 46,
               marginBottom: index === notices.length - 1 ? 0 : 6,
               overflow: "hidden",
-              borderRadius: 14,
+              borderRadius: 10,
               border: "1px solid color-mix(in srgb, var(--border) 70%, transparent)",
               background: "var(--bg)",
               color: "var(--text-muted)",
@@ -779,16 +780,17 @@ function NoticeShelf({ notices, floating = false, align = "left" }: { notices: N
               boxShadow: floating
                 ? "0 1px 2px rgba(15,23,42,0.05), 0 10px 28px -14px rgba(15,23,42,0.24)"
                 : "0 1px 2px rgba(15,23,42,0.04), 0 8px 24px -12px rgba(15,23,42,0.10)",
-              fontSize: 18,
-              lineHeight: 1.45,
+              fontSize: 13,
+              lineHeight: 1.35,
               transformOrigin: "top center",
               animation: notice.exiting
                 ? "notice-shelf-out 0.18s ease-in forwards"
                 : "notice-shelf-in 0.18s ease-out both",
-              padding: "0 12px",
+              padding: "0 11px",
             }}
           >
             <span
+              className="notice-shelf-indicator"
               style={{
                 width: 7,
                 height: 7,
@@ -797,7 +799,7 @@ function NoticeShelf({ notices, floating = false, align = "left" }: { notices: N
                 flexShrink: 0,
               }}
             />
-            <span style={{ padding: "14px 0", minWidth: 0, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span className="notice-shelf-message" style={{ padding: "10px 0", minWidth: 0, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {notice.message}
             </span>
           </div>

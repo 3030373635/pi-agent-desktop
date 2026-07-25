@@ -59,6 +59,7 @@ export function UpdateReminder({ onOpenSettings }: { onOpenSettings: () => void 
 
   return (
     <aside
+      className="native-update-reminder"
       aria-label="Available updates"
       aria-live="polite"
       style={{
@@ -75,12 +76,13 @@ export function UpdateReminder({ onOpenSettings }: { onOpenSettings: () => void 
         overflow: "hidden",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px 10px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 700 }}>
-          <span aria-hidden="true" style={{ color: "var(--accent)", fontSize: 16 }}>↑</span>
+      <div className="native-update-reminder-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px 10px" }}>
+        <div className="native-update-reminder-title" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 700 }}>
+          <span className="native-update-reminder-icon" aria-hidden="true" style={{ color: "var(--accent)", fontSize: 16 }}>↑</span>
           Updates available
         </div>
         <button
+          className="native-modal-close"
           type="button"
           aria-label="Dismiss update reminder"
           title="Remind me next week"
@@ -98,9 +100,10 @@ export function UpdateReminder({ onOpenSettings }: { onOpenSettings: () => void 
           ×
         </button>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "0 14px 12px" }}>
+      <div className="native-update-reminder-body" style={{ display: "flex", flexDirection: "column", gap: 8, padding: "0 14px 12px" }}>
         {updates.map((update) => (
           <div
+            className="native-update-reminder-row"
             key={update.project}
             style={{
               display: "flex",
@@ -120,6 +123,7 @@ export function UpdateReminder({ onOpenSettings }: { onOpenSettings: () => void 
               </div>
             </div>
             <a
+              className="native-update-reminder-link"
               href={update.releaseUrl}
               target="_blank"
               rel="noreferrer"
@@ -135,23 +139,14 @@ export function UpdateReminder({ onOpenSettings }: { onOpenSettings: () => void 
             </a>
           </div>
         ))}
-        <div style={{ color: "var(--text-dim)", fontSize: 10, lineHeight: 1.45 }}>
+        <div className="native-update-reminder-caption" style={{ color: "var(--text-dim)", fontSize: 10, lineHeight: 1.45 }}>
           {PRODUCT_NAME} checks official GitHub releases once a week. Review and install one complete signed app update in Settings.
         </div>
         <button
+          className="native-button native-button-primary"
           type="button"
           onClick={handleOpenSettings}
-          style={{
-            alignSelf: "flex-end",
-            padding: "7px 11px",
-            border: 0,
-            borderRadius: 7,
-            background: "var(--accent)",
-            color: "#fff",
-            cursor: "pointer",
-            fontSize: 11,
-            fontWeight: 650,
-          }}
+          style={{ alignSelf: "flex-end" }}
         >
           Open Settings
         </button>

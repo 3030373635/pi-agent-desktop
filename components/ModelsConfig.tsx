@@ -155,8 +155,8 @@ const API_OPTIONS = ["openai-completions", "openai-responses", "anthropic-messag
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <label style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>{label}</label>
+    <div className="native-field">
+      <label className="native-field-label">{label}</label>
       {children}
     </div>
   );
@@ -176,6 +176,7 @@ const inputStyle = {
 
 function TextInput({ value, onChange, placeholder, mono }: { value: string; onChange: (v: string) => void; placeholder?: string; mono?: boolean }) {
   return <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+    className="native-input"
     style={{ ...inputStyle, fontFamily: mono ? "var(--font-mono)" : "inherit" }} />;
 }
 
@@ -207,6 +208,7 @@ function SecretTextInput({
   return (
     <div style={{ position: "relative", width: "100%", ...style }}>
       <input
+        className="native-input"
         type={visible ? "text" : "password"}
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -217,6 +219,7 @@ function SecretTextInput({
         spellCheck={spellCheck}
       />
       <button
+        className="native-input-action"
         type="button"
         onClick={() => setVisible((v) => !v)}
         aria-label={visible ? "Hide API key" : "Show API key"}
@@ -257,12 +260,12 @@ function SecretTextInput({
 }
 
 function NumInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
-  return <input type="number" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={inputStyle} />;
+  return <input className="native-input" type="number" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={inputStyle} />;
 }
 
 function Select({ value, onChange, options, required }: { value: string; onChange: (v: string) => void; options: readonly string[]; required?: boolean }) {
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)}
+    <select className="native-select" value={value} onChange={(e) => onChange(e.target.value)}
       style={{ ...inputStyle, color: value ? "var(--text)" : "var(--text-dim)" }}>
       {!required && <option value="">— inherit / none —</option>}
       {options.map((o) => <option key={o} value={o}>{o}</option>)}
@@ -272,9 +275,9 @@ function Select({ value, onChange, options, required }: { value: string; onChang
 
 function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, color: "var(--text-muted)" }}>
+    <label className="native-check">
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)}
-        style={{ width: 13, height: 13, accentColor: "var(--accent)", cursor: "pointer" }} />
+        className="native-checkbox" style={{ width: 13, height: 13, accentColor: "var(--accent)", cursor: "pointer" }} />
       {label}
     </label>
   );
@@ -303,8 +306,7 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete }: {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <SectionTitle>Provider</SectionTitle>
-        <button onClick={onDelete}
-          style={{ padding: "3px 8px", background: "none", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 4, color: "#ef4444", cursor: "pointer", fontSize: 11 }}>
+        <button className="native-button native-button-compact native-button-danger" onClick={onDelete}>
           Delete
         </button>
       </div>
@@ -312,8 +314,8 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete }: {
       <Field label="Provider name">
         <TextInput value={editingName} onChange={setEditingName} placeholder="provider-name" mono />
         {editingName !== name && editingName.trim() && (
-          <button onClick={() => onRename(editingName.trim())}
-            style={{ marginTop: 4, padding: "3px 10px", background: "var(--accent)", border: "none", borderRadius: 4, color: "#fff", cursor: "pointer", fontSize: 11, alignSelf: "flex-start" }}>
+          <button className="native-button native-button-compact native-button-primary" onClick={() => onRename(editingName.trim())}
+            style={{ marginTop: 4, alignSelf: "flex-start" }}>
             Rename
           </button>
         )}
@@ -347,11 +349,11 @@ type ThinkingLevel = typeof THINKING_LEVELS[number];
 const LEVEL_COLORS: Record<ThinkingLevel, string> = {
   off:     "var(--text-dim)",
   minimal: "#6b7280",
-  low:     "#60a5fa",
+  low:     "var(--accent)",
   medium:  "#a78bfa",
   high:    "#f472b6",
   xhigh:   "#fb923c",
-  max:     "#ef4444",
+  max:     "var(--danger)",
 };
 
 function ThinkingLevelMapEditor({
@@ -399,7 +401,7 @@ function ThinkingLevelMapEditor({
           fontWeight: 600,
         };
         const btnActiveDisabled: React.CSSProperties = {
-          background: "#ef4444",
+          background: "var(--danger)",
           color: "#fff",
           fontWeight: 600,
         };
@@ -604,24 +606,10 @@ function ModelDetail({
             </span>
           )}
           <button
+            className={`native-button native-button-compact${testState.phase === "success" ? " is-success" : ""}`}
             onClick={handleTest}
             disabled={!model.id.trim() || testState.phase === "testing"}
             title="Test model connection"
-            style={{
-              height: 24,
-              padding: "0 8px",
-              background: testState.phase === "success" ? "#16a34a" : "none",
-              border: `1px solid ${testState.phase === "success" ? "#16a34a" : "var(--border)"}`,
-              borderRadius: 4,
-              color: testState.phase === "success" ? "#fff" : (!model.id.trim() || testState.phase === "testing") ? "var(--text-dim)" : "var(--text-muted)",
-              cursor: (!model.id.trim() || testState.phase === "testing") ? "not-allowed" : "pointer",
-              fontSize: 11,
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              boxSizing: "border-box",
-              gap: 5,
-            }}
           >
             {testState.phase === "success" && (
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -630,8 +618,7 @@ function ModelDetail({
             )}
             {testState.phase === "testing" ? "Testing…" : testState.phase === "success" ? "OK" : "Test"}
           </button>
-          <button onClick={onDelete}
-            style={{ height: 24, padding: "0 8px", background: "none", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 4, color: "#ef4444", cursor: "pointer", fontSize: 11, boxSizing: "border-box" }}>
+          <button className="native-button native-button-compact native-button-danger" onClick={onDelete}>
             Remove
           </button>
         </div>
@@ -664,6 +651,7 @@ function ModelDetail({
               <SectionTitle>Thinking level map</SectionTitle>
               {model.thinkingLevelMap && (
                 <button
+                  className="native-button native-button-compact"
                   onClick={() => set("thinkingLevelMap", undefined)}
                   style={{ fontSize: 10, padding: "2px 7px", background: "none", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-dim)", cursor: "pointer" }}
                 >
@@ -834,8 +822,8 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <SectionTitle>Subscription</SectionTitle>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.loggedIn ? "#4ade80" : "var(--border)", display: "inline-block" }} />
-          <span style={{ fontSize: 11, color: provider.loggedIn ? "#4ade80" : "var(--text-dim)" }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.loggedIn ? "var(--success)" : "var(--border)", display: "inline-block" }} />
+          <span style={{ fontSize: 11, color: provider.loggedIn ? "var(--success)" : "var(--text-dim)" }}>
             {provider.loggedIn ? "connected" : "not connected"}
           </span>
         </div>
@@ -859,9 +847,10 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {loginState.options.map((option) => (
                 <button
+                  className="native-button"
                   key={option.id}
                   onClick={() => submitSelection(loginState.token, option.id)}
-                  style={{ padding: "6px 9px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text)", cursor: "pointer", fontSize: 12, textAlign: "left" }}
+                  style={{ justifyContent: "flex-start" }}
                 >
                   {option.label}
                 </button>
@@ -895,9 +884,10 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
                 style={{ flex: 1, padding: "6px 9px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text)", fontSize: 12, outline: "none", fontFamily: "var(--font-mono)", boxSizing: "border-box" }}
               />
               <button
+                className="native-button native-button-primary"
                 onClick={() => submitCode(loginState.token, inputValue)}
                 disabled={!inputValue.trim()}
-                style={{ padding: "6px 12px", background: inputValue.trim() ? "var(--accent)" : "var(--bg-panel)", border: "none", borderRadius: 5, color: inputValue.trim() ? "#fff" : "var(--text-dim)", cursor: inputValue.trim() ? "pointer" : "not-allowed", fontSize: 12, fontWeight: 600, flexShrink: 0 }}
+                style={{ flexShrink: 0 }}
               >
                 Submit
               </button>
@@ -924,10 +914,10 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
           <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>{loginState.message}</p>
         )}
         {loginState.phase === "success" && (
-          <p style={{ margin: 0, fontSize: 12, color: "#4ade80" }}>Connected successfully.</p>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--success)" }}>Connected successfully.</p>
         )}
         {loginState.phase === "error" && (
-          <p style={{ margin: 0, fontSize: 12, color: "#f87171" }}>{loginState.message}</p>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--danger)" }}>{loginState.message}</p>
         )}
       </div>
 
@@ -935,23 +925,23 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
       <div style={{ display: "flex", gap: 8 }}>
         {isWorking ? (
           <button
+            className="native-button"
             onClick={() => { eventSourceRef.current?.close(); setLoginState({ phase: "idle" }); }}
-            style={{ padding: "5px 12px", background: "none", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", cursor: "pointer", fontSize: 12 }}
           >
             Cancel
           </button>
         ) : (
           <>
             <button
+              className="native-button native-button-primary"
               onClick={handleLogin}
-              style={{ padding: "5px 14px", background: "var(--accent)", border: "none", borderRadius: 5, color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600 }}
             >
               {provider.loggedIn ? "Re-login" : "Login"}
             </button>
             {provider.loggedIn && (
               <button
+                className="native-button native-button-danger"
                 onClick={handleLogout}
-                style={{ padding: "5px 12px", background: "none", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 5, color: "#ef4444", cursor: "pointer", fontSize: 12 }}
               >
                 Disconnect
               </button>
@@ -1026,8 +1016,8 @@ function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRef
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <SectionTitle>API Key</SectionTitle>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.configured ? "#4ade80" : "var(--border)", display: "inline-block" }} />
-          <span style={{ fontSize: 11, color: provider.configured ? "#4ade80" : "var(--text-dim)" }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.configured ? "var(--success)" : "var(--border)", display: "inline-block" }} />
+          <span style={{ fontSize: 11, color: provider.configured ? "var(--success)" : "var(--text-dim)" }}>
             {provider.configured ? "configured" : "not configured"}
           </span>
         </div>
@@ -1052,17 +1042,10 @@ function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRef
             mono
           />
           <button
+            className={`native-button native-button-primary${savedOk ? " is-success" : ""}`}
             onClick={handleSave}
             disabled={saving || !apiKey.trim() || savedOk}
-            style={{
-              padding: "6px 12px",
-              background: savedOk ? "#16a34a" : apiKey.trim() ? "var(--accent)" : "var(--bg-panel)",
-              border: "none", borderRadius: 5,
-              color: (apiKey.trim() || savedOk) ? "#fff" : "var(--text-dim)",
-              cursor: (saving || !apiKey.trim() || savedOk) ? "not-allowed" : "pointer",
-              fontSize: 12, fontWeight: 600, flexShrink: 0,
-              display: "flex", alignItems: "center", gap: 5,
-            }}
+            style={{ flexShrink: 0 }}
           >
             {savedOk && (
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -1074,18 +1057,14 @@ function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRef
         </div>
       </Field>
 
-      {error && <p style={{ margin: 0, fontSize: 12, color: "#f87171" }}>{error}</p>}
+      {error && <p style={{ margin: 0, fontSize: 12, color: "var(--danger)" }}>{error}</p>}
 
       {provider.configured && (
         <button
+          className="native-button native-button-danger"
           onClick={handleRemove}
           disabled={removing}
-          style={{
-            alignSelf: "flex-start", padding: "5px 12px",
-            background: "none", border: "1px solid rgba(239,68,68,0.3)",
-            borderRadius: 5, color: "#ef4444",
-            cursor: removing ? "not-allowed" : "pointer", fontSize: 12,
-          }}
+          style={{ alignSelf: "flex-start" }}
         >
           {removing ? "Removing…" : "Disconnect"}
         </button>
@@ -1180,16 +1159,18 @@ function AddProviderPicker({
 
   return (
     <div
+      className="native-modal-backdrop"
       style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{ width: 820, maxWidth: "calc(100vw - 32px)", maxHeight: "min(72vh, calc(100vh - 32px))", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.22)", overflow: "hidden" }}>
+      <div className="native-modal settings-modal provider-picker" style={{ width: 820, maxWidth: "calc(100vw - 32px)", maxHeight: "min(72vh, calc(100vh - 32px))", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.22)", overflow: "hidden" }}>
         {/* Search */}
         <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)", flexShrink: 0 }}>
             <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
           <input
+            className="native-input provider-picker-search"
             ref={inputRef}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -1210,6 +1191,7 @@ function AddProviderPicker({
               )}
               {showCustom && (
                 <button
+                  className="provider-picker-card"
                   onClick={() => { onAddCustom(); onClose(); }}
                   style={cardStyle}
                   onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
@@ -1231,7 +1213,7 @@ function AddProviderPicker({
                 <div style={{ gridColumn: "1 / -1", paddingTop: showCustom ? 6 : 0, fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>Subscriptions</div>
               )}
               {availableOAuth.map((p) => (
-                <button key={p.id} onClick={() => { onSelectOAuth(p.id); onClose(); }}
+                <button className="provider-picker-card" key={p.id} onClick={() => { onSelectOAuth(p.id); onClose(); }}
                   style={cardStyle}
                   onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-panel)"; }}
@@ -1248,7 +1230,7 @@ function AddProviderPicker({
                 <div style={{ gridColumn: "1 / -1", paddingTop: availableOAuth.length > 0 ? 6 : 0, fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>API Key</div>
               )}
               {availableApiKey.map((p) => (
-                <button key={p.id} onClick={() => { onSelectApiKey(p.id); onClose(); }}
+                <button className="provider-picker-card" key={p.id} onClick={() => { onSelectApiKey(p.id); onClose(); }}
                   style={cardStyle}
                   onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-panel)"; }}
@@ -1453,36 +1435,37 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
 
   return (
     <>
-    <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}
+    <div className="native-modal-backdrop" style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ width: isMobile ? "calc(100vw - 16px)" : 860, maxWidth: "calc(100vw - 16px)", height: isMobile ? "calc(100dvh - 16px)" : "78vh", maxHeight: "calc(100dvh - 16px)", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden" }}>
+      <div className="native-modal settings-modal" style={{ width: isMobile ? "calc(100vw - 16px)" : 860, maxWidth: "calc(100vw - 16px)", height: isMobile ? "calc(100dvh - 16px)" : "78vh", maxHeight: "calc(100dvh - 16px)", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden" }}>
 
         {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+        <div className="native-modal-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>Models</span>
+            <span className="native-modal-title" style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>Models</span>
             <code style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>~/.pi/agent/models.json</code>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "2px 6px" }}>×</button>
+          <button className="native-modal-close" onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "2px 6px" }}>×</button>
         </div>
 
         {/* Body */}
-        <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", overflow: "hidden" }}>
+        <div className="settings-modal-body" style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", overflow: "hidden" }}>
 
           {/* Left: tree */}
-          <div style={{
+          <div className="settings-sidebar" style={{
             width: isMobile ? "100%" : 210,
             maxHeight: isMobile ? "40vh" : undefined,
             borderRight: isMobile ? "none" : "1px solid var(--border)",
             borderBottom: isMobile ? "1px solid var(--border)" : "none",
             display: "flex", flexDirection: "column", flexShrink: 0, background: "var(--bg-panel)",
           }}>
-            <div style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
+            <div className="settings-sidebar-scroll" style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
               {/* Active OAuth subscriptions */}
               {activeOAuth.map((p) => {
                 const isSelected = selection?.type === "oauth" && selection.providerId === p.id;
                 return (
                   <div
+                    className={`settings-list-row${isSelected ? " is-selected" : ""}`}
                     key={p.id}
                     onClick={() => setSelection({ type: "oauth", providerId: p.id })}
                     style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 8px", borderRadius: 5, cursor: "pointer", background: isSelected ? "var(--bg-selected)" : "none" }}
@@ -1500,6 +1483,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
                 const isSelected = selection?.type === "apikey" && selection.providerId === p.id;
                 return (
                   <div
+                    className={`settings-list-row${isSelected ? " is-selected" : ""}`}
                     key={p.id}
                     onClick={() => setSelection({ type: "apikey", providerId: p.id })}
                     style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 8px", borderRadius: 5, cursor: "pointer", background: isSelected ? "var(--bg-selected)" : "none" }}
@@ -1527,6 +1511,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
                   <div key={pName} style={{ marginBottom: 2 }}>
                     {/* Provider row */}
                     <div
+                      className={`settings-list-row${isProviderSelected ? " is-selected" : ""}`}
                       onClick={() => setSelection({ type: "provider", name: pName })}
                       style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 8px", borderRadius: 5, cursor: "pointer", background: isProviderSelected ? "var(--bg-selected)" : "none" }}
                       onMouseEnter={(e) => { if (!isProviderSelected) e.currentTarget.style.background = "var(--bg-hover)"; }}
@@ -1549,6 +1534,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
                       const isModelSelected = selection?.type === "model" && selection.providerName === pName && selection.index === i;
                       return (
                         <div
+                          className={`settings-list-row settings-list-row-nested${isModelSelected ? " is-selected" : ""}`}
                           key={i}
                           onClick={() => setSelection({ type: "model", providerName: pName, index: i })}
                           style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px 5px 26px", borderRadius: 5, cursor: "pointer", background: isModelSelected ? "var(--bg-selected)" : "none" }}
@@ -1567,6 +1553,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
 
                     {/* Add model button */}
                     <div
+                      className="settings-list-row settings-list-row-nested settings-list-add"
                       onClick={(e) => { e.stopPropagation(); addModel(pName); }}
                       style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 8px 4px 26px", borderRadius: 5, cursor: "pointer", color: "var(--text-dim)" }}
                       onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
@@ -1581,7 +1568,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
 
             {/* Add provider */}
             <div style={{ borderTop: "1px solid var(--border)", padding: "8px 6px" }}>
-              <button onClick={() => setPickerOpen(true)} style={{
+              <button className="native-button settings-add-button" onClick={() => setPickerOpen(true)} style={{
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
                 width: "100%", padding: "6px 0", background: "none", border: "1px dashed var(--border)", borderRadius: 5,
                 color: "var(--text-muted)", cursor: "pointer", fontSize: 12,
@@ -1595,9 +1582,9 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
           </div>
 
           {/* Right: detail */}
-          <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+          <div className="settings-detail" style={{ flex: 1, overflowY: "auto", padding: 20 }}>
             {loading ? null : detailContent ?? (
-              <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 13 }}>
+              <div className="settings-empty-state" style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 13 }}>
                 Select a provider or model
               </div>
             )}
@@ -1605,21 +1592,14 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Footer */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, padding: "10px 18px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
-          {saveError && <span style={{ fontSize: 12, color: "#f87171", flex: 1 }}>{saveError}</span>}
-          <button onClick={onClose} style={{ padding: "6px 14px", background: "none", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text-muted)", cursor: "pointer", fontSize: 13 }}>
+        <div className="settings-footer" style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, padding: "10px 18px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
+          {saveError && <span className="settings-footer-status is-error" style={{ fontSize: 12, color: "var(--danger)", flex: 1 }}>{saveError}</span>}
+          <button className="native-button" onClick={onClose}>
             Cancel
           </button>
-          <button onClick={handleSave} disabled={saving || savedOk} style={{
+          <button className={`native-button native-button-primary${savedOk ? " is-success" : ""}`} onClick={handleSave} disabled={saving || savedOk} style={{
             position: "relative",
-            padding: "6px 16px",
             minWidth: 92,
-            background: savedOk ? "#16a34a" : saving ? "var(--bg-panel)" : "var(--accent)",
-            border: "none", borderRadius: 6,
-            color: savedOk ? "#fff" : saving ? "var(--text-muted)" : "#fff",
-            cursor: (saving || savedOk) ? "default" : "pointer", fontSize: 13, fontWeight: 600,
-            display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-            transition: "background-color 0.2s ease, color 0.2s ease",
             animation: savedOk ? "saved-pop 0.45s ease" : undefined,
           }}>
             {savedOk && (

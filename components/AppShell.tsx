@@ -425,6 +425,12 @@ export function AppShell() {
   const activeFileTab = fileTabs.find((t) => t.id === activeFileTabId) ?? null;
   const activeCwdName = activeCwd ? getFileName(activeCwd) || activeCwd : null;
   const windowTitle = activeCwdName ? `${activeCwdName} - ${PRODUCT_NAME}` : PRODUCT_NAME;
+  const topBarTitle = selectedSession
+    ? selectedSession.name || selectedSession.firstMessage || "Untitled task"
+    : showChat
+      ? "New task"
+      : PRODUCT_NAME;
+  const topBarSubtitle = activeCwdName ?? "Local coding agent";
 
   useEffect(() => {
     const syncWindowTitle = () => {
@@ -451,12 +457,13 @@ export function AppShell() {
         selectedCwd={selectedSession?.cwd ?? newSessionCwd ?? null}
         onCwdChange={handleCwdChange}
         onOpenFile={handleOpenFile}
+        selectedFilePath={activeFileTab?.filePath ?? null}
         explorerRefreshKey={explorerRefreshKey}
         onExplorerRefresh={handleExplorerRefresh}
         onAtMention={handleAtMention}
         onAtMentions={handleAtMentions}
       />
-      <div style={{ padding: "8px", flexShrink: 0, display: "flex", justifyContent: "space-between", gap: 4 }}>
+      <div className="sidebar-footer" style={{ padding: "8px", flexShrink: 0, display: "flex", justifyContent: "space-between", gap: 4 }}>
         {([
           {
             label: "Models",
@@ -538,57 +545,24 @@ export function AppShell() {
     <>
     <style>{`
       @keyframes session-info-pop {
-        0% {
+        from {
           opacity: 0;
-          transform: translateY(-24px);
-          filter: blur(6px);
-          box-shadow: 0 2px 8px rgba(0,0,0,0);
+          transform: translateY(-4px) scale(0.99);
         }
-        55% {
+        to {
           opacity: 1;
-          transform: translateY(0);
-          filter: blur(0);
-          background: color-mix(in srgb, var(--accent) 8%, var(--bg-panel));
-          box-shadow: 0 18px 44px rgba(37,99,235,0.16);
-        }
-        100% {
-          opacity: 1;
-          transform: translateY(0);
-          filter: blur(0);
-          background: var(--bg-panel);
-          box-shadow: 0 10px 28px rgba(0,0,0,0.10);
-        }
-      }
-      @keyframes session-info-light-wash {
-        0% {
-          opacity: 0;
-          transform: translateX(-110%) skewX(-16deg);
-        }
-        24% {
-          opacity: 0.42;
-        }
-        100% {
-          opacity: 0;
-          transform: translateX(115%) skewX(-16deg);
+          transform: translateY(0) scale(1);
         }
       }
       .session-info-popover {
         position: relative;
         overflow: hidden;
         transform-origin: top right;
-        animation: session-info-pop 360ms ease-out both;
-        will-change: transform, opacity, filter, background, box-shadow;
+        animation: session-info-pop 160ms var(--ease-native) both;
+        will-change: transform, opacity;
       }
       .session-info-popover::after {
-        content: "";
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        left: 0;
-        width: 44%;
-        pointer-events: none;
-        background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 24%, transparent), transparent);
-        animation: session-info-light-wash 620ms ease-out both;
+        display: none;
       }
       @media (prefers-reduced-motion: reduce) {
         .session-info-popover,
@@ -607,7 +581,7 @@ export function AppShell() {
         }
       }
     `}</style>
-    <div style={{ display: "flex", height: "100dvh", overflow: "hidden", background: "var(--bg)" }}>
+    <div className="app-shell" style={{ display: "flex", height: "100dvh", overflow: "hidden", background: "var(--bg)" }}>
       {/* Mobile overlay backdrop */}
       <div
         className={`sidebar-overlay-backdrop${mobileSidebarReady ? "" : " sidebar-mobile-pending"}`}
@@ -625,7 +599,7 @@ export function AppShell() {
 
       {/* Left sidebar */}
       <div
-        className={`sidebar-container${sidebarOpen ? " sidebar-open" : " sidebar-closed"}${mobileSidebarReady ? "" : " sidebar-mobile-pending"}`}
+        className={`app-sidebar sidebar-container${sidebarOpen ? " sidebar-open" : " sidebar-closed"}${mobileSidebarReady ? "" : " sidebar-mobile-pending"}`}
         style={{
           background: "var(--bg-panel)",
           borderRight: "1px solid var(--border)",
@@ -641,8 +615,9 @@ export function AppShell() {
       {/* Center: chat */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         {/* Top bar with sidebar toggle */}
-        <div ref={topBarRef} style={{ display: "flex", alignItems: "center", flexShrink: 0, borderBottom: "1px solid var(--border)", height: 36, background: "var(--bg-panel)" }}>
+        <div ref={topBarRef} className="app-topbar" style={{ display: "flex", alignItems: "center", flexShrink: 0, borderBottom: "1px solid var(--border)", height: 36, background: "var(--bg-panel)" }}>
           <button
+            className="native-icon-button"
             onClick={handleSidebarToggle}
             title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
             aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
@@ -666,10 +641,8 @@ export function AppShell() {
             )}
           </button>
           <button
-            onClick={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              toggleTheme({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
-            }}
+            className="native-icon-button"
+            onClick={toggleTheme}
             title={isDark ? "Switch to light mode" : "Switch to dark mode"}
             aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
             aria-pressed={isDark}
@@ -696,9 +669,14 @@ export function AppShell() {
               </svg>
             )}
           </button>
-          {showChat && (
-            <div style={{ display: "flex", alignItems: "stretch", height: "100%" }}>
+          <div className="app-topbar-title" title={topBarTitle}>
+            <span>{topBarTitle}</span>
+            <small>{topBarSubtitle}</small>
+          </div>
+          {selectedSession && (
+            <div className="app-topbar-actions" style={{ display: "flex", alignItems: "stretch", height: "100%" }}>
               <button
+                className="native-toolbar-button"
                 onClick={handleViewFullHistory}
                 disabled={!selectedSession}
                 title={selectedSession ? "View full history" : "Full history is available after the session is saved"}
@@ -776,6 +754,7 @@ export function AppShell() {
 
                 return (
                   <button
+                    className="native-toolbar-button"
                     type="button"
                     onClick={() => void handleAutoName()}
                     disabled={disabled}
@@ -835,6 +814,7 @@ export function AppShell() {
                 hasSession
               />
               <button
+                className="native-toolbar-button"
                 ref={systemBtnRef}
                 onClick={() => toggleTopPanel("system")}
                 title="System prompt"
@@ -875,7 +855,7 @@ export function AppShell() {
             let ctxStr: string | null = null;
             if (contextUsage?.contextWindow) {
               const pct = contextUsage.percent;
-              if (pct !== null && pct > 90) ctxColor = "#ef4444";
+              if (pct !== null && pct > 90) ctxColor = "var(--danger)";
               else if (pct !== null && pct > 70) ctxColor = "rgba(234,179,8,0.95)";
               ctxStr = pct !== null ? `${pct.toFixed(0)}% / ${fmt(contextUsage.contextWindow)}` : `? / ${fmt(contextUsage.contextWindow)}`;
             }
@@ -896,6 +876,7 @@ export function AppShell() {
 
             return (
               <button
+                className="app-topbar-status native-toolbar-button"
                 type="button"
                 onClick={() => toggleTopPanel("session")}
                 title={tooltip || "Session info"}
@@ -1236,7 +1217,7 @@ export function AppShell() {
         }}
       >
         {/* Right panel tab bar */}
-        <div style={{ display: "flex", alignItems: "center", flexShrink: 0, background: "var(--bg-panel)", borderBottom: "1px solid var(--border)", height: 36 }}>
+        <div className="right-panel-tab-strip">
           <div style={{ flex: 1, overflow: "hidden" }}>
             <TabBar
               tabs={fileTabs}
@@ -1263,8 +1244,14 @@ export function AppShell() {
               )}
             />
           ) : (
-            <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
-              No file open
+            <div className="file-panel-empty-state">
+              <span className="file-panel-empty-icon" aria-hidden="true">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H10l2 2h6.5A2.5 2.5 0 0 1 21 8.5v8A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5Z" />
+                </svg>
+              </span>
+              <strong>No file open</strong>
+              <span>Choose a file from the sidebar to preview it here.</span>
             </div>
           )}
         </div>
@@ -1272,6 +1259,7 @@ export function AppShell() {
     </div>
     {/* File panel toggle — always visible at top-right */}
     <button
+      className="right-panel-toggle"
       onClick={() => setRightPanelOpen((v) => !v)}
       title={rightPanelOpen ? "Hide file panel" : "Show file panel"}
       aria-label={rightPanelOpen ? "Hide file panel" : "Show file panel"}

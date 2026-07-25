@@ -106,20 +106,11 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
 
   const upgradeStyle: CSSProperties = {
     minWidth: 150,
-    padding: "8px 15px",
-    border: "none",
-    borderRadius: 7,
-    background: canUpgrade ? "var(--accent)" : "var(--bg-hover)",
-    color: canUpgrade ? "#fff" : "var(--text-dim)",
-    cursor: canUpgrade ? "pointer" : "default",
-    fontSize: 12,
-    fontWeight: 650,
-    textAlign: "center" as const,
-    textDecoration: "none",
   };
 
   return (
     <div
+      className="native-modal-backdrop"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !upgradeProgress) onClose();
@@ -136,6 +127,7 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
       }}
     >
       <section
+        className="native-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="app-settings-title"
@@ -152,7 +144,7 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
           boxShadow: "0 22px 70px rgba(0,0,0,0.32)",
         }}
       >
-        <header style={{ display: "flex", alignItems: "flex-start", gap: 14, padding: "20px 22px 17px", borderBottom: "1px solid var(--border)" }}>
+        <header className="native-modal-header" style={{ display: "flex", alignItems: "flex-start", gap: 14, padding: "20px 22px 17px", borderBottom: "1px solid var(--border)" }}>
           <div
             aria-hidden="true"
             style={{
@@ -174,7 +166,7 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
           </div>
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-              <h2 id="app-settings-title" style={{ margin: 0, fontSize: 18, lineHeight: 1.25 }}>
+              <h2 className="native-modal-title" id="app-settings-title" style={{ margin: 0, fontSize: 18, lineHeight: 1.25 }}>
                 {APP_DISTRIBUTION_NAME}
               </h2>
               <span style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>
@@ -186,6 +178,7 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
             </div>
           </div>
           <button
+            className="native-modal-close"
             type="button"
             onClick={onClose}
             disabled={Boolean(upgradeProgress)}
@@ -212,6 +205,7 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
               </div>
             ) : components.length > 0 ? components.map((component) => (
               <div
+                className="native-settings-card"
                 key={component.project}
                 style={{
                   display: "grid",
@@ -254,10 +248,10 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
           </div>
 
           {loadError && components.length > 0 && (
-            <div style={{ marginTop: 10, color: "#f87171", fontSize: 11 }}>{loadError}</div>
+            <div className="native-inline-alert is-error" style={{ marginTop: 10 }}>{loadError}</div>
           )}
           {upgradeError && (
-            <div role="alert" style={{ marginTop: 10, padding: "9px 11px", borderRadius: 7, background: "rgba(248,113,113,0.1)", color: "#f87171", fontSize: 11, lineHeight: 1.5 }}>
+            <div className="native-inline-alert is-error" role="alert" style={{ marginTop: 10 }}>
               {upgradeError}
               {appRelease?.releaseUrl && (
                 <a href={appRelease.releaseUrl} target="_blank" rel="noreferrer" style={{ marginLeft: 6, color: "inherit", fontWeight: 650 }}>
@@ -268,13 +262,13 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
           )}
         </div>
 
-        <footer style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 22px", borderTop: "1px solid var(--border)" }}>
+        <footer className="settings-footer" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 22px", borderTop: "1px solid var(--border)" }}>
           <span style={{ color: "var(--text-dim)", fontSize: 10, lineHeight: 1.4 }}>
             {pendingUpdates.length > 0
               ? `${pendingUpdates.map((component) => component.name).join(" → ")} will be updated through one signed ${APP_DISTRIBUTION_NAME} release.`
               : `Upgrading installs a complete signed ${APP_DISTRIBUTION_NAME} release.`}
           </span>
-          <button type="button" disabled={!canUpgrade} onClick={() => void handleUpgrade()} style={upgradeStyle}>
+          <button className="native-button native-button-primary" type="button" disabled={!canUpgrade} onClick={() => void handleUpgrade()} style={upgradeStyle}>
             {upgradeLabel}
           </button>
         </footer>

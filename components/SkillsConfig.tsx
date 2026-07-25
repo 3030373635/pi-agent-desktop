@@ -156,7 +156,7 @@ function SkillDetail({
           onToggle={() => onToggle(skill)}
         />
         {saveError && (
-          <span style={{ fontSize: 12, color: "#f87171", flexShrink: 0 }}>
+          <span style={{ fontSize: 12, color: "var(--danger)", flexShrink: 0 }}>
             {saveError}
           </span>
         )}
@@ -225,6 +225,7 @@ function SkillDetail({
             </span>
             {skill.install.canCheckForUpdates && (
               <button
+                className="native-button native-button-compact"
                 onClick={onCheckUpdate}
                 disabled={checkingUpdate || updating}
                 style={{
@@ -246,7 +247,7 @@ function SkillDetail({
                 style={{
                   fontFamily: "var(--font-mono)",
                   fontSize: 12,
-                  color: "#d97706",
+                  color: "var(--warning)",
                 }}
               >
                 {shortVersion(updateStatus.latestVersion)}
@@ -260,9 +261,9 @@ function SkillDetail({
                   color: checkingUpdate
                     ? "var(--accent)"
                     : updateStatus?.state === "up-to-date"
-                      ? "#16a34a"
+                      ? "var(--success)"
                       : updateStatus?.state === "error"
-                          ? "#ef4444"
+                          ? "var(--danger)"
                           : "var(--text-dim)",
                 }}
               >
@@ -277,6 +278,7 @@ function SkillDetail({
             )}
             {updateStatus?.state === "update-available" && (
               <button
+                className="native-button native-button-compact native-button-primary"
                 onClick={onUpdate}
                 disabled={updating || checkingUpdate}
                 style={{
@@ -296,7 +298,7 @@ function SkillDetail({
             )}
           </div>
           {updateError && (
-            <span style={{ fontSize: 12, color: "#ef4444" }}>{updateError}</span>
+            <span style={{ fontSize: 12, color: "var(--danger)" }}>{updateError}</span>
           )}
         </div>
       )}
@@ -457,6 +459,7 @@ function AddSkillPanel({
             }}
           />
           <button
+            className="native-button native-button-primary"
             onClick={() => search(query)}
             disabled={searching || !query.trim()}
             style={{
@@ -522,11 +525,11 @@ function AddSkillPanel({
 
         {/* Errors */}
         {searchError && (
-          <div style={{ fontSize: 12, color: "#f87171" }}>{searchError}</div>
+          <div style={{ fontSize: 12, color: "var(--danger)" }}>{searchError}</div>
         )}
         {installError && (
           <div
-            style={{ fontSize: 12, color: "#f87171", wordBreak: "break-word" }}
+            style={{ fontSize: 12, color: "var(--danger)", wordBreak: "break-word" }}
           >
             {installError}
           </div>
@@ -612,6 +615,7 @@ function AddSkillPanel({
                   </div>
                 </div>
                 <button
+                  className={`native-button native-button-compact${isInstalled ? " is-success" : ""}`}
                   onClick={() =>
                     !isInstalled && !isInstalling && install(r.package)
                   }
@@ -629,7 +633,7 @@ function AddSkillPanel({
                         : "pointer",
                     background: isInstalled ? "rgba(34,197,94,0.1)" : "none",
                     color: isInstalled
-                      ? "#16a34a"
+                      ? "var(--success)"
                       : isInstalling
                         ? "var(--accent)"
                         : "var(--text-muted)",
@@ -843,6 +847,7 @@ export function SkillsConfig({
 
   return (
     <div
+      className="native-modal-backdrop"
       style={{
         position: "fixed",
         inset: 0,
@@ -857,6 +862,7 @@ export function SkillsConfig({
       }}
     >
       <div
+        className="native-modal settings-modal"
         style={{
           width: isMobile ? "calc(100vw - 16px)" : 860,
           maxWidth: "calc(100vw - 16px)",
@@ -873,6 +879,7 @@ export function SkillsConfig({
       >
         {/* Header */}
         <div
+          className="native-modal-header"
           style={{
             display: "flex",
             alignItems: "center",
@@ -884,6 +891,7 @@ export function SkillsConfig({
         >
           <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
             <span
+              className="native-modal-title"
               style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}
             >
               Skills
@@ -903,6 +911,7 @@ export function SkillsConfig({
             </code>
           </div>
           <button
+            className="native-modal-close"
             onClick={onClose}
             style={{
               background: "none",
@@ -919,9 +928,10 @@ export function SkillsConfig({
         </div>
 
         {/* Body */}
-        <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", overflow: "hidden" }}>
+        <div className="settings-modal-body" style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", overflow: "hidden" }}>
           {/* Left: skill list */}
           <div
+            className="settings-sidebar"
             style={{
               width: isMobile ? "100%" : 210,
               maxHeight: isMobile ? "40vh" : undefined,
@@ -933,7 +943,7 @@ export function SkillsConfig({
               background: "var(--bg-panel)",
             }}
           >
-            <div style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
+            <div className="settings-sidebar-scroll" style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
               {loading ? (
                 <div
                   style={{
@@ -949,7 +959,7 @@ export function SkillsConfig({
                   style={{
                     padding: "10px 8px",
                     fontSize: 11,
-                    color: "#f87171",
+                    color: "var(--danger)",
                   }}
                 >
                   {error}
@@ -1023,6 +1033,7 @@ export function SkillsConfig({
                           const disabled = skill.disableModelInvocation;
                           return (
                             <div
+                              className={`settings-list-row${isSelected ? " is-selected" : ""}`}
                               key={skill.filePath}
                               onClick={() => {
                                 setSelected(skill.filePath);
@@ -1089,7 +1100,7 @@ export function SkillsConfig({
                                   <span
                                     title="Update available"
                                     style={{
-                                      color: "#d97706",
+                                      color: "var(--warning)",
                                       fontSize: 13,
                                       lineHeight: 1,
                                       flexShrink: 0,
@@ -1117,6 +1128,7 @@ export function SkillsConfig({
               }}
             >
               <div
+                className={`settings-list-row settings-list-add${addMode ? " is-selected" : ""}`}
                 onClick={() => setAddMode(true)}
                 style={{
                   display: "flex",
@@ -1156,7 +1168,7 @@ export function SkillsConfig({
           </div>
 
           {/* Right: detail or add panel */}
-          <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+          <div className="settings-detail" style={{ flex: 1, overflowY: "auto", padding: 20 }}>
             {addMode ? (
               <AddSkillPanel
                 cwd={cwd}
@@ -1201,6 +1213,7 @@ export function SkillsConfig({
               />
             ) : (
               <div
+                className="settings-empty-state"
                 style={{
                   height: "100%",
                   display: "flex",
@@ -1218,6 +1231,7 @@ export function SkillsConfig({
 
         {/* Footer */}
         <div
+          className="settings-footer"
           style={{
             display: "flex",
             alignItems: "center",
@@ -1230,6 +1244,7 @@ export function SkillsConfig({
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             {skills.some((skill) => Boolean(skill.install)) && (
               <button
+                className="native-button"
                 onClick={() => void checkForUpdates()}
                 disabled={checkingAll || updatingSkill !== null}
                 style={{
@@ -1252,7 +1267,7 @@ export function SkillsConfig({
             {Object.values(updateStatuses).filter(
               (status) => status.state === "update-available",
             ).length > 0 && (
-              <span style={{ fontSize: 12, color: "#d97706" }}>
+              <span className="settings-footer-status is-warning" style={{ fontSize: 12, color: "var(--warning)" }}>
                 {
                   Object.values(updateStatuses).filter(
                     (status) => status.state === "update-available",
@@ -1267,6 +1282,7 @@ export function SkillsConfig({
             )}
           </div>
           <button
+            className="native-button"
             onClick={onClose}
             style={{
               padding: "6px 14px",

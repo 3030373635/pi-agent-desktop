@@ -176,23 +176,17 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
 
   return (
     <div
+      className="message-user"
       style={{ marginBottom: 16, display: "flex", flexDirection: "column", alignItems: "flex-end" }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 6, maxWidth: "85%" }}>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 6, maxWidth: "min(78%, 660px)" }}>
         <div
+          className="message-user-bubble"
           style={{
             flex: 1,
             minWidth: 0,
-            background: "var(--user-bg)",
-            border: "1px solid rgba(59,130,246,0.2)",
-            borderRadius: 12,
-            padding: "8px 12px",
-            fontSize: 14,
-            lineHeight: 1.6,
-            color: "var(--text)",
-            wordBreak: "break-word",
           }}
         >
           {imageBlocks.length > 0 && (
@@ -214,7 +208,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                     key={i}
                     src={src}
                     alt=""
-                    style={{ maxWidth: 240, maxHeight: 240, borderRadius: 6, objectFit: "contain", display: "block", border: "1px solid rgba(59,130,246,0.15)" }}
+                    style={{ maxWidth: 240, maxHeight: 240, borderRadius: 6, objectFit: "contain", display: "block", border: "1px solid color-mix(in srgb, var(--accent) 15%, transparent)" }}
                   />
                 );
               })}
@@ -471,12 +465,14 @@ function AssistantMessageView({
 
   return (
     <div
+      className="message-assistant"
       style={{ marginBottom: 16 }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
       {/* Model label */}
       <div
+        className="message-assistant-model"
         style={{
           fontSize: 11,
           color: "var(--text-dim)",
@@ -523,13 +519,13 @@ function AssistantMessageView({
         })()}
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div className="message-assistant-content" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {blockItems.map(({ block, originalIndex }) => (
           <BlockView key={`${entryId ?? "stream"}-${originalIndex}`} block={block} toolResults={toolResults} isStreaming={isStreaming} streamingDuration={streamingDurations.get(originalIndex) ?? (block.type === "thinking" ? thinkingDurationFromFile : undefined)} toolCallDurations={toolCallDurations} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} entryId={entryId} blockIndex={originalIndex} />
         ))}
       </div>
 
-      <div style={{
+      <div className="message-assistant-footer" style={{
         display: "flex", alignItems: "center", gap: 8, marginTop: 4,
       }}>
         {message.usage && !isStreaming && (
@@ -664,7 +660,7 @@ function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
         <div
           style={{
             padding: "8px 10px",
-            color: error ? "#f87171" : "var(--text-muted)",
+            color: error ? "var(--danger)" : "var(--text-muted)",
             fontSize: 12,
             lineHeight: 1.6,
             whiteSpace: "pre-wrap",
@@ -721,7 +717,7 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
           minWidth: 0,
         }}
       >
-        <span style={{ color: isError ? "#f87171" : "#16a34a", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
+        <span style={{ color: isError ? "var(--danger)" : "var(--success)", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
           {block.toolName}
         </span>
         <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
@@ -877,7 +873,7 @@ function SplitDiffCellView({ cell, side }: { cell: SplitDiffCell; side: "left" |
   const marker =
     cell.type === "added" ? "+" : cell.type === "removed" ? "-" : " ";
   const markerColor =
-    cell.type === "added" ? "#22c55e" : cell.type === "removed" ? "#f87171" : "var(--text-dim)";
+    cell.type === "added" ? "var(--success)" : cell.type === "removed" ? "var(--danger)" : "var(--text-dim)";
 
   return (
     <div
@@ -947,8 +943,8 @@ function PatchTextView({ text }: { text: string }) {
           kind === "hunk" ? "rgba(96,165,250,0.12)" :
           "transparent";
         const color =
-          kind === "added" ? "#22c55e" :
-          kind === "removed" ? "#f87171" :
+          kind === "added" ? "var(--success)" :
+          kind === "removed" ? "var(--danger)" :
           kind === "hunk" ? "var(--accent)" :
           "var(--text)";
 
@@ -959,9 +955,9 @@ function PatchTextView({ text }: { text: string }) {
               display: "flex",
               background: bg,
               borderLeft: kind === "added"
-                ? "3px solid #22c55e"
+                ? "3px solid var(--success)"
                 : kind === "removed"
-                ? "3px solid #f87171"
+                ? "3px solid var(--danger)"
                 : kind === "hunk"
                 ? "3px solid var(--accent)"
                 : "3px solid transparent",
@@ -1034,7 +1030,7 @@ function PairedResult({ text, isEmpty, isError }: {
         style={{
           margin: 0,
           padding: "8px 10px",
-          color: isError ? "#f87171" : (isEmpty ? "var(--text-dim)" : "var(--text-muted)"),
+          color: isError ? "var(--danger)" : (isEmpty ? "var(--text-dim)" : "var(--text-muted)"),
           fontSize: 12,
           lineHeight: 1.5,
           overflow: "auto",

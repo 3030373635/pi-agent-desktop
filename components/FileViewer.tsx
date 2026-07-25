@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback, type CSSProperties, type MouseEvent } from "react";
+import { useEffect, useState, useRef, useCallback, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import {
   Prism as SyntaxHighlighter,
   createElement as renderSyntaxNode,
@@ -22,6 +22,7 @@ import { resolveLocalFileHref } from "@/lib/file-links";
 import { markdownPreviewRehypePlugins, markdownPreviewRemarkPlugins } from "@/lib/markdown";
 import { parseUnifiedPatch } from "@/lib/patch";
 import type { GitFileDiffResponse } from "@/lib/git-types";
+import { getFileIcon } from "./FileIcons";
 
 interface Props {
   filePath: string;
@@ -148,6 +149,93 @@ function DownloadLink({ filePath, sourceSessionId }: { filePath: string; sourceS
   );
 }
 
+function FileViewerToolbar({
+  filePath,
+  cwd,
+  metadata,
+  watching,
+  sourceSessionId,
+  children,
+}: {
+  filePath: string;
+  cwd?: string;
+  metadata?: string | null;
+  watching: boolean;
+  sourceSessionId?: string | null;
+  children?: ReactNode;
+}) {
+  const relativePath = getRelativeFilePath(filePath, cwd);
+  return (
+    <div className="file-viewer-toolbar">
+      <div className="file-viewer-identity">
+        <span className="file-viewer-file-icon" aria-hidden="true">
+          {getFileIcon(getFileName(filePath), 15)}
+        </span>
+        <span className="file-viewer-path" title={filePath}>{relativePath}</span>
+        {metadata && <span className="file-viewer-meta" title={metadata}>{metadata}</span>}
+      </div>
+      <span
+        title={watching ? "Live sync active" : "Live sync unavailable"}
+        aria-label={watching ? "Live sync active" : "Live sync unavailable"}
+        className={`file-viewer-live-status${watching ? " is-live" : ""}`}
+      >
+        <span className="file-viewer-live-indicator" />
+        <span>{watching ? "Live" : "Static"}</span>
+      </span>
+      <div className="file-viewer-controls">
+        {children}
+        <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />
+      </div>
+    </div>
+  );
+}
+
+function FileViewerStatus({
+  kind,
+  message,
+  onRetry,
+}: {
+  kind: "loading" | "error" | "empty";
+  message?: string;
+  onRetry?: () => void;
+}) {
+  const title = kind === "loading"
+    ? "Opening file"
+    : kind === "error"
+      ? "Couldn’t open this file"
+      : "Nothing to preview";
+
+  return (
+    <div className={`file-viewer-status is-${kind}`} role={kind === "error" ? "alert" : "status"}>
+      <span className="file-viewer-status-icon" aria-hidden="true">
+        {kind === "loading" ? (
+          <svg className="file-viewer-spinner" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+            <path d="M21 12a9 9 0 1 1-5.7-8.4" />
+          </svg>
+        ) : kind === "error" ? (
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 7.5v5" />
+            <path d="M12 16.5h.01" />
+          </svg>
+        ) : (
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h7L20 9.5v9A2.5 2.5 0 0 1 17.5 21h-11A2.5 2.5 0 0 1 4 18.5Z" />
+            <path d="M13.5 3v6.5H20" />
+          </svg>
+        )}
+      </span>
+      <strong>{title}</strong>
+      {message && <span>{message}</span>}
+      {onRetry && (
+        <button type="button" className="file-viewer-retry-button" onClick={onRetry}>
+          Try again
+        </button>
+      )}
+    </div>
+  );
+}
+
 type DiffLine = {
   type: "unchanged" | "removed" | "added";
   text: string;
@@ -159,6 +247,23 @@ function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatLanguage(language: string): string {
+  const labels: Record<string, string> = {
+    css: "CSS",
+    html: "HTML",
+    javascript: "JavaScript",
+    jsx: "JavaScript React",
+    json: "JSON",
+    markdown: "Markdown",
+    plaintext: "Plain text",
+    text: "Plain text",
+    tsx: "TypeScript React",
+    typescript: "TypeScript",
+    yaml: "YAML",
+  };
+  return labels[language] ?? `${language.charAt(0).toUpperCase()}${language.slice(1)}`;
 }
 
 function diffLines(patch: string): DiffLine[] {
@@ -277,7 +382,7 @@ function DiffView({ patch }: { patch: string }) {
           const prefix =
             line.type === "added" ? "+" : line.type === "removed" ? "-" : " ";
           const prefixColor =
-            line.type === "added" ? "#4ade80" : line.type === "removed" ? "#f87171" : "var(--text-dim)";
+            line.type === "added" ? "var(--success)" : line.type === "removed" ? "var(--danger)" : "var(--text-dim)";
 
           return (
             <div
@@ -288,9 +393,9 @@ function DiffView({ patch }: { patch: string }) {
                 minWidth: "100%",
                 background: bg,
                 borderLeft: line.type === "added"
-                  ? "3px solid #4ade80"
+                  ? "3px solid var(--success)"
                   : line.type === "removed"
-                  ? "3px solid #f87171"
+                  ? "3px solid var(--danger)"
                   : "3px solid transparent",
               }}
             >
@@ -376,63 +481,26 @@ function ImageViewer({ filePath, cwd, sourceSessionId }: Props) {
   const src = getFileApiUrl(filePath, "read", sourceSessionId, bust ? { v: bust } : undefined);
 
   const formatSizeStr = size != null ? formatSize(size) : null;
+  const metadata = [
+    ext || "image",
+    naturalSize ? `${naturalSize.w} × ${naturalSize.h}` : null,
+    formatSizeStr,
+  ].filter(Boolean).join(" · ");
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+    <div className="file-viewer-shell">
+      <FileViewerToolbar
+        filePath={filePath}
+        cwd={cwd}
+        metadata={metadata}
+        watching={watching}
+        sourceSessionId={sourceSessionId}
+      />
       <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          padding: "4px 16px",
-          borderBottom: "1px solid var(--border)",
-          fontSize: 11,
-          color: "var(--text-dim)",
-          background: "var(--bg)",
-          flexShrink: 0,
-        }}
-      >
-        <span style={{ fontFamily: "var(--font-mono)" }} title={filePath}>
-          {getRelativeFilePath(filePath, cwd)}
-        </span>
-        <span style={{ marginLeft: "auto" }}>{ext || "image"}</span>
-        {naturalSize && <span>{naturalSize.w} × {naturalSize.h}</span>}
-        {formatSizeStr && <span>{formatSizeStr}</span>}
-        <span
-          title={watching ? "Live sync active" : "Not watching"}
-          style={{ display: "flex", alignItems: "center", gap: 4, color: watching ? "#4ade80" : "var(--text-dim)" }}
-        >
-          <span
-            style={{
-              width: 7,
-              height: 7,
-              borderRadius: "50%",
-              background: watching ? "#4ade80" : "var(--border)",
-              display: "inline-block",
-              boxShadow: watching ? "0 0 4px #4ade80" : "none",
-            }}
-          />
-          {watching ? "live" : "static"}
-        </span>
-        <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />
-      </div>
-      <div
-        style={{
-          flex: 1,
-          overflow: "auto",
-          background: "var(--bg-panel)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: 16,
-          backgroundImage:
-            "linear-gradient(45deg, var(--bg) 25%, transparent 25%), linear-gradient(-45deg, var(--bg) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, var(--bg) 75%), linear-gradient(-45deg, transparent 75%, var(--bg) 75%)",
-          backgroundSize: "16px 16px",
-          backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0px",
-        }}
+        className="file-viewer-image-stage"
       >
         {error ? (
-          <div style={{ color: "#f87171", fontSize: 13 }}>{error}</div>
+          <div style={{ color: "var(--danger)", fontSize: 13 }}>{error}</div>
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -509,59 +577,27 @@ function AudioViewer({ filePath, cwd, sourceSessionId }: Props) {
   }, [filePath, sourceSessionId]);
 
   const src = getFileApiUrl(filePath, "read", sourceSessionId, bust ? { v: bust } : undefined);
+  const metadata = [
+    ext || "audio",
+    duration != null ? formatDuration(duration) : null,
+    size != null ? formatSize(size) : null,
+  ].filter(Boolean).join(" · ");
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+    <div className="file-viewer-shell">
+      <FileViewerToolbar
+        filePath={filePath}
+        cwd={cwd}
+        metadata={metadata}
+        watching={watching}
+        sourceSessionId={sourceSessionId}
+      />
       <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          padding: "4px 16px",
-          borderBottom: "1px solid var(--border)",
-          fontSize: 11,
-          color: "var(--text-dim)",
-          background: "var(--bg)",
-          flexShrink: 0,
-        }}
-      >
-        <span style={{ fontFamily: "var(--font-mono)" }} title={filePath}>
-          {getRelativeFilePath(filePath, cwd)}
-        </span>
-        <span style={{ marginLeft: "auto" }}>{ext || "audio"}</span>
-        {duration != null && <span>{formatDuration(duration)}</span>}
-        {size != null && <span>{formatSize(size)}</span>}
-        <span
-          title={watching ? "Live sync active" : "Not watching"}
-          style={{ display: "flex", alignItems: "center", gap: 4, color: watching ? "#4ade80" : "var(--text-dim)" }}
-        >
-          <span
-            style={{
-              width: 7,
-              height: 7,
-              borderRadius: "50%",
-              background: watching ? "#4ade80" : "var(--border)",
-              display: "inline-block",
-              boxShadow: watching ? "0 0 4px #4ade80" : "none",
-            }}
-          />
-          {watching ? "live" : "static"}
-        </span>
-        <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />
-      </div>
-      <div
-        style={{
-          flex: 1,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: 24,
-          background: "var(--bg-panel)",
-        }}
+        className="file-viewer-audio-stage"
       >
         <div style={{ width: "min(680px, 100%)" }}>
           {error && (
-            <div style={{ color: "#f87171", fontSize: 13, marginBottom: 12, textAlign: "center" }}>
+            <div style={{ color: "var(--danger)", fontSize: 13, marginBottom: 12, textAlign: "center" }}>
               {error}
             </div>
           )}
@@ -644,47 +680,23 @@ function DocumentViewer({ filePath, cwd, sourceSessionId }: Props) {
     };
   }, [filePath, isPdf, sourceSessionId]);
 
+  const metadata = [
+    ext === "docx" ? "DOCX preview" : "PDF",
+    size != null ? formatSize(size) : null,
+  ].filter(Boolean).join(" · ");
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          padding: "4px 16px",
-          borderBottom: "1px solid var(--border)",
-          fontSize: 11,
-          color: "var(--text-dim)",
-          background: "var(--bg)",
-          flexShrink: 0,
-        }}
-      >
-        <span style={{ fontFamily: "var(--font-mono)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={filePath}>
-          {getRelativeFilePath(filePath, cwd)}
-        </span>
-        <span style={{ marginLeft: "auto" }}>{ext === "docx" ? "docx preview" : "pdf"}</span>
-        {size != null && <span>{formatSize(size)}</span>}
-        <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />
-        <span
-          title={watching ? "Live sync active" : "Not watching"}
-          style={{ display: "flex", alignItems: "center", gap: 4, color: watching ? "#4ade80" : "var(--text-dim)", flexShrink: 0 }}
-        >
-          <span
-            style={{
-              width: 7,
-              height: 7,
-              borderRadius: "50%",
-              background: watching ? "#4ade80" : "var(--border)",
-              display: "inline-block",
-              boxShadow: watching ? "0 0 4px #4ade80" : "none",
-            }}
-          />
-          {watching ? "live" : "static"}
-        </span>
-      </div>
-      <div style={{ flex: 1, minHeight: 0, background: "var(--bg-panel)" }}>
+    <div className="file-viewer-shell">
+      <FileViewerToolbar
+        filePath={filePath}
+        cwd={cwd}
+        metadata={metadata}
+        watching={watching}
+        sourceSessionId={sourceSessionId}
+      />
+      <div className="file-viewer-document-stage">
         {error ? (
-          <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, color: "#f87171", fontSize: 13, textAlign: "center" }}>
+          <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, color: "var(--danger)", fontSize: 13, textAlign: "center" }}>
             {error}
           </div>
         ) : (
@@ -723,6 +735,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, gitRefresh
   const [displayMode, setDisplayMode] = useState<DisplayMode>("source");
   const [wrapLines, setWrapLines] = useState(false);
   const [watching, setWatching] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const esRef = useRef<EventSource | null>(null);
   const gitDiffRequestRef = useRef(0);
 
@@ -806,7 +819,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, gitRefresh
       es.close();
       esRef.current = null;
     };
-  }, [filePath, fetchContent, fetchGitDiff, sourceSessionId]);
+  }, [filePath, fetchContent, fetchGitDiff, sourceSessionId, reloadKey]);
 
   useEffect(() => {
     void fetchGitDiff(filePath);
@@ -819,22 +832,20 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, gitRefresh
   }, [displayMode, hasGitDiff]);
 
   if (loading) {
-    return (
-      <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: 13 }}>
-        Loading...
-      </div>
-    );
+    return <FileViewerStatus kind="loading" message={getFileName(filePath)} />;
   }
 
   if (error) {
     return (
-      <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#f87171", fontSize: 13 }}>
-        {error}
-      </div>
+      <FileViewerStatus
+        kind="error"
+        message={error}
+        onRetry={() => setReloadKey((value) => value + 1)}
+      />
     );
   }
 
-  if (!data) return null;
+  if (!data) return <FileViewerStatus kind="empty" />;
 
   const isHtml = data.language === "html";
   const isMarkdown = data.language === "markdown";
@@ -846,66 +857,40 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, gitRefresh
     ...(hasPreview ? ["preview" as const] : []),
     ...(hasGitDiff ? ["diff" as const] : []),
   ];
-  const metadata = `${data.language} · ${lines.length} lines · ${formatSize(data.size)}`;
+  const lineCount = `${lines.length} ${lines.length === 1 ? "line" : "lines"}`;
+  const metadata = `${formatLanguage(data.language)} · ${lineCount} · ${formatSize(data.size)}`;
 
   return (
-    <div className="file-viewer-shell" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
-      <div
-        className="file-viewer-toolbar"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "5px 12px",
-          borderBottom: "1px solid var(--border)",
-          fontSize: 11,
-          color: "var(--text-dim)",
-          background: "var(--bg)",
-          flexShrink: 0,
-        }}
+    <div className="file-viewer-shell">
+      <FileViewerToolbar
+        filePath={filePath}
+        cwd={cwd}
+        metadata={metadata}
+        watching={watching}
+        sourceSessionId={sourceSessionId}
       >
-        <span className="file-viewer-path" style={{ fontFamily: "var(--font-mono)" }} title={filePath}>
-          {getRelativeFilePath(filePath, cwd)}
-        </span>
+        {displayModes.length > 1 && (
+          <div className="file-viewer-mode-switch" aria-label="File view mode">
+            {displayModes.map((mode) => {
+              const active = displayMode === mode;
+              return (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setDisplayMode(mode)}
+                  title={mode === "diff" ? "Compare working tree with HEAD" : undefined}
+                  aria-pressed={active}
+                  className="file-viewer-mode-button"
+                >
+                  {DISPLAY_MODE_LABELS[mode]}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
-        <span className="file-viewer-meta" title={metadata}>{metadata}</span>
-        <span
-          title={watching ? "Live sync active" : "Not watching"}
-          aria-label={watching ? "Live sync active" : "Not watching"}
-          className="file-viewer-live-indicator"
-          style={{
-            background: watching ? "#4ade80" : "var(--border)",
-            boxShadow: watching ? "0 0 4px #4ade80" : "none",
-          }}
-        />
-
-        <div className="file-viewer-controls">
-          {displayModes.length > 1 && (
-            <div className="file-viewer-mode-switch" aria-label="File view mode">
-              {displayModes.map((mode) => {
-                const active = displayMode === mode;
-                return (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => setDisplayMode(mode)}
-                    title={mode === "diff" ? "Compare working tree with HEAD" : undefined}
-                    aria-pressed={active}
-                    className="file-viewer-mode-button"
-                    style={{
-                      background: active ? "var(--bg-selected)" : "transparent",
-                      color: active ? "var(--text)" : "var(--text-muted)",
-                    }}
-                  >
-                    {DISPLAY_MODE_LABELS[mode]}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
+        {displayMode === "source" && (
           <div className="file-viewer-action-slot">
-            {displayMode === "source" && (
               <button
                 type="button"
                 onClick={() => setWrapLines((value) => !value)}
@@ -913,10 +898,6 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, gitRefresh
                 aria-label={wrapLines ? "Disable word wrap" : "Enable word wrap"}
                 aria-pressed={wrapLines}
                 className="file-viewer-icon-button"
-                style={{
-                  background: wrapLines ? "var(--bg-selected)" : "transparent",
-                  color: wrapLines ? "var(--text)" : "var(--text-muted)",
-                }}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M3 6h18" />
@@ -925,12 +906,9 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, gitRefresh
                   <path d="M3 18h7" />
                 </svg>
               </button>
-            )}
           </div>
-
-          <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />
-        </div>
-      </div>
+        )}
+      </FileViewerToolbar>
 
       {/* Content area */}
       <div className="file-viewer-content" style={{ flex: 1, overflow: "auto", background: "var(--bg)" }}>
@@ -970,6 +948,23 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, gitRefresh
 
                   return <a href={href} {...props} onClick={handleClick}>{children}</a>;
                 },
+                img({ src, alt, ...props }) {
+                  delete props.node;
+                  const imageSrc = typeof src === "string" ? src : undefined;
+                  const localImage = resolveLocalFileHref(
+                    imageSrc,
+                    markdownDirectory,
+                    cwd ?? markdownDirectory,
+                  );
+                  return (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={localImage ? getFileApiUrl(localImage, "read", sourceSessionId) : imageSrc}
+                      alt={alt ?? ""}
+                      {...props}
+                    />
+                  );
+                },
               }}
             >
               {data.content}
@@ -988,7 +983,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, gitRefresh
               margin: 0,
               padding: 0,
               border: 0,
-              background: "var(--bg)",
+              backgroundColor: "var(--bg)",
               ...FILE_CODE_STYLE,
               width: wrapLines ? "100%" : "max-content",
               minWidth: "100%",

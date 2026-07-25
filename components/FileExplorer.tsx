@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useState, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from "react";
+import { forwardRef, useState, useCallback, useEffect, useImperativeHandle, useMemo, useRef, type CSSProperties } from "react";
 import { getFileIcon, FolderIcon } from "./FileIcons";
 import {
   encodeFilePathForApi,
@@ -30,6 +30,7 @@ interface FileNode {
 interface Props {
   cwd: string;
   onOpenFile: (filePath: string, fileName: string) => void;
+  selectedFilePath?: string | null;
   refreshKey?: number;
   onAtMention?: (relativePath: string, isDir: boolean) => void;
   onAtMentions?: (relativePaths: string[]) => void;
@@ -110,12 +111,12 @@ const GIT_STATUS_LABELS: Record<GitFileStatusKind, string> = {
 };
 
 const GIT_STATUS_COLORS: Record<GitFileStatusKind, string> = {
-  modified: "#d6a84b",
-  added: "#4ade80",
-  deleted: "#f87171",
-  renamed: "#60a5fa",
-  untracked: "#4ade80",
-  conflict: "#f87171",
+  modified: "var(--warning)",
+  added: "var(--success)",
+  deleted: "var(--danger)",
+  renamed: "var(--accent)",
+  untracked: "var(--success)",
+  conflict: "var(--danger)",
 };
 
 function uploadFiles(
@@ -169,9 +170,7 @@ function DismissButton({ onClick, title }: { onClick: () => void; title: string 
       onClick={onClick}
       title={title}
       aria-label={title}
-      style={{ width: 24, height: 24, padding: 0, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, border: "none", borderRadius: 4, background: "none", color: "var(--text-dim)", cursor: "pointer" }}
-      onMouseEnter={(event) => { event.currentTarget.style.color = "var(--text-muted)"; event.currentTarget.style.background = "var(--bg-hover)"; }}
-      onMouseLeave={(event) => { event.currentTarget.style.color = "var(--text-dim)"; event.currentTarget.style.background = "none"; }}
+      className="file-tree-dismiss-button"
     >
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
         <path d="m6 6 12 12" />
@@ -193,6 +192,8 @@ function TreeNode({
   highlightedPaths,
   gitStatusByPath,
   changedDirectoryPaths,
+  selectedPath,
+  onSelectPath,
 }: {
   node: FileNode;
   depth: number;
@@ -205,6 +206,8 @@ function TreeNode({
   highlightedPaths: Set<string>;
   gitStatusByPath: Map<string, GitFileStatus>;
   changedDirectoryPaths: Set<string>;
+  selectedPath: string | null;
+  onSelectPath: (fullPath: string) => void;
 }) {
   const open = expandedPaths.has(node.fullPath);
   const highlighted = highlightedPaths.has(node.fullPath);
@@ -213,6 +216,7 @@ function TreeNode({
   const containsGitChanges = node.isDir && (
     gitStatus !== undefined || changedDirectoryPaths.has(normalizedPath)
   );
+  const selected = selectedPath === node.fullPath;
   const [children, setChildren] = useState<FileNode[]>(node.children ?? []);
   const [loaded, setLoaded] = useState(node.loaded ?? false);
   const [loading, setLoading] = useState(false);
@@ -241,6 +245,7 @@ function TreeNode({
   }, [refreshToken]);
 
   const handleClick = useCallback(() => {
+    onSelectPath(node.fullPath);
     if (node.isDir) {
       const next = !open;
       onToggleExpanded(node.fullPath, next);
@@ -248,50 +253,43 @@ function TreeNode({
     } else {
       onOpenFile(node.fullPath, node.name);
     }
-  }, [node.isDir, node.fullPath, node.name, loaded, open, loadChildren, onOpenFile, onToggleExpanded]);
+  }, [node.isDir, node.fullPath, node.name, loaded, open, loadChildren, onOpenFile, onSelectPath, onToggleExpanded]);
 
   return (
     <div>
       <div
+        className={`file-tree-row${selected ? " is-selected" : ""}${loading ? " is-loading" : ""}`}
+        role="treeitem"
+        aria-expanded={node.isDir ? open : undefined}
+        aria-selected={selected}
+        tabIndex={selected ? 0 : -1}
         onClick={handleClick}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          handleClick();
+        }}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         style={{
-          position: "relative",
-          display: "flex",
-          alignItems: "center",
-          gap: 4,
           paddingLeft: 8 + depth * 14,
-          paddingRight: 8,
-          height: 24,
-          cursor: "pointer",
-          background: hovered ? "var(--bg-hover)" : "transparent",
-          borderRadius: 4,
-          userSelect: "none",
         }}
       >
         {node.isDir && (
           <svg
             width="10" height="10" viewBox="0 0 10 10" fill="none"
             stroke="var(--text-dim)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-            style={{ flexShrink: 0, transform: open ? "rotate(90deg)" : "none", transition: "transform 0.1s" }}
+            className={`file-tree-chevron${open ? " is-open" : ""}`}
           >
             <polyline points="3 2 7 5 3 8" />
           </svg>
         )}
         {!node.isDir && <span style={{ width: 10, flexShrink: 0 }} />}
-        <span style={{ flexShrink: 0, display: "flex", alignItems: "center" }}>
+        <span className={`file-tree-icon${node.isDir ? " is-folder" : ""}`}>
           {node.isDir ? <FolderIcon size={14} open={open} /> : getFileIcon(node.name, 14)}
         </span>
         <span
-          style={{
-            fontSize: 12,
-            color: "var(--text)",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            flex: 1,
-          }}
+          className="file-tree-label"
           title={node.fullPath}
         >
           {node.name}
@@ -300,7 +298,7 @@ function TreeNode({
           <span
             title="Newly uploaded"
             aria-label="Newly uploaded"
-            style={{ width: 6, height: 6, flexShrink: 0, borderRadius: "50%", background: "#3b82f6" }}
+            className="file-tree-upload-dot"
           />
         )}
         {!hovered && !node.isDir && gitStatus && (
@@ -329,12 +327,12 @@ function TreeNode({
               height: 6,
               flexShrink: 0,
               borderRadius: "50%",
-              background: "#d6a84b",
+              background: "var(--warning)",
             }}
           />
         )}
         {loading && (
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2" strokeLinecap="round">
+          <svg className="file-tree-spinner" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2" strokeLinecap="round">
             <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4" />
           </svg>
         )}
@@ -345,26 +343,8 @@ function TreeNode({
               onAtMention(getRelativeFilePath(node.fullPath, cwd), node.isDir);
             }}
             title="Insert path into chat"
-            style={{
-              position: "absolute",
-              right: !node.isDir ? 28 : 4,
-              top: "50%",
-              transform: "translateY(-50%)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 4,
-              padding: "0 8px",
-              height: 20,
-              background: "var(--bg-panel)",
-              border: "1px solid var(--border)",
-              borderRadius: 4,
-              color: "var(--accent)",
-              cursor: "pointer",
-              fontSize: 11,
-              fontWeight: 600,
-              whiteSpace: "nowrap",
-            }}
+            aria-label={`Mention ${node.name}`}
+            className={`file-tree-action file-tree-mention${!node.isDir ? " has-download" : ""}`}
           >
             <MentionIcon />
             mention
@@ -376,27 +356,8 @@ function TreeNode({
             download
             onClick={(e) => e.stopPropagation()}
             title="Download file"
-            style={{
-              position: "absolute",
-              right: 4,
-              top: "50%",
-              transform: "translateY(-50%)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 4,
-              padding: "0 5px",
-              height: 20,
-              background: "var(--bg-panel)",
-              border: "1px solid var(--border)",
-              borderRadius: 4,
-              color: "var(--text-muted)",
-              cursor: "pointer",
-              fontSize: 11,
-              fontWeight: 600,
-              whiteSpace: "nowrap",
-              textDecoration: "none",
-            }}
+            aria-label={`Download ${node.name}`}
+            className="file-tree-action file-tree-download"
           >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -422,11 +383,13 @@ function TreeNode({
               highlightedPaths={highlightedPaths}
               gitStatusByPath={gitStatusByPath}
               changedDirectoryPaths={changedDirectoryPaths}
+              selectedPath={selectedPath}
+              onSelectPath={onSelectPath}
             />
           ))}
           {children.length === 0 && loaded && (
-            <div style={{ paddingLeft: 8 + (depth + 1) * 14, fontSize: 11, color: "var(--text-dim)", height: 22, display: "flex", alignItems: "center" }}>
-              empty
+            <div className="file-tree-empty-folder" style={{ paddingLeft: 8 + (depth + 1) * 14 }}>
+              Empty folder
             </div>
           )}
         </div>
@@ -438,6 +401,7 @@ function TreeNode({
 export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileExplorer({
   cwd,
   onOpenFile,
+  selectedFilePath,
   refreshKey,
   onAtMention,
   onAtMentions,
@@ -447,6 +411,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [treeRefreshKey, setTreeRefreshKey] = useState(0);
   const [highlightedPaths, setHighlightedPaths] = useState<Set<string>>(new Set());
   const [gitFiles, setGitFiles] = useState<GitFileStatus[]>([]);
@@ -588,12 +553,17 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   useEffect(() => () => onUploadBusyChange?.(false), [onUploadBusyChange]);
 
   useEffect(() => {
+    if (selectedFilePath) setSelectedPath(selectedFilePath);
+  }, [selectedFilePath]);
+
+  useEffect(() => {
     const cwdChanged = prevCwdRef.current !== cwd;
     prevCwdRef.current = cwd;
 
     // Reset expanded state only when cwd changes, not on refreshKey bumps
     if (cwdChanged) {
       setExpandedPaths(new Set());
+      setSelectedPath(null);
       setHighlightedPaths(new Set());
       setUploadSummary(null);
       setPendingConflict(null);
@@ -632,10 +602,10 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   }, [cwd, onAtMentions, uploadSummary]);
 
   return (
-    <div style={{ minHeight: "100%" }}>
+    <div className="file-tree">
       <input ref={uploadInputRef} type="file" multiple hidden onChange={handleUploadInput} />
       {showUploadFeedback && (
-        <div style={{ padding: "6px 8px", borderBottom: "1px solid var(--border)" }}>
+        <div className="file-tree-feedback">
         {uploadBusy && (
           <div role="status" aria-live="polite" aria-label={uploadPhase === "checking" ? "Checking files" : `Uploading, ${uploadProgress}%`}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minHeight: 14, color: "var(--text-muted)" }}>
@@ -661,17 +631,17 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
         )}
 
         {pendingConflict && (
-          <div role="alert" style={{ padding: 7, border: "1px solid color-mix(in srgb, #f59e0b 55%, var(--border))", borderRadius: 4, background: "color-mix(in srgb, #f59e0b 9%, var(--bg-panel))" }}>
+          <div role="alert" style={{ padding: 7, border: "1px solid color-mix(in srgb, var(--warning) 55%, var(--border))", borderRadius: 4, background: "color-mix(in srgb, var(--warning) 9%, var(--bg-panel))" }}>
             <div style={{ fontSize: 11, color: "var(--text)", lineHeight: 1.35, overflowWrap: "anywhere" }}>
               {pendingConflict.conflicts.length} file{pendingConflict.conflicts.length === 1 ? "" : "s"} already exist: {pendingConflict.conflicts.join(", ")}
             </div>
             {pendingConflict.nonReplaceable.length > 0 && (
-              <div style={{ marginTop: 3, fontSize: 10, color: "#f59e0b", lineHeight: 1.35, overflowWrap: "anywhere" }}>
+              <div style={{ marginTop: 3, fontSize: 10, color: "var(--warning)", lineHeight: 1.35, overflowWrap: "anywhere" }}>
                 Cannot replace: {pendingConflict.nonReplaceable.join(", ")}
               </div>
             )}
             <div style={{ display: "flex", gap: 5, marginTop: 7 }}>
-              <button type="button" onClick={() => void performUpload(pendingConflict.files, "overwrite")} style={{ height: 22, padding: "0 7px", border: "1px solid #ef4444", borderRadius: 4, background: "transparent", color: "#ef4444", cursor: "pointer", fontSize: 10 }}>
+              <button type="button" onClick={() => void performUpload(pendingConflict.files, "overwrite")} style={{ height: 22, padding: "0 7px", border: "1px solid var(--danger)", borderRadius: 4, background: "transparent", color: "var(--danger)", cursor: "pointer", fontSize: 10 }}>
                 Replace
               </button>
               <button type="button" onClick={() => void performUpload(pendingConflict.files, "skip")} style={{ height: 22, padding: "0 7px", border: "1px solid var(--border)", borderRadius: 4, background: "var(--bg-panel)", color: "var(--text)", cursor: "pointer", fontSize: 10 }}>
@@ -685,7 +655,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
         )}
 
         {uploadError && (
-          <div role="alert" style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 11, lineHeight: 1.35, color: "#f87171" }}>
+          <div role="alert" style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 11, lineHeight: 1.35, color: "var(--danger)" }}>
             <span style={{ minWidth: 0, flex: 1, overflowWrap: "anywhere" }}>{uploadError}</span>
             <DismissButton onClick={() => setUploadError(null)} title="Dismiss error" />
           </div>
@@ -696,7 +666,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
             <div style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 22, fontSize: 11 }}>
               <div style={{ minWidth: 0, flex: 1, display: "flex", alignItems: "center", gap: 8 }}>
                 {uploadSummary.uploaded.length > 0 && (
-                  <span title={`${uploadSummary.uploaded.length} uploaded`} aria-label={`${uploadSummary.uploaded.length} uploaded`} style={{ display: "flex", alignItems: "center", gap: 3, color: "#22c55e" }}>
+                  <span title={`${uploadSummary.uploaded.length} uploaded`} aria-label={`${uploadSummary.uploaded.length} uploaded`} style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--success)" }}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="m5 12 4 4L19 6" />
                     </svg>
@@ -713,7 +683,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
                   </span>
                 )}
                 {uploadSummary.errors.length > 0 && (
-                  <span title={`${uploadSummary.errors.length} failed`} aria-label={`${uploadSummary.errors.length} failed`} style={{ display: "flex", alignItems: "center", gap: 3, color: "#f87171" }}>
+                  <span title={`${uploadSummary.errors.length} failed`} aria-label={`${uploadSummary.errors.length} failed`} style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--danger)" }}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M12 3 2.5 20h19L12 3Z" />
                       <path d="M12 9v4" />
@@ -738,7 +708,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
               <DismissButton onClick={() => setUploadSummary(null)} title="Dismiss upload results" />
             </div>
             {uploadSummary.errors.map((item) => (
-              <div key={item.name} title={item.error} style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3, minWidth: 0, fontSize: 10, color: "#f87171" }}>
+              <div key={item.name} title={item.error} style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3, minWidth: 0, fontSize: 10, color: "var(--danger)" }}>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }} aria-hidden="true">
                   <circle cx="12" cy="12" r="9" />
                   <path d="M12 8v5" />
@@ -752,11 +722,26 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
         </div>
       )}
 
-      <div style={{ padding: "2px 4px" }}>
+      <div className="file-tree-list" role="tree" aria-label="Project files">
         {loading ? (
-          <div style={{ padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>Loading files...</div>
+          <div className="file-tree-loading" role="status" aria-label="Loading files">
+            {[0, 1, 2, 3, 4, 5].map((item) => (
+              <span key={item} style={{ "--skeleton-width": `${64 + ((item * 17) % 30)}%` } as CSSProperties} />
+            ))}
+          </div>
         ) : error ? (
-          <div style={{ padding: "8px 12px", fontSize: 11, color: "#f87171" }}>{error}</div>
+          <div className="file-tree-message is-error" role="alert">
+            <span>{error}</span>
+            <button
+              type="button"
+              onClick={() => {
+                setLoading(true);
+                setTreeRefreshKey((value) => value + 1);
+              }}
+            >
+              Retry
+            </button>
+          </div>
         ) : (
           roots.map((node) => (
             <TreeNode
@@ -772,12 +757,14 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
               highlightedPaths={highlightedPaths}
               gitStatusByPath={gitStatusByPath}
               changedDirectoryPaths={changedDirectoryPaths}
+              selectedPath={selectedPath}
+              onSelectPath={setSelectedPath}
             />
           ))
         )}
         {!loading && !error && roots.length === 0 && (
-          <div style={{ padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>
-            No files found
+          <div className="file-tree-message">
+            <span>No files found in this folder.</span>
           </div>
         )}
       </div>
