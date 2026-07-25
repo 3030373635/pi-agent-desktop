@@ -20,6 +20,15 @@ import { getFileName } from "@/lib/file-paths";
 import { buildAtMentionText, buildFileAtMentionsText } from "@/lib/file-fuzzy";
 import { PRODUCT_NAME } from "@/lib/branding";
 import { getInitialNavigation } from "@/lib/initial-navigation";
+import { isTauriDesktop } from "@/lib/desktop-updater";
+import {
+  getDesktopPlatform,
+  minimizeWindow,
+  toggleMaximizeWindow,
+  closeWindow,
+  isWindowMaximized,
+  type DesktopPlatform,
+} from "@/lib/desktop-window";
 import type { SessionInfo, SessionTreeNode } from "@/lib/types";
 import type { ChatInputHandle } from "./ChatInput";
 import type { SessionStatsInfo } from "@/lib/pi-types";
@@ -54,6 +63,19 @@ export function AppShell() {
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileSidebarReady, setMobileSidebarReady] = useState(false);
+  // The desktop window has no native title bar; macOS keeps the traffic
+  // lights (we only inset content for them), other platforms need custom
+  // minimize/maximize/close buttons drawn into the top bar instead.
+  const [desktopPlatform, setDesktopPlatform] = useState<DesktopPlatform>(null);
+  const [windowMaximized, setWindowMaximized] = useState(false);
+  useEffect(() => {
+    if (!isTauriDesktop()) return;
+    setDesktopPlatform(getDesktopPlatform());
+    const refreshMaximized = () => { isWindowMaximized().then(setWindowMaximized); };
+    refreshMaximized();
+    window.addEventListener("resize", refreshMaximized);
+    return () => window.removeEventListener("resize", refreshMaximized);
+  }, []);
   // On mobile the sidebar is an overlay drawer; hide it by default so the chat
   // is visible on load. Runs once the breakpoint resolves after hydration.
   useEffect(() => {
@@ -81,7 +103,6 @@ export function AppShell() {
   }, []);
 
   const [systemPrompt, setSystemPrompt] = useState<string | null>(null);
-  const systemBtnRef = useRef<HTMLButtonElement>(null);
 
   const handleSystemPromptChange = useCallback((prompt: string | null) => {
     setSystemPrompt(prompt);
@@ -121,10 +142,13 @@ export function AppShell() {
 
   // Single active panel — only one dropdown open at a time
   const [activeTopPanel, setActiveTopPanel] = useState<"branches" | "system" | "session" | null>(null);
+  const [topMoreOpen, setTopMoreOpen] = useState(false);
+  const topMoreRef = useRef<HTMLDivElement>(null);
   const [topPanelPos, setTopPanelPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
   const toggleTopPanel = useCallback((panel: "branches" | "system" | "session") => {
     if (isMobile) setSidebarOpen(false);
+    setTopMoreOpen(false);
     setActiveTopPanel((cur) => cur === panel ? null : panel);
   }, [isMobile]);
 
@@ -137,6 +161,28 @@ export function AppShell() {
     if (isMobile) setActiveTopPanel(null);
     setSidebarOpen((open) => !open);
   }, [isMobile]);
+
+  useEffect(() => {
+    if (!topMoreOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!topMoreRef.current?.contains(event.target as Node)) setTopMoreOpen(false);
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setTopMoreOpen(false);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [topMoreOpen]);
+
+  useEffect(() => {
+    setTopMoreOpen(false);
+  }, [selectedSession?.id]);
 
   useEffect(() => {
     if (!activeTopPanel || !topBarRef.current) return;
@@ -615,7 +661,12 @@ export function AppShell() {
       {/* Center: chat */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         {/* Top bar with sidebar toggle */}
-        <div ref={topBarRef} className="app-topbar" style={{ display: "flex", alignItems: "center", flexShrink: 0, borderBottom: "1px solid var(--border)", height: 36, background: "var(--bg-panel)" }}>
+        <div
+          ref={topBarRef}
+          className={`app-topbar${desktopPlatform === "macos" && (!sidebarOpen || isMobile) ? " app-topbar--mac-inset" : ""}`}
+          data-tauri-drag-region={desktopPlatform ? true : undefined}
+          style={{ display: "flex", alignItems: "center", flexShrink: 0, borderBottom: "1px solid var(--border)", height: 36, background: "var(--bg-panel)" }}
+        >
           <button
             className="native-icon-button"
             onClick={handleSidebarToggle}
@@ -729,79 +780,6 @@ export function AppShell() {
                 </svg>
                 {!isMobile && <span>Full history</span>}
               </button>
-              {(() => {
-                const hasMessages = Boolean(
-                  selectedSession
-                  && (sessionStats?.userMessages ?? selectedSession.messageCount) > 0,
-                );
-                const disabled = !selectedSession || !hasMessages || autoNameStatus.kind === "naming";
-                const isSuccess = autoNameStatus.kind === "success";
-                const isError = autoNameStatus.kind === "error";
-                const label = autoNameStatus.kind === "naming"
-                  ? "Generating..."
-                  : isSuccess
-                    ? "Title updated"
-                    : isError
-                      ? "Generation failed"
-                      : "Generate title";
-                const title = !selectedSession
-                  ? "Title generation is available after the session is saved"
-                  : !hasMessages
-                    ? "Send a message before naming this session"
-                    : isError
-                      ? autoNameStatus.message
-                      : "Generate a session title";
-
-                return (
-                  <button
-                    className="native-toolbar-button"
-                    type="button"
-                    onClick={() => void handleAutoName()}
-                    disabled={disabled}
-                    title={title}
-                    aria-label={label}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 6,
-                      height: "100%", padding: "0 12px",
-                      background: "none", border: "none",
-                      borderTop: "2px solid transparent",
-                      borderRight: "1px solid var(--border)",
-                      color: isError ? "#dc2626" : isSuccess ? "var(--accent)" : disabled ? "var(--text-dim)" : "var(--text-muted)",
-                      cursor: disabled ? "not-allowed" : "pointer",
-                      opacity: disabled && autoNameStatus.kind !== "naming" ? 0.45 : 1,
-                      flexShrink: 0, fontSize: 11, whiteSpace: "nowrap",
-                      transition: "color 0.1s, background 0.1s, opacity 0.1s",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (disabled) return;
-                      e.currentTarget.style.color = isError ? "#dc2626" : "var(--text)";
-                      e.currentTarget.style.background = "var(--bg-hover)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.color = isError ? "#dc2626" : isSuccess ? "var(--accent)" : disabled ? "var(--text-dim)" : "var(--text-muted)";
-                      e.currentTarget.style.background = "none";
-                    }}
-                  >
-                    {autoNameStatus.kind === "naming" ? (
-                      <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" opacity="0.25" />
-                        <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                      </svg>
-                    ) : isSuccess ? (
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                    ) : (
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="m15 4 5 5L7 22l-5-5Z" />
-                        <path d="m14 5 5 5" />
-                        <path d="M6 4V2M5 3H3M19 19v3M17.5 20.5h3" />
-                      </svg>
-                    )}
-                    {!isMobile && <span>{label}</span>}
-                  </button>
-                );
-              })()}
               <BranchNavigator
                 tree={branchTree}
                 activeLeafId={branchActiveLeafId}
@@ -813,137 +791,171 @@ export function AppShell() {
                 onToggle={() => toggleTopPanel("branches")}
                 hasSession
               />
-              <button
-                className="native-toolbar-button"
-                ref={systemBtnRef}
-                onClick={() => toggleTopPanel("system")}
-                title="System prompt"
-                aria-label="System prompt"
-                aria-pressed={activeTopPanel === "system"}
-                style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  height: "100%", padding: "0 12px",
-                  background: activeTopPanel === "system" ? "var(--bg-selected)" : "none",
-                  border: "none",
-                  borderTop: activeTopPanel === "system" ? "2px solid var(--accent)" : "2px solid transparent",
-                  borderRight: "1px solid var(--border)",
-                  cursor: "pointer",
-                  color: activeTopPanel === "system" ? "var(--text)" : "var(--text-muted)",
-                  fontSize: 11, whiteSpace: "nowrap", transition: "color 0.1s, background 0.1s",
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = activeTopPanel === "system" ? "var(--text)" : "var(--text-muted)"; }}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: systemPrompt ? "var(--accent)" : "var(--text-dim)", flexShrink: 0 }}>
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                  <polyline points="14 2 14 8 20 8" />
-                  <line x1="8" y1="13" x2="16" y2="13" />
-                  <line x1="8" y1="17" x2="13" y2="17" />
-                </svg>
-                {!isMobile && <span>System</span>}
-              </button>
+              {(() => {
+                const hasMessages = Boolean(
+                  selectedSession
+                  && (sessionStats?.userMessages ?? selectedSession.messageCount) > 0,
+                );
+                const nameDisabled = !selectedSession || !hasMessages || autoNameStatus.kind === "naming";
+                const isSuccess = autoNameStatus.kind === "success";
+                const isError = autoNameStatus.kind === "error";
+                const nameLabel = autoNameStatus.kind === "naming"
+                  ? "Generating…"
+                  : isSuccess
+                    ? "Title updated"
+                    : isError
+                      ? "Generation failed"
+                      : "Generate title";
+                const nameDescription = !hasMessages
+                  ? "Available after the first message"
+                  : isError
+                    ? autoNameStatus.message
+                    : "Create a concise title for this session";
+
+                return (
+                  <div className="app-topbar-more" ref={topMoreRef}>
+                    <button
+                      className="native-toolbar-button app-topbar-more-trigger"
+                      type="button"
+                      onClick={() => {
+                        setActiveTopPanel(null);
+                        setTopMoreOpen((open) => !open);
+                      }}
+                      title="More session actions"
+                      aria-label="More session actions"
+                      aria-expanded={topMoreOpen}
+                      aria-haspopup="menu"
+                      style={{
+                        display: "flex", alignItems: "center", gap: 5,
+                        height: "100%", padding: "0 12px",
+                        background: topMoreOpen ? "var(--bg-selected)" : "none",
+                        border: "none",
+                        borderTop: topMoreOpen ? "2px solid var(--accent)" : "2px solid transparent",
+                        color: topMoreOpen ? "var(--text)" : "var(--text-muted)",
+                        cursor: "pointer",
+                        fontSize: 11, whiteSpace: "nowrap",
+                        transition: "color 0.1s, background 0.1s",
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <circle cx="5" cy="12" r="1.65" />
+                        <circle cx="12" cy="12" r="1.65" />
+                        <circle cx="19" cy="12" r="1.65" />
+                      </svg>
+                      {!isMobile && <span>More</span>}
+                    </button>
+                    {topMoreOpen && (
+                      <div className="native-popover app-topbar-more-menu" role="menu" aria-label="More session actions">
+                        <button
+                          className="app-topbar-more-item"
+                          type="button"
+                          role="menuitem"
+                          disabled={nameDisabled}
+                          onClick={() => {
+                            setTopMoreOpen(false);
+                            void handleAutoName();
+                          }}
+                        >
+                          <span
+                            className="app-topbar-more-icon"
+                            style={{
+                              color: isError
+                                ? "var(--danger)"
+                                : isSuccess
+                                  ? "var(--accent)"
+                                  : nameDisabled
+                                    ? "var(--text-dim)"
+                                    : "var(--text-muted)",
+                            }}
+                          >
+                            {autoNameStatus.kind === "naming" ? (
+                              <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" opacity="0.25" />
+                                <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                              </svg>
+                            ) : isSuccess ? (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            ) : (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="m15 4 5 5L7 22l-5-5Z" />
+                                <path d="m14 5 5 5" />
+                                <path d="M6 4V2M5 3H3M19 19v3M17.5 20.5h3" />
+                              </svg>
+                            )}
+                          </span>
+                          <span className="app-topbar-more-copy">
+                            <span>{nameLabel}</span>
+                            <small>{nameDescription}</small>
+                          </span>
+                        </button>
+                        <button
+                          className="app-topbar-more-item"
+                          type="button"
+                          role="menuitem"
+                          onClick={() => toggleTopPanel("system")}
+                        >
+                          <span
+                            className="app-topbar-more-icon"
+                            style={{ color: systemPrompt !== null ? "var(--accent)" : "var(--text-muted)" }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                              <polyline points="14 2 14 8 20 8" />
+                              <line x1="8" y1="13" x2="16" y2="13" />
+                              <line x1="8" y1="17" x2="13" y2="17" />
+                            </svg>
+                          </span>
+                          <span className="app-topbar-more-copy">
+                            <span>System prompt</span>
+                            <small>{systemPrompt === null ? "Loads after the first message" : systemPrompt ? "View active instructions" : "Tools are disabled"}</small>
+                          </span>
+                        </button>
+                        {(() => {
+                          const fmt = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(0)}k` : String(n);
+                          const t = sessionStats?.tokens;
+                          const c = sessionStats?.cost ?? 0;
+                          const parts: string[] = [];
+                          if (t && t.input > 0) parts.push(`↑${fmt(t.input)}`);
+                          if (t && t.output > 0) parts.push(`↓${fmt(t.output)}`);
+                          if (c > 0) parts.push(c >= 0.01 ? `$${c.toFixed(2)}` : "<$0.01");
+                          if (contextUsage?.contextWindow && contextUsage.percent !== null) {
+                            parts.push(`${contextUsage.percent.toFixed(0)}% ctx`);
+                          }
+                          const summary = parts.length > 0 ? parts.join(" · ") : "Tokens, cost and context";
+                          return (
+                            <button
+                              className="app-topbar-more-item"
+                              type="button"
+                              role="menuitem"
+                              disabled={!sessionStats && !contextUsage}
+                              onClick={() => toggleTopPanel("session")}
+                            >
+                              <span
+                                className="app-topbar-more-icon"
+                                style={{ color: activeTopPanel === "session" ? "var(--accent)" : "var(--text-muted)" }}
+                              >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                  <line x1="18" y1="20" x2="18" y2="10" />
+                                  <line x1="12" y1="20" x2="12" y2="4" />
+                                  <line x1="6" y1="20" x2="6" y2="14" />
+                                </svg>
+                              </span>
+                              <span className="app-topbar-more-copy">
+                                <span>Session stats</span>
+                                <small>{summary}</small>
+                              </span>
+                            </button>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
-          {/* Session stats — right-aligned in top bar */}
-          {showChat && (sessionStats || contextUsage) && (() => {
-            const t = sessionStats?.tokens;
-            const c = sessionStats?.cost ?? 0;
-            const fmt = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(0)}k` : String(n);
-            const costStr = c > 0 ? (c >= 0.01 ? `$${c.toFixed(2)}` : `<$0.01`) : null;
-
-            let ctxColor = "var(--text-muted)";
-            let ctxStr: string | null = null;
-            if (contextUsage?.contextWindow) {
-              const pct = contextUsage.percent;
-              if (pct !== null && pct > 90) ctxColor = "var(--danger)";
-              else if (pct !== null && pct > 70) ctxColor = "rgba(234,179,8,0.95)";
-              ctxStr = pct !== null ? `${pct.toFixed(0)}% / ${fmt(contextUsage.contextWindow)}` : `? / ${fmt(contextUsage.contextWindow)}`;
-            }
-
-            const tooltipParts: string[] = [];
-            if (t) {
-              tooltipParts.push(`in: ${t.input.toLocaleString()}`);
-              tooltipParts.push(`out: ${t.output.toLocaleString()}`);
-              tooltipParts.push(`cache read: ${t.cacheRead.toLocaleString()}`);
-              tooltipParts.push(`cache write: ${t.cacheWrite.toLocaleString()}`);
-              if (c > 0) tooltipParts.push(`cost: $${c.toFixed(4)}`);
-            }
-            if (contextUsage?.contextWindow) {
-              const pct = contextUsage.percent;
-              tooltipParts.push(`context: ${pct !== null ? pct.toFixed(1) + "%" : "unknown"} of ${contextUsage.contextWindow.toLocaleString()} tokens`);
-            }
-            const tooltip = tooltipParts.join("  |  ");
-
-            return (
-              <button
-                className="app-topbar-status native-toolbar-button"
-                type="button"
-                onClick={() => toggleTopPanel("session")}
-                title={tooltip || "Session info"}
-                aria-label="Session info"
-                aria-pressed={activeTopPanel === "session"}
-                style={{
-                  marginLeft: "auto",
-                  display: "flex", alignItems: "center", gap: 10,
-                  paddingLeft: 12,
-                  paddingRight: rightPanelOpen ? 12 : 48,
-                  height: "100%",
-                  background: activeTopPanel === "session" ? "var(--bg-selected)" : "none",
-                  border: "none",
-                  borderTop: activeTopPanel === "session" ? "2px solid var(--accent)" : "2px solid transparent",
-                  fontSize: 11, color: "var(--text-muted)",
-                  whiteSpace: "nowrap", cursor: "pointer",
-                  fontVariantNumeric: "tabular-nums",
-                  transition: "color 0.1s, background 0.1s",
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = activeTopPanel === "session" ? "var(--text)" : "var(--text-muted)"; }}
-              >
-                {isMobile && (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
-                  </svg>
-                )}
-                {!isMobile && t && t.input > 0 && (
-                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="5" y1="8.5" x2="5" y2="1.5" /><polyline points="2 4 5 1.5 8 4" />
-                    </svg>
-                    {fmt(t.input)}
-                  </span>
-                )}
-                {!isMobile && t && t.output > 0 && (
-                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="5" y1="1.5" x2="5" y2="8.5" /><polyline points="2 6 5 8.5 8 6" />
-                    </svg>
-                    {fmt(t.output)}
-                  </span>
-                )}
-                {!isMobile && t && t.cacheRead > 0 && (
-                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M8.5 5a3.5 3.5 0 1 1-1-2.45" /><polyline points="6.5 1.5 8.5 2.5 7.5 4.5" />
-                    </svg>
-                    {fmt(t.cacheRead)}
-                  </span>
-                )}
-                {!isMobile && costStr && (
-                  <span style={{ display: "flex", alignItems: "center", color: "var(--text)", fontWeight: 500 }}>
-                    {costStr}
-                  </span>
-                )}
-                {ctxStr && (
-                  <span style={{ display: "flex", alignItems: "center", gap: 4, color: ctxColor }}>
-                    <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M1 9 L1 5 Q1 1 5 1 Q9 1 9 5 L9 9" /><line x1="1" y1="9" x2="9" y2="9" />
-                    </svg>
-                    {ctxStr}
-                  </span>
-                )}
-              </button>
-            );
-          })()}
           {/* Top panel dropdown — shared, only one active at a time */}
           {activeTopPanel && topPanelPos && (
             <div style={{
@@ -1141,6 +1153,47 @@ export function AppShell() {
             </div>
           )}
 
+          {desktopPlatform && desktopPlatform !== "macos" && (
+            <div className="window-controls">
+              <button
+                type="button"
+                className="window-control-btn"
+                aria-label="Minimize"
+                onClick={() => { void minimizeWindow(); }}
+              >
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1">
+                  <line x1="0" y1="5" x2="10" y2="5" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                className="window-control-btn"
+                aria-label={windowMaximized ? "Restore" : "Maximize"}
+                onClick={async () => { await toggleMaximizeWindow(); setWindowMaximized(await isWindowMaximized()); }}
+              >
+                {windowMaximized ? (
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1">
+                    <rect x="2" y="0.5" width="7.5" height="7.5" />
+                    <path d="M0.5 2.5 V9.5 H7.5" />
+                  </svg>
+                ) : (
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1">
+                    <rect x="0.5" y="0.5" width="9" height="9" />
+                  </svg>
+                )}
+              </button>
+              <button
+                type="button"
+                className="window-control-btn window-control-btn--close"
+                aria-label="Close"
+                onClick={() => { void closeWindow(); }}
+              >
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1">
+                  <line x1="0" y1="0" x2="10" y2="10" /><line x1="10" y1="0" x2="0" y2="10" />
+                </svg>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Chat content */}
@@ -1264,10 +1317,11 @@ export function AppShell() {
       title={rightPanelOpen ? "Hide file panel" : "Show file panel"}
       aria-label={rightPanelOpen ? "Hide file panel" : "Show file panel"}
       style={{
-        position: "fixed", top: 0, right: 0, zIndex: 300,
+        // Vertically centered within the 48px top bar so it lines up with the left sidebar toggle.
+        position: "fixed", top: 6, right: 9, zIndex: 300,
         display: "flex", alignItems: "center", justifyContent: "center",
         width: 36, height: 36, padding: 0,
-        background: "var(--bg-panel)", border: "none", borderLeft: "1px solid var(--border)", borderBottom: "1px solid var(--border)",
+        background: "none", border: "none",
         color: rightPanelOpen ? "var(--text)" : "var(--text-muted)",
         cursor: "pointer", transition: "color 0.12s",
       }}

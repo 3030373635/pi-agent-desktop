@@ -10,7 +10,7 @@ interface Props {
   messageRefs: RefObject<(HTMLDivElement | null)[]>;
 }
 
-const MINIMAP_WIDTH = 36;
+const MINIMAP_WIDTH = 16;
 
 function getMessagePreview(msg: AgentMessage | Partial<AgentMessage>): string {
   if (msg.role === "user") {
@@ -320,11 +320,11 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
             {/* Dot */}
             <div
               style={{
-                width: isUser ? 8 : 6,
-                height: isUser ? 8 : 6,
+                width: isUser ? 7 : 5,
+                height: isUser ? 7 : 5,
                 borderRadius: isUser ? 2 : "50%",
                 background: color.bg,
-                border: `1.5px solid ${color.border}`,
+                border: `1px solid ${color.border}`,
                 flexShrink: 0,
                 transition: "transform 0.1s",
                 transform: isNearest ? "scale(1.6)" : "scale(1)",

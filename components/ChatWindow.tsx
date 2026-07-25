@@ -51,9 +51,7 @@ function phaseLabel(phase: AgentPhase): string {
   return "Thinking...";
 }
 
-const CHAT_MINIMAP_WIDTH = 36;
 const CHAT_COLUMN_PADDING = 16;
-const CHAT_INPUT_RIGHT_PADDING = CHAT_COLUMN_PADDING + CHAT_MINIMAP_WIDTH;
 
 function hasFinalAssistantAnswer(message: AgentMessage): boolean {
   if (message.role !== "assistant") return false;
@@ -412,12 +410,10 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "flex-start",
-                gap: 12,
                 marginLeft: 16,
                 marginRight: 16,
               }}
             >
-              <span className="chat-empty-brand-mark">π</span>
               <div className="chat-empty-brand-copy">
                 <strong>Start a task</strong>
                 <span>{PRODUCT_NAME} can explore, edit, and run this project with you.</span>
@@ -429,13 +425,16 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
         </div>
       ) : (
       <>
+      {/* Row: (messages + input) column on the left, full-height minimap on the right */}
+      <div className="flex flex-1 overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
       <div className="relative flex flex-1 overflow-hidden">
         <div
           style={{
             position: "absolute",
             top: 12,
             left: 0,
-            right: isMobile ? 0 : CHAT_MINIMAP_WIDTH,
+            right: 0,
             zIndex: 40,
             padding: `0 ${CHAT_COLUMN_PADDING}px`,
             pointerEvents: "none",
@@ -656,28 +655,25 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
             </div>
           </div>
         </div>
-        {isMobile ? null : (
-          <ChatMinimap
-            messages={messages}
-            streamingMessage={streamState.streamingMessage}
-            scrollContainer={scrollContainerRef}
-            messageRefs={messageRefs}
-          />
-        )}
       </div>
 
       <div className="relative">
-        <div
-          style={{
-            padding: `0 ${CHAT_COLUMN_PADDING}px`,
-            paddingRight: isMobile ? CHAT_COLUMN_PADDING : CHAT_INPUT_RIGHT_PADDING,
-          }}
-        >
+        <div style={{ padding: `0 ${CHAT_COLUMN_PADDING}px` }}>
           <div style={{ maxWidth: 820, margin: "0 auto" }}>
             <ExtensionWidgets widgets={belowEditorWidgets} />
           </div>
         </div>
         {chatInputElement}
+      </div>
+      </div>
+      {isMobile ? null : (
+        <ChatMinimap
+          messages={messages}
+          streamingMessage={streamState.streamingMessage}
+          scrollContainer={scrollContainerRef}
+          messageRefs={messageRefs}
+        />
+      )}
       </div>
       </>
       )}

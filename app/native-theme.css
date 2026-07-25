@@ -28,6 +28,7 @@
   --text: #1d1d1f;
   --text-muted: #68686d;
   --text-dim: #94949a;
+  --text-meta: #85858b;
   --accent: #007aff;
   --accent-hover: #006ee6;
   --accent-soft: rgba(0, 122, 255, 0.1);
@@ -79,6 +80,7 @@ html.dark {
   --text: #f5f5f7;
   --text-muted: rgba(235, 235, 245, 0.64);
   --text-dim: rgba(235, 235, 245, 0.38);
+  --text-meta: rgba(235, 235, 245, 0.44);
   --accent: #0a84ff;
   --accent-hover: #409cff;
   --accent-soft: rgba(10, 132, 255, 0.18);
@@ -235,6 +237,13 @@ pre, code {
   border-bottom: 0 !important;
 }
 
+/* This header sits in the window's top-left corner — reserve vertical room
+   so the macOS traffic-light controls (overlaid via titleBarStyle: Overlay)
+   don't sit on top of the project picker / New / Refresh row. */
+.session-sidebar-header--mac-inset {
+  padding-top: 30px !important;
+}
+
 .sidebar-new-button {
   height: 30px !important;
   padding: 0 11px !important;
@@ -355,6 +364,12 @@ pre, code {
 .session-item-meta {
   margin-top: 3px !important;
   font-size: 11.5px !important;
+  color: var(--text-meta) !important;
+}
+
+.message-meta,
+.message-assistant-model {
+  color: var(--text-meta) !important;
 }
 
 .sidebar-files-pane {
@@ -733,10 +748,50 @@ pre, code {
   transform: scale(0.96);
 }
 
+/* Reserve room for the macOS traffic-light controls overlaid by titleBarStyle: Overlay. */
+.app-topbar--mac-inset {
+  padding-left: 72px !important;
+}
+
+/* Custom window chrome for platforms where the native title bar is fully removed. */
+.window-controls {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.window-control-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.window-control-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.window-control-btn--close:hover {
+  background: #e81123;
+  color: #fff;
+}
+
 .app-topbar-actions {
   display: flex !important;
   height: 34px !important;
   margin-left: auto;
+  /* Clear the fixed right-panel toggle pinned to the window's top-right corner. */
+  margin-right: 52px;
   padding: 2px;
   align-items: stretch !important;
   gap: 1px;
@@ -756,16 +811,77 @@ pre, code {
   font-weight: 500;
 }
 
-.app-topbar-status {
-  height: 30px !important;
-  margin-left: 4px !important;
-  margin-right: 34px !important;
-  padding: 0 8px !important;
-  padding-right: 8px !important;
-  border: 1px solid var(--separator) !important;
-  border-radius: 9px !important;
-  background: color-mix(in srgb, var(--surface) 58%, transparent) !important;
-  box-shadow: var(--shadow-control);
+.app-topbar-more {
+  position: relative;
+  display: flex;
+  height: 100%;
+}
+
+.app-topbar-more-menu {
+  position: absolute;
+  top: calc(100% + 7px);
+  right: -2px;
+  z-index: 650;
+  width: 242px;
+  padding: 5px;
+  transform-origin: top right !important;
+}
+
+.app-topbar-more-item {
+  display: grid !important;
+  grid-template-columns: 24px minmax(0, 1fr);
+  column-gap: 7px;
+  width: 100%;
+  min-height: 46px !important;
+  padding: 7px 8px !important;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.app-topbar-more-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.app-topbar-more-icon {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  background: var(--bg-subtle);
+}
+
+.app-topbar-more-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.app-topbar-more-copy > span {
+  overflow: hidden;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-topbar-more-copy > small {
+  overflow: hidden;
+  color: var(--text-meta);
+  font-size: 10.5px;
+  font-weight: 450;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .native-popover {
@@ -1350,22 +1466,6 @@ pre, code {
   font-family: var(--font-display) !important;
 }
 
-.chat-empty-brand-mark {
-  display: inline-flex;
-  width: 42px;
-  height: 42px;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--separator);
-  border-radius: 12px;
-  background: var(--surface);
-  box-shadow: var(--shadow-control);
-  color: var(--text);
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 25px;
-  font-weight: 600;
-}
-
 .chat-empty-brand-copy {
   display: flex;
   min-width: 0;
@@ -1936,7 +2036,7 @@ pre, code {
 }
 
 .right-panel-toggle {
-  border-radius: 0 0 0 9px;
+  border-radius: 8px;
   transition:
     color 140ms ease,
     background 140ms ease,
