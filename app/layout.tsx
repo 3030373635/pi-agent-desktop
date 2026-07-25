@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { Noto_Sans_Mono } from "next/font/google";
 import "katex/dist/katex.min.css";
 import "./globals.css";
+// Fork-local restyle layer — must come after globals.css so its
+// equal-specificity rules win the cascade. See app/native-theme.css.
+import "./native-theme.css";
 import { PRODUCT_NAME } from "@/lib/branding";
 
 const notoSansMono = Noto_Sans_Mono({
@@ -26,7 +29,7 @@ export default function RootLayout({
         <meta name="google" content="notranslate" />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem("pi-theme");if(t==="dark")document.documentElement.classList.add("dark")}catch(e){}})();`,
+            __html: `(function(){try{var t=localStorage.getItem("pi-theme");var d=t==="dark"||(t!=="light"&&window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(d)document.documentElement.classList.add("dark")}catch(e){}})();`,
           }}
         />
       </head>

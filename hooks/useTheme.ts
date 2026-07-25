@@ -22,12 +22,30 @@ function getServerSnapshot(): Theme {
   return "light";
 }
 
-type ToggleOrigin = { x: number; y: number };
+function storedTheme(): Theme | null {
+  try {
+    const t = localStorage.getItem("pi-theme");
+    return t === "dark" || t === "light" ? t : null;
+  } catch {
+    return null;
+  }
+}
+
+// Follow the OS appearance until the user picks a theme explicitly
+// (toggleTheme persists the choice, which stops the auto-follow).
+if (typeof window !== "undefined") {
+  const media = window.matchMedia?.("(prefers-color-scheme: dark)");
+  media?.addEventListener?.("change", (event) => {
+    if (storedTheme() !== null) return;
+    document.documentElement.classList.toggle("dark", event.matches);
+    listeners.forEach((cb) => cb());
+  });
+}
 
 export function useTheme() {
   const theme = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
-  const toggleTheme = useCallback((origin?: ToggleOrigin) => {
+  const toggleTheme = useCallback(() => {
     const next: Theme = getSnapshot() === "dark" ? "light" : "dark";
 
     const apply = () => {
@@ -52,33 +70,16 @@ export function useTheme() {
       return;
     }
 
-    const x = origin?.x ?? window.innerWidth / 2;
-    const y = origin?.y ?? window.innerHeight / 2;
-    const endRadius = Math.hypot(
-      Math.max(x, window.innerWidth - x),
-      Math.max(y, window.innerHeight - y),
-    );
-
-    const transition = document.startViewTransition(apply);
-    transition.ready
-      .then(() => {
-        document.documentElement.animate(
-          {
-            clipPath: [
-              `circle(0px at ${x}px ${y}px)`,
-              `circle(${endRadius}px at ${x}px ${y}px)`,
-            ],
-          },
-          {
-            duration: 450,
-            easing: "cubic-bezier(0.22, 0.61, 0.36, 1)",
-            pseudoElement: "::view-transition-new(root)",
-          },
-        );
-      })
-      .catch(() => {
-        // transition cancelled — ignore
-      });
+    try {
+      const transition = document.startViewTransition(apply);
+      // A navigation or rapid second toggle can legitimately abort a transition.
+      // Consume those promise rejections so they do not surface as app errors.
+      void transition.ready.catch(() => {});
+      void transition.updateCallbackDone.catch(() => {});
+      void transition.finished.catch(() => {});
+    } catch {
+      apply();
+    }
   }, []);
 
   return { theme, toggleTheme, isDark: theme === "dark" };
