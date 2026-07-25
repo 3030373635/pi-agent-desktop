@@ -51,7 +51,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          if [ "$PI_UPDATE" = "true" ]; then
+          # When a pi-web merge is also pending, defer the pi install until after
+          # the merge: installing first dirties the tree and git refuses to merge.
+          if [ "$PI_UPDATE" = "true" ] && [ "$PI_WEB_UPDATE" != "true" ]; then
             npm install --save-exact \
               "@earendil-works/pi-agent-core@$PI_VERSION" \
               "@earendil-works/pi-ai@$PI_VERSION" \
