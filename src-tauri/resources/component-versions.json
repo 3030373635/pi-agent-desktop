@@ -10,12 +10,12 @@
     {
       "id": "pi",
       "repository": "earendil-works/pi",
-      "version": "0.82.0"
+      "version": "0.82.1"
     },
     {
       "id": "pi-web",
       "repository": "agegr/pi-web",
-      "version": "0.8.0"
+      "version": "0.8.1"
     }
   ]
 }

@@ -2193,11 +2193,11 @@ pre, code {
 
 .file-viewer-action-slot {
   display: flex;
-  width: 28px;
   height: 28px;
-  flex: 0 0 28px;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
+  gap: 4px;
 }
 
 .file-viewer-mode-switch {
