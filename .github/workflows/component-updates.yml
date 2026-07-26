@@ -8,6 +8,8 @@ on:
 permissions:
   actions: write
   contents: write
+  pull-requests: write
+  issues: write
 
 concurrency:
   group: component-release-sync
@@ -38,12 +40,45 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/resolve-component-releases.mjs
 
-      - name: Synchronize released components into main
-        if: steps.releases.outputs.needs_update == 'true'
+      # A sync held for review keeps `needs_update` true until it is merged, so
+      # without this the job would redo the same work — and fail on the existing
+      # branch — every night while the PR sits open.
+      - name: Skip if this sync is already awaiting review
+        id: pending
+        if: steps.releases.outputs.pi_web_update == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          PI_VERSION: ${{ steps.releases.outputs.pi_version }}
           PI_WEB_TAG: ${{ steps.releases.outputs.pi_web_tag }}
+        run: |
+          set -euo pipefail
+          open="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open \
+            --head "sync/pi-web-$PI_WEB_TAG" --limit 1 --json number --jq '.[0].number // empty')"
+          if [ -n "$open" ]; then
+            echo "Sync for $PI_WEB_TAG is already open as PR #$open; nothing to do."
+            echo "awaiting_review=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "awaiting_review=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Classify BEFORE merging: once the merge commit exists the incoming
+      # changeset is no longer recoverable with a plain diff.
+      - name: Classify the upstream changeset against the fork boundary
+        id: boundary
+        if: steps.releases.outputs.pi_web_update == 'true' && steps.pending.outputs.awaiting_review != 'true'
+        env:
+          PI_WEB_TAG: ${{ steps.releases.outputs.pi_web_tag }}
+        run: |
+          set -euo pipefail
+          git remote add pi-web-upstream https://github.com/agegr/pi-web.git
+          git fetch --no-tags pi-web-upstream "refs/tags/$PI_WEB_TAG:refs/tags/pi-web-release"
+          base="$(git merge-base HEAD refs/tags/pi-web-release)"
+          git diff --name-only "$base" refs/tags/pi-web-release \
+            | node scripts/fork-ownership.mjs classify -
+
+      - name: Synchronize released components
+        if: steps.releases.outputs.needs_update == 'true' && steps.pending.outputs.awaiting_review != 'true'
+        env:
+          PI_VERSION: ${{ steps.releases.outputs.pi_version }}
           PI_UPDATE: ${{ steps.releases.outputs.pi_update }}
           PI_WEB_UPDATE: ${{ steps.releases.outputs.pi_web_update }}
         run: |
@@ -54,37 +89,114 @@ jobs:
           # When a pi-web merge is also pending, defer the pi install until after
           # the merge: installing first dirties the tree and git refuses to merge.
           if [ "$PI_UPDATE" = "true" ] && [ "$PI_WEB_UPDATE" != "true" ]; then
-            npm install --save-exact \
-              "@earendil-works/pi-agent-core@$PI_VERSION" \
-              "@earendil-works/pi-ai@$PI_VERSION" \
-              "@earendil-works/pi-coding-agent@$PI_VERSION" \
-              "@earendil-works/pi-tui@$PI_VERSION"
+            npm install --save-exact $(node scripts/pi-packages.mjs --install-spec "$PI_VERSION")
           fi
 
           if [ "$PI_WEB_UPDATE" = "true" ]; then
-            git remote add pi-web-upstream https://github.com/agegr/pi-web.git
-            git fetch --no-tags pi-web-upstream "refs/tags/$PI_WEB_TAG:refs/tags/pi-web-release"
+            # The tag was already fetched by the boundary classification step.
             git merge --no-edit --no-ff refs/tags/pi-web-release
             npm install
             if [ "$PI_UPDATE" = "true" ]; then
-              npm install --save-exact \
-                "@earendil-works/pi-agent-core@$PI_VERSION" \
-                "@earendil-works/pi-ai@$PI_VERSION" \
-                "@earendil-works/pi-coding-agent@$PI_VERSION" \
-                "@earendil-works/pi-tui@$PI_VERSION"
+              npm install --save-exact $(node scripts/pi-packages.mjs --install-spec "$PI_VERSION")
             fi
           fi
 
           node scripts/bump-pi-agent-desktop-version.mjs
           npm run release:manifest
-          node --test lib/*.test.mjs scripts/*.test.mjs
+
+      # A clean `git merge` is not evidence the two sides agree, so the gate has
+      # to be as wide as it can cheaply be. Component tests are included here
+      # deliberately: upstream ships them and they cover fork-modified files.
+      - name: Verify the merged tree
+        if: steps.releases.outputs.needs_update == 'true' && steps.pending.outputs.awaiting_review != 'true'
+        run: |
+          set -euo pipefail
+          npm test
           node_modules/.bin/tsc --noEmit
           npm run lint
+          # Build the standalone output the desktop app actually ships, so a
+          # broken bundle fails here rather than midway through a signed release.
+          PI_WEB_DESKTOP_BUILD=1 node_modules/.bin/next build --webpack
 
+      - name: Commit the sync
+        if: steps.releases.outputs.needs_update == 'true' && steps.pending.outputs.awaiting_review != 'true'
+        run: |
+          set -euo pipefail
           git add --all
           git commit -m "chore: sync released pi components"
+
+      # Upstream did not touch anything this fork has modified, so the merge
+      # cannot have produced a silent semantic conflict. Ship it.
+      - name: Publish unattended
+        if: steps.releases.outputs.needs_update == 'true' && steps.pending.outputs.awaiting_review != 'true' && steps.boundary.outputs.review_required != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
           git push origin HEAD:main
 
           # Pushes made with GITHUB_TOKEN do not trigger other push workflows,
           # so dispatch the signed release build explicitly after main updates.
           gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref main
+
+      # Upstream changed files the fork has also rewritten. Git may have merged
+      # them cleanly and still be wrong, so a human reviews before anything is
+      # signed and published.
+      - name: Open a review PR
+        if: steps.releases.outputs.needs_update == 'true' && steps.pending.outputs.awaiting_review != 'true' && steps.boundary.outputs.review_required == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PI_WEB_TAG: ${{ steps.releases.outputs.pi_web_tag }}
+          HIGHEST_RISK: ${{ steps.boundary.outputs.highest_risk }}
+          BOUNDARY_REPORT: ${{ steps.boundary.outputs.report }}
+        run: |
+          set -euo pipefail
+          branch="sync/pi-web-$PI_WEB_TAG"
+          git push --force-with-lease origin "HEAD:refs/heads/$branch"
+
+          {
+            echo "Automated sync of \`$PI_WEB_TAG\`, held for review."
+            echo
+            echo "$BOUNDARY_REPORT"
+            echo
+            echo "Tests, \`tsc --noEmit\`, lint and the desktop build all passed —"
+            echo "that is exactly why this needs eyes. Check the listed files for"
+            echo "behaviour the merge kept from both sides."
+            echo
+            echo "Merging this PR to \`main\` triggers the signed release build."
+          } > /tmp/pr-body.md
+
+          gh pr create \
+            --repo "$GITHUB_REPOSITORY" \
+            --base main \
+            --head "$branch" \
+            --title "chore: sync pi-web $PI_WEB_TAG (review required: $HIGHEST_RISK risk)" \
+            --body-file /tmp/pr-body.md
+
+      # Without this a failed sync is silent, and the fork quietly falls behind
+      # upstream until someone happens to look at the Actions tab.
+      - name: Report a failed sync
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" \
+            --state open --label component-sync-failure --limit 1 --json number --jq '.[0].number // empty')"
+
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" \
+              --body "Sync failed again: $RUN_URL"
+          else
+            gh label create component-sync-failure --repo "$GITHUB_REPOSITORY" \
+              --color B60205 --description "Automated pi/pi-web sync needs attention" 2>/dev/null || true
+            gh issue create --repo "$GITHUB_REPOSITORY" \
+              --title "Component sync failed" \
+              --label component-sync-failure \
+              --body "The nightly pi/pi-web sync failed: $RUN_URL
+
+          Most likely a merge conflict against a file listed in \`scripts/fork-ownership.json\`.
+          See docs/ownership-boundaries.md for how to resolve it. This issue is reused for
+          subsequent failures — close it once the sync is green again."
+          fi

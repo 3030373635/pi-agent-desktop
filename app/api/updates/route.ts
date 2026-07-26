@@ -16,7 +16,7 @@ import type {
   AppUpdateInfo,
   AppUpdateProjectId,
   AppUpdatesResponse,
-} from "@/lib/api-types";
+} from "@/lib/app-update-types";
 
 export const dynamic = "force-dynamic";
 

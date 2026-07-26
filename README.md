@@ -135,14 +135,17 @@ npm run desktop:dev
 ### 常用检查
 
 ```bash
-# Node 测试
-node --test lib/*.test.mjs scripts/*.test.mjs
+# Node 测试（与 CI 同步门禁完全一致，含 components/ 测试）
+npm test
 
 # TypeScript
 node_modules/.bin/tsc --noEmit
 
 # ESLint 与品牌保护测试
 npm run lint
+
+# 与 pi-web 上游的偏离度：区分「样式类」与「结构类」改动
+npm run drift
 
 # Rust/Tauri
 cargo fmt --check --manifest-path src-tauri/Cargo.toml
@@ -171,12 +174,16 @@ npm run desktop:build
 
 ## 上游同步与 Release
 
-仓库包含两条串联的自动化工作流，更新过程只使用 `main`：
+仓库包含两条串联的自动化工作流：
 
-- [`component-updates.yml`](./.github/workflows/component-updates.yml)：每天检查 `pi` 和 `pi-web` 的稳定 Release；发现新版后直接更新 `main` 中的依赖、合并 `pi-web` Release Tag、更新组件清单并运行完整检查，成功后提交到 `main` 并触发发布。
+- [`component-updates.yml`](./.github/workflows/component-updates.yml)：每天检查 `pi` 和 `pi-web` 的稳定 Release。发现新版后，**先**把上游改动集与 [`scripts/fork-ownership.json`](./scripts/fork-ownership.json) 记录的「本仓库改过的上游文件」求交集，再合并 Tag、更新依赖和组件清单，并运行完整门禁（`npm test`、`tsc`、`lint`、真实 standalone 构建）。
+  - 交集为空 → 直接提交 `main` 并触发发布；
+  - 命中高/中风险文件 → 推送 `sync/pi-web-<tag>` 分支并开 PR，附上边界报告，**不**触发发布。合并该 PR 才会发版。
 - [`release.yml`](./.github/workflows/release.yml)：收到组件同步工作流的显式触发后，串行构建 Apple Silicon (`aarch64`) DMG 和 Windows x64 NSIS `-setup.exe`，仍不构建 Intel Mac 版本。Release 在两个平台的 updater 签名文件、`latest.json` 和组件清单全部上传完成前保持草稿状态。
 
-上游同步使用 Git 合并，因此本仓库维护的 Pi Agent 品牌、设置入口和升级逻辑会作为本地修改保留。如果上游与本地修改发生冲突，工作流会停止，必须审核和解决冲突后才能发布。
+上游同步使用 Git 合并，因此本仓库维护的 Pi Agent 品牌、设置入口和升级逻辑会作为本地修改保留。合并冲突会让工作流停止——这是安全的失败方式。真正危险的是**无冲突但语义错误**的合并：上游改了本仓库也改过的区域，Git 干净地合上了，测试也全绿。上面的边界求交就是为此设置的，规则见 [维护边界说明](./docs/ownership-boundaries.md)。
+
+同步失败会自动创建/更新 `component-sync-failure` Issue，不会静默积压。
 
 正式发布前需要配置：
 
@@ -203,6 +210,7 @@ instrumentation.ts     Next.js 服务端 HTTP 代理初始化
 
 ## 相关文档
 
+- [维护边界说明](./docs/ownership-boundaries.md) — 与 `pi-web` 上游的分工、改共享文件的规则、自动同步的判定逻辑
 - [桌面升级与发布说明](./docs/desktop-updates.md)
 - [Git Worktree 使用说明](./docs/worktrees.zh-CN.md)
 - [Pi Session 与项目架构说明](./AGENTS.md)

@@ -20,15 +20,7 @@ import { getFileName } from "@/lib/file-paths";
 import { buildAtMentionText, buildFileAtMentionsText, buildFileLineMentionText } from "@/lib/file-fuzzy";
 import { PRODUCT_NAME } from "@/lib/branding";
 import { getInitialNavigation } from "@/lib/initial-navigation";
-import { isTauriDesktop } from "@/lib/desktop-updater";
-import {
-  getDesktopPlatform,
-  minimizeWindow,
-  toggleMaximizeWindow,
-  closeWindow,
-  isWindowMaximized,
-  type DesktopPlatform,
-} from "@/lib/desktop-window";
+import { WindowControls, useDesktopChrome } from "./desktop";
 import type { SessionInfo, SessionTreeNode } from "@/lib/types";
 import type { ChatInputHandle } from "./ChatInput";
 import type { SessionStatsInfo } from "@/lib/pi-types";
@@ -63,19 +55,10 @@ export function AppShell() {
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileSidebarReady, setMobileSidebarReady] = useState(false);
-  // The desktop window has no native title bar; macOS keeps the traffic
-  // lights (we only inset content for them), other platforms need custom
-  // minimize/maximize/close buttons drawn into the top bar instead.
-  const [desktopPlatform, setDesktopPlatform] = useState<DesktopPlatform>(null);
-  const [windowMaximized, setWindowMaximized] = useState(false);
-  useEffect(() => {
-    if (!isTauriDesktop()) return;
-    setDesktopPlatform(getDesktopPlatform());
-    const refreshMaximized = () => { isWindowMaximized().then(setWindowMaximized); };
-    refreshMaximized();
-    window.addEventListener("resize", refreshMaximized);
-    return () => window.removeEventListener("resize", refreshMaximized);
-  }, []);
+  // The desktop window has no native title bar. macOS keeps its traffic lights
+  // and only needs the top bar inset for them; other platforms get the buttons
+  // from <WindowControls />, which renders nothing in a browser build.
+  const desktopChrome = useDesktopChrome();
   // On mobile the sidebar is an overlay drawer; hide it by default so the chat
   // is visible on load. Runs once the breakpoint resolves after hydration.
   useEffect(() => {
@@ -667,8 +650,8 @@ export function AppShell() {
         {/* Top bar with sidebar toggle */}
         <div
           ref={topBarRef}
-          className={`app-topbar${desktopPlatform === "macos" && (!sidebarOpen || isMobile) ? " app-topbar--mac-inset" : ""}`}
-          data-tauri-drag-region={desktopPlatform ? true : undefined}
+          className={`app-topbar${desktopChrome.isMacOS && (!sidebarOpen || isMobile) ? " app-topbar--mac-inset" : ""}`}
+          {...desktopChrome.dragRegionProps}
           style={{ display: "flex", alignItems: "center", flexShrink: 0, borderBottom: "1px solid var(--border)", height: 36, background: "var(--bg-panel)" }}
         >
           <button
@@ -1157,47 +1140,7 @@ export function AppShell() {
             </div>
           )}
 
-          {desktopPlatform && desktopPlatform !== "macos" && (
-            <div className="window-controls">
-              <button
-                type="button"
-                className="window-control-btn"
-                aria-label="Minimize"
-                onClick={() => { void minimizeWindow(); }}
-              >
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1">
-                  <line x1="0" y1="5" x2="10" y2="5" />
-                </svg>
-              </button>
-              <button
-                type="button"
-                className="window-control-btn"
-                aria-label={windowMaximized ? "Restore" : "Maximize"}
-                onClick={async () => { await toggleMaximizeWindow(); setWindowMaximized(await isWindowMaximized()); }}
-              >
-                {windowMaximized ? (
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1">
-                    <rect x="2" y="0.5" width="7.5" height="7.5" />
-                    <path d="M0.5 2.5 V9.5 H7.5" />
-                  </svg>
-                ) : (
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1">
-                    <rect x="0.5" y="0.5" width="9" height="9" />
-                  </svg>
-                )}
-              </button>
-              <button
-                type="button"
-                className="window-control-btn window-control-btn--close"
-                aria-label="Close"
-                onClick={() => { void closeWindow(); }}
-              >
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1">
-                  <line x1="0" y1="0" x2="10" y2="10" /><line x1="10" y1="0" x2="0" y2="10" />
-                </svg>
-              </button>
-            </div>
-          )}
+          <WindowControls />
         </div>
 
         {/* Chat content */}
