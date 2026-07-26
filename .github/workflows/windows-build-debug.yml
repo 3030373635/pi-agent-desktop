@@ -80,14 +80,31 @@ jobs:
         env:
           PI_WEB_DESKTOP_BUILD: "1"
 
-      - name: Build with a stray-scan tracer attached
+      # desktop:prepare rather than a bare `next build`: it runs the same build
+      # and then exercises the Windows-only half of prepare-desktop.mjs — the
+      # node.exe copy and the npm lookup — which a plain build never touches.
+      # Still no Tauri, no signing, no release.
+      - name: Stage the desktop server with a stray-scan tracer attached
         shell: bash
         continue-on-error: true
         env:
-          PI_WEB_DESKTOP_BUILD: "1"
           NEXT_TELEMETRY_DISABLED: "1"
           NODE_OPTIONS: "--require ./scripts/trace-stray-scandir.cjs --stack-trace-limit=60"
-        run: node_modules/.bin/next build --webpack
+        run: npm run desktop:prepare
+
+      - name: Show what got staged
+        shell: bash
+        continue-on-error: true
+        run: |
+          echo "--- server entry ---"
+          ls -la src-tauri/resources/server/server.js src-tauri/resources/server/desktop-server.cjs
+          echo "--- bundled node runtime ---"
+          ls -la src-tauri/resources/node/
+          "./src-tauri/resources/node/node.exe" --version
+          echo "--- bundled pi packages ---"
+          for d in src-tauri/resources/server/node_modules/@earendil-works/*/dist; do
+            echo "$d: $(ls "$d" | wc -l) entries"
+          done
 
       - name: Look for junction loops in the profile
         shell: pwsh
