@@ -17,6 +17,24 @@ declare global {
 const ALLOWED_ROOTS_TTL_MS = 5_000;
 const WINDOWS_ABSOLUTE_RE = /^[a-zA-Z]:[\\/]/;
 
+/**
+ * Base directory for the `pi-cwd-<date>` folders the default-cwd endpoint makes.
+ *
+ * Read through an env var first. That is a real override, and it also keeps a
+ * literal `homedir()` out of the arguments to `readdirSync`/`join`: Next's file
+ * tracer (@vercel/nft) statically evaluates those, and on seeing the home
+ * directory it globs `<home>/**\/*` at build time. A Windows user profile is
+ * full of junction loops (Application Data, Local Settings) and WindowsApps
+ * reparse points, so that walk dies with EPERM/EACCES and fails the build —
+ * which is why the Windows release leg never once succeeded. Reading an env var
+ * first makes the expression dynamic, so nft stops folding it.
+ *
+ * See .github/workflows/windows-build-debug.yml for the full diagnosis.
+ */
+export function defaultCwdBase(): string {
+  return process.env.PI_AGENT_DEFAULT_CWD_ROOT || homedir();
+}
+
 export function isWindowsAbsolutePath(filePath: string): boolean {
   return WINDOWS_ABSOLUTE_RE.test(filePath) || filePath.startsWith("\\\\") || filePath.startsWith("//");
 }
@@ -37,9 +55,10 @@ export async function getAllowedFileRoots(): Promise<Set<string>> {
 
   // Also allow ~/pi-cwd-* directories created by the default-cwd endpoint.
   try {
-    for (const name of readdirSync(homedir())) {
+    const base = defaultCwdBase();
+    for (const name of readdirSync(base)) {
       if (/^pi-cwd-\d{8}$/.test(name)) {
-        roots.add(normalizeSlashes(path.join(homedir(), name)));
+        roots.add(normalizeSlashes(path.join(base, name)));
       }
     }
   } catch {
