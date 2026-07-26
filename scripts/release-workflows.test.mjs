@@ -121,6 +121,29 @@ test("history is never rewritten on main", () => {
   assert.doesNotMatch(componentUpdates, /push .*--force-with-lease origin HEAD:main/);
 });
 
+test("a failed release build is reported instead of failing silently", async () => {
+  // Four consecutive v0.1.3 builds failed on Windows with no notification, and
+  // the draft was published by hand with macOS artifacts and no manifest.
+  const workflow = await readFile(join(root, ".github", "workflows", "release.yml"), "utf8");
+
+  assert.match(workflow, /if: failure\(\)/);
+  assert.match(workflow, /gh issue create/);
+  assert.match(workflow, /release-failure/);
+  assert.match(workflow, /needs: \[build, manifest\]/);
+});
+
+test("the manifest job only publishes when every platform succeeded", async () => {
+  // `needs: build` covers the whole matrix, so one failed platform keeps the
+  // release a draft. Publishing a release that is missing a platform's
+  // installer or its component manifest breaks updates for that platform.
+  const workflow = await readFile(join(root, ".github", "workflows", "release.yml"), "utf8");
+  const manifestJob = workflow.slice(workflow.indexOf("\n  manifest:"), workflow.indexOf("\n  notify:"));
+
+  assert.match(manifestJob, /needs: build/);
+  assert.doesNotMatch(manifestJob, /if: (always|success\(\) \|\|)/);
+  assert.match(manifestJob, /--draft=false --latest/);
+});
+
 test("release workflow publishes Apple Silicon and Windows x64 installers", async () => {
   const workflow = await readFile(
     join(root, ".github", "workflows", "release.yml"),
