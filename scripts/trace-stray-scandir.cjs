@@ -93,4 +93,29 @@ for (const fnName of ["readdir", "opendir"]) {
   };
 }
 
+// The stray walks all originate in @vercel/nft calling next's bundled glob, but
+// the stack stops inside glob's async internals — it never shows the pattern
+// that started it. Hook the module loader to capture pattern + cwd at call time.
+const Module = require("node:module");
+const originalLoad = Module._load;
+
+Module._load = function patchedLoad(request, parent, isMain) {
+  const exported = originalLoad.call(this, request, parent, isMain);
+  if (!request.includes("compiled/glob") || typeof exported !== "function" || exported.__patched) {
+    return exported;
+  }
+
+  const wrapped = function tracedGlob(pattern, options, callback) {
+    const cwd = (options && options.cwd) || process.cwd();
+    console.error(
+      `[glob] pattern=${JSON.stringify(pattern)} cwd=${JSON.stringify(cwd)}` +
+        ` caller=${(new Error().stack ?? "").split("\n")[2]?.trim() ?? "?"}`,
+    );
+    return exported.call(this, pattern, options, callback);
+  };
+  Object.assign(wrapped, exported);
+  wrapped.__patched = true;
+  return wrapped;
+};
+
 console.error(`[trace-stray-scandir] armed — project=${projectDir} cwd=${process.cwd()}`);
