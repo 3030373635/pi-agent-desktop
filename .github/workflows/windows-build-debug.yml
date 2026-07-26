@@ -1,9 +1,31 @@
 name: Debug the Windows desktop build
 
 # Manual only, and deliberately not part of any release path: it produces no
-# artifacts, creates no release, and signs nothing. Its whole job is to answer
-# one question — which directory walk reaches C:\Users\runneradmin and dies on
-# the Application Data junction.
+# artifacts, creates no release, and signs nothing.
+#
+# ROOT CAUSE (found 2026-07-26, runs 30203907309 and 30204652244):
+#
+#   app/api/default-cwd/route.ts does
+#       const dir = join(homedir(), `pi-cwd-${date}`);
+#       mkdirSync(dir, { recursive: true });
+#
+#   Next's file tracer (@vercel/nft) statically analyses that fs call. It can
+#   evaluate homedir(), but the template literal is dynamic, so it turns the
+#   path into a glob and enumerates the base. The two patterns it issued were:
+#
+#       C:\Users\runneradmin\pi-cwd-*
+#       C:\Users\runneradmin/**/*        <- note the mixed separators
+#
+#   The second walks the entire user profile, which on a Windows runner is full
+#   of legacy junctions (Application Data -> AppData\Roaming, Local Settings ->
+#   AppData\Local, Cookies, ...) plus WindowsApps reparse points. Enumerating
+#   them returns EPERM/EACCES and fails the build.
+#
+#   The same build on macOS reports ZERO scans outside the checkout, so this is
+#   Windows-specific rather than a latent problem everywhere.
+#
+#   This also explains why 576181f did not help: outputFileTracingRoot bounds
+#   where traced output is rooted, not where nft follows an analysed path.
 #
 # Delete this workflow once the Windows leg is restored in release.yml.
 
