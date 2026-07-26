@@ -122,12 +122,37 @@ jobs:
       contents: read
       issues: write
     steps:
+      # This repository currently has Issues disabled, so an issue-only alert
+      # silently fails and reports nothing — which is how four consecutive
+      # failed releases went unnoticed. The job summary always works; the issue
+      # is attempted on top and starts working by itself if Issues are enabled.
       - name: Report the failed release
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
+          {
+            echo "## Signed release build failed"
+            echo
+            echo "[Run log]($RUN_URL)"
+            echo
+            echo "The release for this version stays a **draft** and has no"
+            echo "\`component-versions.json\`: the manifest job only runs when every"
+            echo "platform in the build matrix succeeds."
+            echo
+            echo "**Do not publish it by hand.** A release missing a platform's installer"
+            echo "or its component manifest will not serve updates to that platform —"
+            echo "that is exactly how v0.1.3 shipped macOS-only."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          issues_enabled="$(gh api "repos/$GITHUB_REPOSITORY" --jq .has_issues 2>/dev/null || echo false)"
+          if [ "$issues_enabled" != "true" ]; then
+            echo "Issues are disabled for $GITHUB_REPOSITORY; reported in the job summary only."
+            echo "Enable Issues to also get a persistent, notifying alert." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
           existing="$(gh issue list --repo "$GITHUB_REPOSITORY" \
             --state open --label release-failure --limit 1 --json number --jq '.[0].number // empty')"
 

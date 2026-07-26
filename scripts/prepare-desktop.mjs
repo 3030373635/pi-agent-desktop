@@ -1,4 +1,4 @@
-import { access, chmod, copyFile, cp, mkdir, rm } from "node:fs/promises";
+import { access, chmod, copyFile, cp, mkdir, readFile, readdir, rm } from "node:fs/promises";
 import { constants } from "node:fs";
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
@@ -79,6 +79,106 @@ async function assembleServer() {
   }
 }
 
+async function readPackageVersion(packageDir) {
+  try {
+    return JSON.parse(await readFile(join(packageDir, "package.json"), "utf8")).version ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Package directories directly under a node_modules dir, resolving @scope/name. */
+async function listPackageDirs(nodeModulesDir) {
+  const packages = [];
+  let entries;
+  try {
+    entries = await readdir(nodeModulesDir, { withFileTypes: true });
+  } catch {
+    return packages;
+  }
+
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name === ".bin") continue;
+    const entryPath = join(nodeModulesDir, entry.name);
+
+    if (entry.name.startsWith("@")) {
+      for (const scoped of await readdir(entryPath, { withFileTypes: true })) {
+        if (scoped.isDirectory()) {
+          packages.push({ name: `${entry.name}/${scoped.name}`, dir: join(entryPath, scoped.name) });
+        }
+      }
+      continue;
+    }
+    packages.push({ name: entry.name, dir: entryPath });
+  }
+  return packages;
+}
+
+/**
+ * Drop nested node_modules copies that duplicate a top-level package at the
+ * exact same version.
+ *
+ * npm nests a dependency when versions conflict, but it also leaves redundant
+ * copies behind. Each nesting level adds ~45 characters to every path inside
+ * it, and NSIS cannot open a path over Windows' 260-character MAX_PATH — one
+ * file in @mistralai took the whole Windows installer down that way.
+ *
+ * Only exact version matches are removed, so a genuine version conflict keeps
+ * its nested copy and Node still resolves it correctly.
+ */
+async function dedupeNestedPackages() {
+  const topLevelDir = join(serverResourcesDir, "node_modules");
+  const topLevelVersions = new Map();
+  for (const { name, dir } of await listPackageDirs(topLevelDir)) {
+    topLevelVersions.set(name, await readPackageVersion(dir));
+  }
+
+  let removed = 0;
+  for (const { dir } of await listPackageDirs(topLevelDir)) {
+    const nestedDir = join(dir, "node_modules");
+    for (const nested of await listPackageDirs(nestedDir)) {
+      const topVersion = topLevelVersions.get(nested.name);
+      if (!topVersion) continue;
+      if (topVersion !== (await readPackageVersion(nested.dir))) continue;
+
+      await rm(nested.dir, { recursive: true, force: true });
+      removed += 1;
+    }
+
+    // Removing @scope/name leaves the @scope directory behind. An empty
+    // directory is harmless to Node but confuses anyone auditing the bundle.
+    for (const entry of await readdir(nestedDir, { withFileTypes: true }).catch(() => [])) {
+      if (!entry.isDirectory() || !entry.name.startsWith("@")) continue;
+      const scopeDir = join(nestedDir, entry.name);
+      if ((await readdir(scopeDir)).length === 0) await rm(scopeDir, { recursive: true, force: true });
+    }
+  }
+  return removed;
+}
+
+/** Paths that would exceed Windows' MAX_PATH once staged on a runner. */
+async function findOverlongPaths() {
+  // Mirrors the checkout location on a windows-latest runner. Measured even on
+  // macOS so a long path fails the build here instead of inside makensis.
+  const windowsPrefix = "D:\\a\\pi-agent-desktop\\pi-agent-desktop\\src-tauri\\resources\\server";
+  const overlong = [];
+
+  async function walk(dir, relative) {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const childRelative = relative ? `${relative}\\${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        await walk(join(dir, entry.name), childRelative);
+        continue;
+      }
+      const full = `${windowsPrefix}\\${childRelative}`;
+      if (full.length > 260) overlong.push({ length: full.length, path: childRelative });
+    }
+  }
+
+  await walk(serverResourcesDir, "");
+  return overlong;
+}
+
 async function findNpmSource() {
   const npmFromCurrentRun = process.env.npm_execpath
     ? dirname(dirname(process.env.npm_execpath))
@@ -132,6 +232,21 @@ async function bundleNodeRuntime() {
 
 await runNextBuild();
 await assembleServer();
+
+const deduped = await dedupeNestedPackages();
+if (deduped > 0) console.log(`Removed ${deduped} redundant nested package cop${deduped === 1 ? "y" : "ies"}`);
+
+// Fail here rather than inside makensis, which reports a bare "failed opening
+// file" and takes an entire signed release build down with it.
+const overlong = await findOverlongPaths();
+if (overlong.length > 0) {
+  console.error(
+    `${overlong.length} staged path(s) exceed Windows' 260-character limit:\n` +
+      overlong.map(({ length, path }) => `  ${length}  ${path}`).join("\n"),
+  );
+  throw new Error("Staged paths would break the Windows installer.");
+}
+
 const { binaryPath: nodeBinary, triple } = await bundleNodeRuntime();
 
 console.log(`Desktop server staged at ${serverResourcesDir}`);

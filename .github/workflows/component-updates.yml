@@ -182,6 +182,24 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
+          {
+            echo "## Component sync failed"
+            echo
+            echo "[Run log]($RUN_URL)"
+            echo
+            echo "Most likely a merge conflict against a file listed in"
+            echo "\`scripts/fork-ownership.json\`. See docs/ownership-boundaries.md."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Issues are disabled on this repository today, and an issue-only
+          # alert fails silently when they are. The summary above always works.
+          issues_enabled="$(gh api "repos/$GITHUB_REPOSITORY" --jq .has_issues 2>/dev/null || echo false)"
+          if [ "$issues_enabled" != "true" ]; then
+            echo "Issues are disabled for $GITHUB_REPOSITORY; reported in the job summary only."
+            echo "Enable Issues to also get a persistent, notifying alert." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
           existing="$(gh issue list --repo "$GITHUB_REPOSITORY" \
             --state open --label component-sync-failure --limit 1 --json number --jq '.[0].number // empty')"
 

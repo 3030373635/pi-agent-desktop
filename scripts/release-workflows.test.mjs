@@ -108,6 +108,21 @@ test("a failed sync is reported instead of failing silently", () => {
   assert.match(componentUpdates, /component-sync-failure/);
 });
 
+test("failure alerts do not depend on Issues being enabled", async () => {
+  // This repository has Issues disabled, so the original issue-only alerts
+  // failed silently and reported nothing at all. The job summary always works.
+  const release = await readFile(join(root, ".github", "workflows", "release.yml"), "utf8");
+
+  for (const [name, workflow] of [["component-updates", componentUpdates], ["release", release]]) {
+    assert.match(workflow, /GITHUB_STEP_SUMMARY/, `${name} must always write a job summary`);
+    assert.match(
+      workflow,
+      /has_issues/,
+      `${name} must check whether Issues are enabled before using them`,
+    );
+  }
+});
+
 test("the pi package list is derived, never hand-written in the workflow", () => {
   assert.match(componentUpdates, /scripts\/pi-packages\.mjs --install-spec/);
   assert.doesNotMatch(componentUpdates, /@earendil-works\/pi-coding-agent@/);
