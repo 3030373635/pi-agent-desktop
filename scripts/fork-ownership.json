@@ -20,145 +20,169 @@
       "high",
       "medium"
     ],
-    "note": "Risk levels that force the sync to open a reviewed PR instead of pushing straight to main and triggering a signed release. As P1 reverts structural drift back to upstream, entries drop out of driftedUpstreamFiles and more releases qualify for unattended sync. Narrow this list only when the drift is actually gone — not to silence the gate."
+    "note": "Risk levels that force the sync to open a reviewed PR instead of pushing straight to main and triggering a signed release. Most upstream releases will land here, because the remaining drift is accepted by decision rather than pending cleanup — see `dispositions` and `decisionLog`. Narrow this list only if the drift itself actually goes away."
   },
   "driftedUpstreamFiles": {
     "components/SessionSidebar.tsx": {
       "risk": "high",
       "drift": 601,
       "reason": "~500 lines were MOVED OUT into components/ProjectPicker.tsx and components/path-ui.tsx, which do not exist upstream. git merge does not track cross-file moves: an upstream edit to the project-picker block can merge back cleanly and silently resurrect a second copy.",
-      "structuralDrift": 430
+      "structuralDrift": 430,
+      "disposition": "accepted"
     },
     "components/AppShell.tsx": {
       "risk": "high",
       "drift": 501,
       "reason": "Top-bar redesign (toolbar consolidated into a more-menu, inline styles to classNames) plus the mount point for desktop chrome. The desktop-only parts moved to components/desktop/; the remaining 376 structural lines are the fork's own interaction design, not desktop plumbing, so this file stays high risk by design rather than by neglect.",
-      "structuralDrift": 376
+      "structuralDrift": 376,
+      "disposition": "accepted"
     },
     "components/FileViewer.tsx": {
       "risk": "high",
       "drift": 456,
-      "reason": "Adds FileViewerToolbar / FileViewerStatus components and inline SVG iconography. Structural JSX rewrite, not a restyle.",
-      "structuralDrift": 305
+      "reason": "Adds FileViewerToolbar and FileViewerStatus, file icons, a live-sync indicator and a retry action. Both components are defined inside FileViewer.tsx rather than moved out, so there is no cross-file resurrection risk — only a large diff. Kept deliberately.",
+      "structuralDrift": 305,
+      "disposition": "accepted"
     },
     "components/FileExplorer.tsx": {
       "risk": "medium",
       "drift": 168,
-      "reason": "Tree row structure and icon rendering reworked.",
-      "structuralDrift": 61
+      "reason": "Adds selection highlighting (selectedPath/onSelectPath) and moves git status colours onto CSS variables. Generic improvement, no desktop coupling. Kept deliberately.",
+      "structuralDrift": 61,
+      "disposition": "accepted"
     },
     "components/ModelsConfig.tsx": {
       "risk": "low",
       "drift": 146,
       "reason": "Already the correct shape: upstream inline style objects swapped for native-* classNames, 12 structural lines out of 146. Conflicts here are textual and trivially resolvable. Use this file as the model for restyling a shared component.",
-      "structuralDrift": 12
+      "structuralDrift": 12,
+      "disposition": "accepted"
     },
     "components/TabBar.tsx": {
       "risk": "medium",
       "drift": 112,
-      "reason": "Tab chrome rebuilt rather than restyled: 66 of 112 changed lines are structural. The smallest of the four genuine P1 revert targets, so a good place to start.",
-      "structuralDrift": 66
+      "reason": "Accessibility work: role=\"tab\", aria-selected, roving tabIndex, arrow-key navigation, Enter/Space activation, plus an empty state. A generic improvement with no desktop coupling, so it cannot be extracted anywhere — the only ways to remove this drift are upstreaming it or deleting the accessibility support. Kept deliberately.",
+      "structuralDrift": 66,
+      "disposition": "accepted"
     },
     "components/ChatWindow.tsx": {
       "risk": "medium",
       "drift": 89,
-      "reason": "Header and empty-state markup adjusted.",
-      "structuralDrift": 35
+      "reason": "Branding copy, the ChatMinimap mount and a redesigned empty state. Part of the fork's interaction design. Kept deliberately.",
+      "structuralDrift": 35,
+      "disposition": "accepted"
     },
     "hooks/useTheme.ts": {
       "risk": "medium",
       "drift": 57,
-      "reason": "Adds prefers-color-scheme following. Good upstream-PR candidate.",
-      "structuralDrift": 57
+      "reason": "Follows the OS colour scheme until the user picks a theme explicitly, and drops the ToggleOrigin argument so the view transition always starts from the centre. The view transition itself is unchanged from upstream. Kept deliberately.",
+      "structuralDrift": 57,
+      "disposition": "accepted"
     },
     "components/PluginsConfig.tsx": {
       "risk": "low",
       "drift": 50,
       "reason": "Already the correct shape: 2 structural lines out of 50, the rest is style-to-className substitution. Nothing to revert.",
-      "structuralDrift": 2
+      "structuralDrift": 2,
+      "disposition": "accepted"
     },
     "components/ChatInput.tsx": {
       "risk": "low",
       "drift": 49,
       "reason": "Composer chrome restyle. Upstream changed this file in v0.8.1, and components/ChatInput.test.mjs covers it.",
-      "structuralDrift": 7
+      "structuralDrift": 7,
+      "disposition": "accepted"
     },
     "components/MessageView.tsx": {
       "risk": "low",
       "drift": 46,
       "reason": "Message bubble markup adjusted.",
-      "structuralDrift": 5
+      "structuralDrift": 5,
+      "disposition": "accepted"
     },
     "components/SkillsConfig.tsx": {
       "risk": "low",
       "drift": 44,
       "reason": "Already the correct shape: 3 structural lines out of 44, the rest is style-to-className substitution. Nothing to revert.",
-      "structuralDrift": 3
+      "structuralDrift": 3,
+      "disposition": "accepted"
     },
     "next.config.ts": {
       "risk": "medium",
       "drift": 21,
-      "reason": "Desktop standalone build branch. Also holds serverExternalPackages, which upstream updates whenever it adds a pi package — do NOT auto-derive that list here."
+      "reason": "Desktop standalone build branch. Also holds serverExternalPackages, which upstream updates whenever it adds a pi package — do NOT auto-derive that list here.",
+      "disposition": "accepted"
     },
     "app/layout.tsx": {
       "risk": "low",
       "drift": 10,
       "reason": "native-theme.css import, branding title, dark-mode bootstrap script.",
-      "structuralDrift": 10
+      "structuralDrift": 10,
+      "disposition": "accepted"
     },
     "components/ChatMinimap.tsx": {
       "risk": "low",
       "drift": 8,
       "reason": "className hooks only, no structural change — the intended shape for every restyled file.",
-      "structuralDrift": 2
+      "structuralDrift": 2,
+      "disposition": "accepted"
     },
     "eslint.config.mjs": {
       "risk": "low",
       "drift": 7,
-      "reason": "Adds ignores for the desktop build output directories."
+      "reason": "Adds ignores for the desktop build output directories.",
+      "disposition": "accepted"
     },
     "lib/rpc-manager.ts": {
       "risk": "low",
       "drift": 5,
       "reason": "Small fork edit in a file upstream changes often; watch it despite the low drift count.",
-      "structuralDrift": 5
+      "structuralDrift": 5,
+      "disposition": "accepted"
     },
     "components/FileIcons.tsx": {
       "risk": "low",
       "drift": 5,
       "reason": "Adds an icon size parameter, consumed by the fork's FileViewer toolbar.",
-      "structuralDrift": 3
+      "structuralDrift": 3,
+      "disposition": "accepted"
     },
     "components/BranchNavigator.tsx": {
       "risk": "low",
       "drift": 1,
       "reason": "className hook only, no structural change — the intended shape for every restyled file.",
-      "structuralDrift": 0
+      "structuralDrift": 0,
+      "disposition": "accepted"
     },
     "package.json": {
       "risk": "low",
       "drift": 13,
-      "reason": "Desktop scripts and Tauri deps. Name stays @agegr/pi-web on purpose — see docs/ownership-boundaries.md."
+      "reason": "Desktop scripts and Tauri deps. Name stays @agegr/pi-web on purpose — see docs/ownership-boundaries.md.",
+      "disposition": "accepted"
     },
     "tsconfig.json": {
       "risk": "low",
       "drift": 4,
-      "reason": "resolveJsonModule for branding."
+      "reason": "resolveJsonModule for branding.",
+      "disposition": "accepted"
     },
     ".gitignore": {
       "risk": "low",
       "drift": 7,
-      "reason": "Desktop build output plus local agent tooling state (.claude/, .spec-workflow/)."
+      "reason": "Desktop build output plus local agent tooling state (.claude/, .spec-workflow/).",
+      "disposition": "accepted"
     },
     "README.md": {
       "risk": "low",
       "drift": 266,
-      "reason": "Fork-specific product docs. Conflicts here are noisy but harmless — resolve by keeping the fork version."
+      "reason": "Fork-specific product docs. Conflicts here are noisy but harmless — resolve by keeping the fork version.",
+      "disposition": "accepted"
     },
     "README.zh-CN.md": {
       "risk": "low",
       "drift": 200,
-      "reason": "Fork-specific product docs. Same handling as README.md."
+      "reason": "Fork-specific product docs. Same handling as README.md.",
+      "disposition": "accepted"
     }
   },
   "forkOwnedPaths": [
@@ -182,5 +206,14 @@
     "lib/desktop-updater.ts",
     "lib/desktop-window.ts",
     "docs/ownership-boundaries.md"
+  ],
+  "dispositions": {
+    "accepted": "Reviewed and kept. The drift is either the fork's own interaction design or a generic improvement with no desktop coupling, so it cannot be extracted into components/desktop/. Removing it would mean deleting a feature. These files stay permanent review points; that is the running cost of a UI fork, not a backlog item. Do not reopen without new information.",
+    "reduce": "Drift that can be removed without losing anything — desktop-only code that belongs in components/desktop/, or fork additions sitting in an upstream file that can move to a fork-owned one. Act on these."
+  },
+  "decisionLog": [
+    "2026-07-26 — lib/api-types.ts: fork update types moved to lib/app-update-types.ts; file now matches upstream and left the manifest.",
+    "2026-07-26 — components/AppShell.tsx: desktop window chrome moved to components/desktop/ (-53 structural). The remaining 376 lines are the top-bar redesign; accepted.",
+    "2026-07-26 — TabBar, FileExplorer, useTheme, FileViewer: assessed as generic improvements with zero desktop coupling. Upstreaming was declined, so accepted rather than reverted — reverting would delete working features to save CI review time."
   ]
 }

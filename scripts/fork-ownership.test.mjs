@@ -35,6 +35,30 @@ test("every drifted file entry is well formed", () => {
   }
 });
 
+test("every drifted file has a recorded disposition", () => {
+  // New drift should force a decision — keep it and accept the review cost, or
+  // remove it — rather than accumulating silently on the blocked list.
+  const known = Object.keys(manifest.dispositions);
+  assert.ok(known.length > 0, "the manifest must define its disposition vocabulary");
+
+  for (const [path, entry] of Object.entries(manifest.driftedUpstreamFiles)) {
+    assert.ok(
+      known.includes(entry.disposition),
+      `${path}: disposition must be one of ${known.join(", ")}, got ${entry.disposition}`,
+    );
+  }
+});
+
+test("the decision log is not empty", () => {
+  // Records why the accepted files were accepted, so the call is not re-litigated
+  // from scratch by whoever next reads a blocked sync PR.
+  assert.ok(Array.isArray(manifest.decisionLog));
+  assert.ok(manifest.decisionLog.length >= 3);
+  for (const entry of manifest.decisionLog) {
+    assert.match(entry, /^\d{4}-\d{2}-\d{2} — /, `decision log entries need a date: ${entry}`);
+  }
+});
+
 test("drifted files still exist — stale entries would silently weaken the gate", async () => {
   for (const path of Object.keys(manifest.driftedUpstreamFiles)) {
     assert.ok(await exists(path), `${path} is listed as drifted but is missing from the tree`);

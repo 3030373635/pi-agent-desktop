@@ -56,17 +56,20 @@ only: `>= 250` high, `>= 30` medium, below that low.
 
 ### Where the structural drift actually is
 
-Across the whole fork: **973 cosmetic lines, 1462 structural**. But the structural half
-is highly concentrated — four files carry 86% of it:
+Across the whole fork: **969 cosmetic lines, 1379 structural**. But the structural half
+is highly concentrated — three files carry 80% of it:
 
-| File | structural | why |
+| File | structural | what it is |
 |---|---|---|
-| `components/SessionSidebar.tsx` | 430 | ~500 lines moved out to `ProjectPicker.tsx` / `path-ui.tsx` |
+| `components/SessionSidebar.tsx` | 430 | sidebar redesign; ~500 lines moved out to `ProjectPicker.tsx` / `path-ui.tsx` |
 | `components/AppShell.tsx` | 376 | top-bar redesign (was 429 before the desktop chrome moved out) |
-| `components/FileViewer.tsx` | 305 | new toolbar/status components, inline SVG |
-| `components/TabBar.tsx` | 66 | tab chrome rebuilt |
+| `components/FileViewer.tsx` | 305 | toolbar, status states, file icons, live-sync indicator |
+| `components/TabBar.tsx` | 66 | accessibility: tab roles, roving focus, arrow-key navigation |
+| `components/FileExplorer.tsx` | 61 | selection highlighting; git status colours on CSS variables |
+| `hooks/useTheme.ts` | 57 | follows the OS colour scheme until the user chooses |
+| `components/ChatWindow.tsx` | 35 | branding copy, minimap mount, empty state |
 
-Every other shared component is already in acceptable shape.
+Every other shared component is cosmetic-only.
 
 Note what the `AppShell.tsx` number says. Moving the desktop chrome into
 `components/desktop/` removed only 53 of its 429 structural lines: the rest is the
@@ -97,7 +100,7 @@ a second copy of code that now lives in `ProjectPicker.tsx`.
 Concrete measurement: upstream's `v0.8.0 → v0.8.1` patch release touched **7 files
 that this fork has also modified**, including all three of the highest-risk ones.
 Expect roughly a third of the files in any upstream release to land on fork-modified
-files until the structural drift is reverted.
+files. That rate is stable, not temporary — see the dispositions below.
 
 ### Sentinels
 
@@ -187,14 +190,46 @@ Safe to edit freely; upstream never touches them. Full list in the manifest's
 
 A merge conflict fails step 4 and nothing ships — that is the design.
 
-## Reducing the cost
+## What is settled, and what is not
 
-The gate's `autoPushPolicy.blockOnRisk` currently blocks on `high` and `medium`, which
-means most upstream releases will require a reviewed PR. That is an accurate reflection
-of the current drift, not a pessimistic setting. It loosens on its own as structural
-drift is reverted to upstream and entries leave `driftedUpstreamFiles`.
+Every entry in the manifest carries a `disposition`, and the reasoning is in
+`decisionLog`. Two values:
 
-Narrow `blockOnRisk` only when the drift is actually gone — never to quiet the gate.
+- **`reduce`** — drift that can go away without losing anything: desktop-only code that
+  belongs in `components/desktop/`, or fork additions sitting in an upstream file that
+  can move to a fork-owned one. Act on these.
+- **`accepted`** — reviewed and kept.
+
+As of 2026-07-26 everything remaining is `accepted`. Two rounds of `reduce` work are
+done: the desktop window chrome left `AppShell.tsx`, and the update types left
+`lib/api-types.ts` (which is now byte-identical to upstream and off the list entirely).
+
+What is left splits in two, and neither half is a backlog item:
+
+- **The fork's interaction design** — `AppShell.tsx` (376), `SessionSidebar.tsx` (430),
+  `ChatWindow.tsx` (35). This is the product. It cannot be cleaned up without deleting it.
+- **Generic improvements with zero desktop coupling** — `FileViewer.tsx` (305),
+  `TabBar.tsx` (66), `FileExplorer.tsx` (61), `hooks/useTheme.ts` (57). Accessibility,
+  selection highlighting, OS theme following, a file toolbar. None of it touches Tauri,
+  so `components/desktop/` is not a home for it; the only ways out are upstreaming it or
+  deleting a working feature. Upstreaming was declined, so these are kept.
+
+The consequence is that most upstream releases will open a review PR rather than
+publishing unattended. That is the running cost of maintaining a UI fork, priced
+honestly. The guardrails make it a review, not a silent failure — which was the goal.
+
+Narrow `blockOnRisk` only if the drift itself goes away. Never to quiet the gate.
+
+## When you add new drift
+
+Adding to a shared file is fine — just make the decision explicit:
+
+1. Run `npm run drift`. If the structural number moved, update the manifest.
+2. Give the entry a `disposition`. `reduce` means you intend to remove it; if you cannot
+   say how, it is `accepted` and you are choosing to pay for it.
+3. If you moved code out of a shared file, add a sentinel in
+   `components/fork-extractions.test.mjs` — that is the failure mode nothing else catches.
+4. Append a dated line to `decisionLog` so the next person does not re-litigate it.
 
 ## Commands
 
