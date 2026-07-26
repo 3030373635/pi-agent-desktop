@@ -129,7 +129,7 @@ fn same_origin(candidate: &Url, app_url: &Url) -> bool {
 fn build_window(app: &tauri::AppHandle, app_url: Url) -> tauri::Result<WebviewWindow> {
     let navigation_origin = app_url.clone();
 
-    WebviewWindowBuilder::new(app, WINDOW_LABEL, WebviewUrl::External(app_url))
+    let builder = WebviewWindowBuilder::new(app, WINDOW_LABEL, WebviewUrl::External(app_url))
         .title("Pi Agent")
         .inner_size(1440.0, 900.0)
         .min_inner_size(900.0, 600.0)
@@ -150,8 +150,20 @@ fn build_window(app: &tauri::AppHandle, app_url: Url) -> tauri::Result<WebviewWi
         })
         .on_document_title_changed(|window, title| {
             let _ = window.set_title(&title);
-        })
-        .build()
+        });
+
+    // Hide the native title bar. macOS keeps the traffic-light controls
+    // (overlaid on our own top bar); other platforms go fully frameless and
+    // rely on custom window controls drawn in the web content instead.
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .title_bar_style(tauri::TitleBarStyle::Overlay)
+        .hidden_title(true);
+
+    #[cfg(not(target_os = "macos"))]
+    let builder = builder.decorations(false);
+
+    builder.build()
 }
 
 #[cfg(all(feature = "custom-protocol", unix))]
