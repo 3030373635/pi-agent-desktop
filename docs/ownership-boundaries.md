@@ -62,12 +62,20 @@ is highly concentrated — four files carry 86% of it:
 | File | structural | why |
 |---|---|---|
 | `components/SessionSidebar.tsx` | 430 | ~500 lines moved out to `ProjectPicker.tsx` / `path-ui.tsx` |
-| `components/AppShell.tsx` | 429 | title bar, window controls, top-bar restructure |
+| `components/AppShell.tsx` | 376 | top-bar redesign (was 429 before the desktop chrome moved out) |
 | `components/FileViewer.tsx` | 305 | new toolbar/status components, inline SVG |
 | `components/TabBar.tsx` | 66 | tab chrome rebuilt |
 
-Every other shared component is already in acceptable shape. Reverting work should target
-these four and nothing else — `TabBar.tsx` first, since it is the smallest.
+Every other shared component is already in acceptable shape.
+
+Note what the `AppShell.tsx` number says. Moving the desktop chrome into
+`components/desktop/` removed only 53 of its 429 structural lines: the rest is the
+fork's own top-bar design — the toolbar consolidated into a more-menu, upstream's
+inline-styled buttons rebuilt — and it applies to the web build too. **That drift is the
+product, not a defect.** It cannot be cleaned up without deleting the differentiated
+interaction design, so `AppShell.tsx` stays a permanent review point rather than
+something to fix. The same will be true of any file where the fork's design genuinely
+diverges from upstream's.
 
 ## The failure mode this guards against
 
@@ -122,9 +130,11 @@ In order of preference:
    structural divergence disappears entirely. This is the only real fix, and it is the
    right home for things like the `ProjectPicker` extraction, the `FileViewer` toolbar,
    and `hooks/useTheme.ts` following `prefers-color-scheme`.
-3. **Genuinely desktop-only?** Put it in a fork-owned file and reach it from the
-   upstream file with a single import plus one `isTauriDesktop()` branch. Never restructure
-   upstream JSX to accommodate it.
+3. **Genuinely desktop-only?** Put it in `components/desktop/` and reach it from the
+   upstream file with a single import and a mount point. Components there render to
+   nothing in a browser build, so the host does not even need an `isTauriDesktop()`
+   branch around them — `<WindowControls />` is the reference. Never restructure
+   upstream JSX to accommodate desktop code.
 
 What to avoid: rewriting upstream JSX for visual reasons, and moving upstream code
 across file boundaries.

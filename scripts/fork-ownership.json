@@ -31,9 +31,9 @@
     },
     "components/AppShell.tsx": {
       "risk": "high",
-      "drift": 558,
-      "reason": "Custom title bar, drag regions, platform window controls, top-bar restructure, AppSettings/UpdateReminder mounting. Mixes desktop-conditional logic with unconditional layout changes.",
-      "structuralDrift": 429
+      "drift": 501,
+      "reason": "Top-bar redesign (toolbar consolidated into a more-menu, inline styles to classNames) plus the mount point for desktop chrome. The desktop-only parts moved to components/desktop/; the remaining 376 structural lines are the fork's own interaction design, not desktop plumbing, so this file stays high risk by design rather than by neglect.",
+      "structuralDrift": 376
     },
     "components/FileViewer.tsx": {
       "risk": "high",
@@ -174,6 +174,7 @@
     ".github/workflows/",
     "app/native-theme.css",
     "app/api/updates/",
+    "components/desktop/",
     "components/ProjectPicker.tsx",
     "components/UpdateReminder.tsx",
     "components/AppSettings.tsx",

@@ -57,17 +57,36 @@ const EXTRACTIONS = [
     ],
     requiredInOrigin: ["ProjectPicker"],
   },
+  {
+    name: "AppShell window chrome",
+    origin: "components/AppShell.tsx",
+    // Desktop-only UI belongs in components/desktop/, so upstream layout files
+    // carry a mount point rather than Tauri calls and window state.
+    movedTo: ["components/desktop/WindowControls.tsx", "components/desktop/useDesktopChrome.ts"],
+    movedDefinitions: [],
+    absentFromOrigin: [
+      "minimizeWindow",
+      "toggleMaximizeWindow",
+      "closeWindow",
+      "isWindowMaximized",
+      "window-control-btn",
+      "@/lib/desktop-window",
+    ],
+    requiredInOrigin: ["WindowControls", "useDesktopChrome"],
+  },
 ];
 
 const FORK_FEATURES = [
   {
     name: "AppShell desktop chrome",
     file: "components/AppShell.tsx",
+    // The window buttons and platform detection live in components/desktop/ now;
+    // what AppShell must keep is the mount point and the drag-region spread.
     markers: [
-      "isTauriDesktop",
-      "getDesktopPlatform",
-      "toggleMaximizeWindow",
-      "data-tauri-drag-region",
+      "useDesktopChrome",
+      "WindowControls",
+      "dragRegionProps",
+      "app-topbar--mac-inset",
       "AppSettings",
       "UpdateReminder",
       "PRODUCT_NAME",
@@ -120,6 +139,16 @@ for (const extraction of EXTRACTIONS) {
       assert.ok(
         targets.some((source) => definesSymbol(source, symbol)),
         `None of ${extraction.movedTo.join(", ")} defines ${symbol}.`,
+      );
+    }
+
+    // Without this the origin-side check could pass simply because the code was
+    // deleted everywhere rather than relocated.
+    for (const marker of extraction.absentFromOrigin) {
+      assert.ok(
+        targets.some((source) => source.includes(marker)),
+        `"${marker}" is absent from ${extraction.origin} but also from ` +
+          `${extraction.movedTo.join(", ")} — it looks deleted, not moved.`,
       );
     }
   });

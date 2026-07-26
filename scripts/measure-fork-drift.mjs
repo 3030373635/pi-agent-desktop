@@ -70,14 +70,16 @@ function baselineFromManifest() {
 const manifest = await readForkOwnership();
 const baseline = resolveBaseline(process.argv[2]);
 
-const files = git("diff", "--name-status", baseline, "HEAD")
+// Diffed against the working tree, not HEAD, so the effect of an in-progress
+// revert is visible before it is committed.
+const files = git("diff", "--name-status", baseline)
   .split("\n")
   .filter((line) => line.startsWith("M\t"))
   .map((line) => line.split("\t")[1])
   .filter((file) => /^(?:components|hooks|lib|app)\/.*\.tsx?$/.test(file));
 
 const rows = files.map((file) => {
-  const diff = git("diff", "-U0", baseline, "HEAD", "--", file);
+  const diff = git("diff", "-U0", baseline, "--", file);
   let cosmetic = 0;
   let structural = 0;
 

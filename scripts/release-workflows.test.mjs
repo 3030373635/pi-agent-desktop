@@ -56,13 +56,34 @@ test("the merge gate covers tests, types, lint and a real build", () => {
   assert.match(componentUpdates, /PI_WEB_DESKTOP_BUILD=1 node_modules\/\.bin\/next build/);
 });
 
-test("npm test covers component tests, so the sync gate cannot skip them", async () => {
-  // Upstream ships components/*.test.mjs covering fork-modified files. The
-  // sync gate ran only lib/ and scripts/, silently skipping them every night.
+test("npm test covers every test directory, recursively", async () => {
+  // Upstream ships components/*.test.mjs covering fork-modified files, and the
+  // sync gate once ran only lib/ and scripts/, silently skipping them nightly.
+  // The globs must recurse too: a flat components/*.test.mjs skips the
+  // fork-owned tests under components/desktop/.
   const pkg = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
-  assert.match(pkg.scripts.test, /components\/\*\.test\.mjs/);
-  assert.match(pkg.scripts.test, /lib\/\*\.test\.mjs/);
-  assert.match(pkg.scripts.test, /scripts\/\*\.test\.mjs/);
+  for (const dir of ["lib", "scripts", "components"]) {
+    assert.match(
+      pkg.scripts.test,
+      new RegExp(`${dir}/\\*\\*/\\*\\.test\\.mjs`),
+      `npm test must recurse into ${dir}/`,
+    );
+  }
+});
+
+test("no test file is left out of npm test", async () => {
+  // Catches a test added in a directory the globs do not cover.
+  const { execFileSync } = await import("node:child_process");
+  const tracked = execFileSync("git", ["ls-files", "*.test.mjs"], { cwd: root, encoding: "utf8" })
+    .split("\n")
+    .filter(Boolean);
+
+  const covered = tracked.filter((file) => /^(lib|scripts|components)\//.test(file));
+  assert.deepEqual(
+    tracked.filter((file) => !covered.includes(file)),
+    [],
+    "a .test.mjs file lives outside lib/, scripts/ and components/ — extend npm test",
+  );
 });
 
 test("a sync already awaiting review is skipped, not retried nightly", () => {
