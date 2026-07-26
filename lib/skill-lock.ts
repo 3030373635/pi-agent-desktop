@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "fs";
-import { homedir } from "os";
+import { userHome } from "./user-home.ts";
 import { isAbsolute, join, relative, resolve, sep } from "path";
 import type { SkillInfo, SkillInstallInfo, SkillInstallScope } from "@/lib/api-types";
 
@@ -29,7 +29,7 @@ interface AnnotateSkillOptions {
 }
 
 export function getGlobalSkillsLockPath({
-  homeDir = homedir(),
+  homeDir = userHome(),
   xdgStateHome = process.env.XDG_STATE_HOME,
 }: GlobalLockPathOptions = {}): string {
   return xdgStateHome

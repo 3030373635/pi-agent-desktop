@@ -1,5 +1,5 @@
 import { readdir, realpath, stat } from "fs/promises";
-import { homedir } from "os";
+import { userHome } from "./user-home.ts";
 import path from "path";
 
 export interface BrowsableDirectory {
@@ -8,12 +8,12 @@ export interface BrowsableDirectory {
 }
 
 export function getBrowseStartDirectory(directory?: string): string {
-  return directory || homedir();
+  return directory || userHome();
 }
 
 export function normalizeDirectory(directory: string): string {
-  if (directory === "~") return homedir();
-  if (directory.startsWith("~/")) return path.resolve(homedir(), directory.slice(2));
+  if (directory === "~") return userHome();
+  if (directory.startsWith("~/")) return path.resolve(userHome(), directory.slice(2));
   return path.resolve(directory);
 }
 

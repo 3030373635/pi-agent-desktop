@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { statSync, type Stats } from "fs";
-import { homedir } from "os";
+import { userHome } from "@/lib/user-home";
 import { isAbsolute, resolve } from "path";
 import { allowFileRoot } from "@/lib/file-access";
 
 function normalizeCwd(cwd: string): string {
-  if (cwd === "~") return homedir();
-  if (cwd.startsWith("~/")) return resolve(homedir(), cwd.slice(2));
+  if (cwd === "~") return userHome();
+  if (cwd.startsWith("~/")) return resolve(userHome(), cwd.slice(2));
   return isAbsolute(cwd) ? cwd : resolve(cwd);
 }
 

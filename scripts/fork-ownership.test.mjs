@@ -127,7 +127,7 @@ test("high and medium overlaps require review; low-only does not", () => {
 
 test("untouched and ignored files never trigger review", () => {
   const result = classifyIncomingChanges(
-    ["app/api/skills/route.ts", "lib/directory-browser.ts", "package-lock.json", ""],
+    ["app/api/skills/route.ts", "lib/bounded-form-data.ts", "package-lock.json", ""],
     manifest,
   );
   assert.equal(result.reviewRequired, false);
@@ -138,8 +138,10 @@ test("untouched and ignored files never trigger review", () => {
 
 test("the real v0.8.0 -> v0.8.1 changeset would have demanded review", () => {
   // Regression anchor: this is what upstream actually shipped in one patch
-  // release. Seven of these files carry fork drift, so the previous
+  // release. Eight of these files carry fork drift, so the previous
   // push-straight-to-signed-release path was applying them unattended.
+  // lib/directory-browser.ts is in both lists for a reason — v0.8.1 introduced
+  // it, and its homedir() usage is what broke the Windows build.
   const result = classifyIncomingChanges(
     [
       "app/api/models/route.ts",
@@ -161,7 +163,7 @@ test("the real v0.8.0 -> v0.8.1 changeset would have demanded review", () => {
 
   assert.equal(result.reviewRequired, true);
   assert.equal(result.highestRisk, "high");
-  assert.equal(result.overlaps.length, 7);
+  assert.equal(result.overlaps.length, 8);
   assert.equal(result.overlaps[0].risk, "high", "the riskiest overlap must be reported first");
   assert.match(formatReport(result), /silent semantic conflicts/);
 });

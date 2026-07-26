@@ -162,8 +162,8 @@
     },
     "tsconfig.json": {
       "risk": "low",
-      "drift": 4,
-      "reason": "resolveJsonModule for branding.",
+      "drift": 5,
+      "reason": "resolveJsonModule for branding, plus allowImportingTsExtensions: lib/*.test.mjs load .ts sources through Node's native type stripping, which requires explicit extensions on relative imports.",
       "disposition": "accepted"
     },
     ".gitignore": {
@@ -186,17 +186,38 @@
     },
     "lib/file-access.ts": {
       "risk": "low",
-      "drift": 22,
-      "structuralDrift": 22,
+      "drift": 7,
+      "structuralDrift": 7,
       "disposition": "accepted",
-      "reason": "Adds defaultCwdBase(), which reads PI_AGENT_DEFAULT_CWD_ROOT before falling back to homedir(). Keeps a literal home directory out of readdirSync/join arguments so @vercel/nft stops folding them into a glob of the whole user profile — the walk that made every Windows release build fail. A genuine upstream bug; kept here because upstreaming was declined."
+      "reason": "Routes homedir() through userHome() so Next's file tracer stops folding it into a build-time glob of the whole user profile — the walk that made every Windows build fail. One import plus call swaps; conflicts here would be textual."
     },
     "app/api/default-cwd/route.ts": {
       "risk": "low",
       "drift": 7,
       "structuralDrift": 7,
       "disposition": "accepted",
-      "reason": "Uses defaultCwdBase() from lib/file-access instead of calling homedir() inline, for the same file-tracer reason. Small and mechanical; conflicts here would be textual."
+      "reason": "Routes homedir() through userHome() so Next's file tracer stops folding it into a build-time glob of the whole user profile — the walk that made every Windows build fail. One import plus call swaps; conflicts here would be textual."
+    },
+    "lib/directory-browser.ts": {
+      "risk": "low",
+      "drift": 8,
+      "structuralDrift": 8,
+      "disposition": "accepted",
+      "reason": "Routes homedir() through userHome() so Next's file tracer stops folding it into a build-time glob of the whole user profile — the walk that made every Windows build fail. One import plus call swaps; conflicts here would be textual."
+    },
+    "lib/skill-lock.ts": {
+      "risk": "low",
+      "drift": 4,
+      "structuralDrift": 4,
+      "disposition": "accepted",
+      "reason": "Routes homedir() through userHome() so Next's file tracer stops folding it into a build-time glob of the whole user profile — the walk that made every Windows build fail. One import plus call swaps; conflicts here would be textual."
+    },
+    "app/api/cwd/validate/route.ts": {
+      "risk": "low",
+      "drift": 6,
+      "structuralDrift": 6,
+      "disposition": "accepted",
+      "reason": "Routes homedir() through userHome() so Next's file tracer stops folding it into a build-time glob of the whole user profile — the walk that made every Windows build fail. One import plus call swaps; conflicts here would be textual."
     }
   },
   "forkOwnedPaths": [
@@ -229,6 +250,7 @@
     "2026-07-26 — lib/api-types.ts: fork update types moved to lib/app-update-types.ts; file now matches upstream and left the manifest.",
     "2026-07-26 — components/AppShell.tsx: desktop window chrome moved to components/desktop/ (-53 structural). The remaining 376 lines are the top-bar redesign; accepted.",
     "2026-07-26 — TabBar, FileExplorer, useTheme, FileViewer: assessed as generic improvements with zero desktop coupling. Upstreaming was declined, so accepted rather than reverted — reverting would delete working features to save CI review time.",
-    "2026-07-26 — lib/file-access.ts and app/api/default-cwd/route.ts: a literal homedir() in readdirSync/join arguments made @vercel/nft glob the whole user profile at build time, which is why the Windows release leg never succeeded. Routed both through defaultCwdBase(); accepted as new drift in two upstream files."
+    "2026-07-26 — lib/file-access.ts and app/api/default-cwd/route.ts: a literal homedir() in readdirSync/join arguments made @vercel/nft glob the whole user profile at build time, which is why the Windows release leg never succeeded. Routed both through defaultCwdBase(); accepted as new drift in two upstream files.",
+    "2026-07-26 — lib/user-home.ts added; five upstream files now call userHome() instead of homedir(). A literal homedir() reaching an fs call made @vercel/nft glob the entire user profile at build time. lib/directory-browser.ts (added upstream in v0.8.1) was the source of the fatal <home>/**/* walk, which is why Windows releases started failing exactly when v0.8.1 merged."
   ]
 }
