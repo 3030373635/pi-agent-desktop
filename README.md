@@ -43,9 +43,9 @@ Pi Agent 由三个开源项目共同组成：
 发布版本可从 [GitHub Releases](https://github.com/abcwyc/pi-agent-desktop/releases) 下载：
 
 - Apple Silicon Mac：下载 `aarch64.dmg`，打开后将 App 拖入 `Applications`。正式 Release 不构建 Intel Mac 版本。
-- Windows x64：下载名称以 `x64-setup.exe` 结尾的安装程序并运行。安装器会在需要时安装 Microsoft WebView2。
+- **Windows x64：暂无可用安装包。** Windows 构建目前无法通过 CI（`next build` 报 `EPERM: scandir 'C:\Users\...\Application Data'`），该平台已暂时从发布矩阵中移除，修复前不会产出 `-setup.exe`。进展见 [`windows-build-debug.yml`](./.github/workflows/windows-build-debug.yml)。
 
-正式 Release 支持运行 macOS 11 或更高版本的 Apple Silicon Mac，以及 Windows 10/11 x64。桌面包内包含运行 Pi Agent 所需的 Next.js 服务、Node.js runtime 和当前版本的 Pi SDK，打开 App 时会自动启动本地服务，不需要用户另开终端、安装 Node.js 或单独启动 Web Server。
+正式 Release 目前只支持运行 macOS 11 或更高版本的 Apple Silicon Mac。桌面包内包含运行 Pi Agent 所需的 Next.js 服务、Node.js runtime 和当前版本的 Pi SDK，打开 App 时会自动启动本地服务，不需要用户另开终端、安装 Node.js 或单独启动 Web Server。
 
 > 安装 Pi Agent 后，可以直接使用 App 中的 Pi Agent 功能；但它不会在系统全局安装 `pi` 命令。如果还需要在终端中使用 Pi CLI，请按照 [pi 项目](https://github.com/earendil-works/pi) 的说明单独安装。
 
@@ -179,7 +179,8 @@ npm run desktop:build
 - [`component-updates.yml`](./.github/workflows/component-updates.yml)：每天检查 `pi` 和 `pi-web` 的稳定 Release。发现新版后，**先**把上游改动集与 [`scripts/fork-ownership.json`](./scripts/fork-ownership.json) 记录的「本仓库改过的上游文件」求交集，再合并 Tag、更新依赖和组件清单，并运行完整门禁（`npm test`、`tsc`、`lint`、真实 standalone 构建）。
   - 交集为空 → 直接提交 `main` 并触发发布；
   - 命中高/中风险文件 → 推送 `sync/pi-web-<tag>` 分支并开 PR，附上边界报告，**不**触发发布。合并该 PR 才会发版。
-- [`release.yml`](./.github/workflows/release.yml)：收到组件同步工作流的显式触发后，串行构建 Apple Silicon (`aarch64`) DMG 和 Windows x64 NSIS `-setup.exe`，仍不构建 Intel Mac 版本。Release 在两个平台的 updater 签名文件、`latest.json` 和组件清单全部上传完成前保持草稿状态。
+- [`release.yml`](./.github/workflows/release.yml)：收到组件同步工作流的显式触发后构建 Apple Silicon (`aarch64`) DMG，不构建 Intel Mac 版本。Release 在 updater 签名文件、`latest.json` 和组件清单全部上传完成前保持草稿状态 —— `manifest` job 依赖**整个**构建矩阵，任一平台失败就不会转正。构建失败会创建/更新 `release-failure` Issue。
+  - Windows x64 已暂时移出矩阵（构建从未成功过，详见上方安装说明）。留着一条必然失败的腿意味着每次发布都停在草稿、缺组件清单，并且每次都报警——那是让人学会忽略告警的最快方式。
 
 上游同步使用 Git 合并，因此本仓库维护的 Pi Agent 品牌、设置入口和升级逻辑会作为本地修改保留。合并冲突会让工作流停止——这是安全的失败方式。真正危险的是**无冲突但语义错误**的合并：上游改了本仓库也改过的区域，Git 干净地合上了，测试也全绿。上面的边界求交就是为此设置的，规则见 [维护边界说明](./docs/ownership-boundaries.md)。
 

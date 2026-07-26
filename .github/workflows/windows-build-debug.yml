@@ -1,0 +1,77 @@
+name: Debug the Windows desktop build
+
+# Manual only, and deliberately not part of any release path: it produces no
+# artifacts, creates no release, and signs nothing. Its whole job is to answer
+# one question — which directory walk reaches C:\Users\runneradmin and dies on
+# the Application Data junction.
+#
+# Delete this workflow once the Windows leg is restored in release.yml.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: windows-latest
+    steps:
+      - name: Check out pi-agent-desktop
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Describe the environment
+        shell: bash
+        run: |
+          echo "cwd:        $(pwd)"
+          echo "node:       $(node --version)"
+          echo "HOME:       ${HOME:-unset}"
+          echo "USERPROFILE:${USERPROFILE:-unset}"
+          echo "homedir:    $(node -p 'require("node:os").homedir()')"
+          echo "tmpdir:     $(node -p 'require("node:os").tmpdir()')"
+
+      - name: Show what next.config resolves to
+        shell: bash
+        run: |
+          # outputFileTracingRoot was pinned to __dirname in 576181f; confirm it
+          # actually resolves on Windows rather than silently becoming undefined.
+          node -e "
+            const { createJiti } = require('jiti');
+            const jiti = createJiti(process.cwd() + '/');
+            const config = jiti('./next.config.ts').default ?? jiti('./next.config.ts');
+            console.log(JSON.stringify({
+              outputFileTracingRoot: config.outputFileTracingRoot,
+              distDir: config.distDir,
+              output: config.output,
+              serverExternalPackages: config.serverExternalPackages,
+            }, null, 2));
+          "
+        env:
+          PI_WEB_DESKTOP_BUILD: "1"
+
+      - name: Build with a stray-scan tracer attached
+        shell: bash
+        continue-on-error: true
+        env:
+          PI_WEB_DESKTOP_BUILD: "1"
+          NEXT_TELEMETRY_DISABLED: "1"
+          NODE_OPTIONS: "--require ./scripts/trace-stray-scandir.cjs --stack-trace-limit=60"
+        run: node_modules/.bin/next build --webpack
+
+      - name: Look for junction loops in the profile
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          Get-ChildItem -Force "$env:USERPROFILE" |
+            Where-Object { $_.LinkType } |
+            Select-Object Name, LinkType, Target |
+            Format-Table -AutoSize

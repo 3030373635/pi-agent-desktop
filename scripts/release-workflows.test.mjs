@@ -144,7 +144,7 @@ test("the manifest job only publishes when every platform succeeded", async () =
   assert.match(manifestJob, /--draft=false --latest/);
 });
 
-test("release workflow publishes Apple Silicon and Windows x64 installers", async () => {
+test("release workflow publishes Apple Silicon installers", async () => {
   const workflow = await readFile(
     join(root, ".github", "workflows", "release.yml"),
     "utf8",
@@ -154,11 +154,35 @@ test("release workflow publishes Apple Silicon and Windows x64 installers", asyn
   assert.match(workflow, /max-parallel: 1/);
   assert.match(workflow, /runner: macos-15/);
   assert.match(workflow, /target: aarch64-apple-darwin/);
-  assert.match(workflow, /runner: windows-latest/);
-  assert.match(workflow, /target: x86_64-pc-windows-msvc/);
-  assert.match(workflow, /--bundles nsis/);
   assert.doesNotMatch(workflow, /x86_64-apple-darwin/);
   assert.doesNotMatch(workflow, /macos-15-intel/);
   assert.match(workflow, /uploadUpdaterJson: true/);
   assert.match(workflow, /gh release edit "v\$version" --draft=false --latest/);
+});
+
+test("the Windows leg stays out of the matrix until its build is fixed", async () => {
+  // It never produced a successful build. Leaving it in kept every release a
+  // draft with no component manifest, and would now file a release-failure
+  // issue on every run — the fastest way to train everyone to ignore alerts.
+  const workflow = await readFile(join(root, ".github", "workflows", "release.yml"), "utf8");
+  const matrix = workflow.slice(workflow.indexOf("matrix:"), workflow.indexOf("runs-on:"));
+
+  assert.doesNotMatch(matrix, /^\s*- runner: windows-latest/m);
+  assert.match(workflow, /windows-build-debug\.yml/, "point readers at the debug workflow");
+});
+
+test("the Windows debug workflow cannot release or sign anything", async () => {
+  const workflow = await readFile(
+    join(root, ".github", "workflows", "windows-build-debug.yml"),
+    "utf8",
+  );
+
+  // Manual only, and it must never touch signing keys or create a release.
+  assert.match(workflow, /on:\s*\n\s*workflow_dispatch:/);
+  assert.doesNotMatch(workflow, /schedule:/);
+  assert.doesNotMatch(workflow, /tauri-action/);
+  assert.doesNotMatch(workflow, /TAURI_SIGNING_PRIVATE_KEY/);
+  assert.doesNotMatch(workflow, /gh release/);
+  assert.match(workflow, /contents: read/);
+  assert.match(workflow, /trace-stray-scandir\.cjs/);
 });
