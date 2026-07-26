@@ -91,6 +91,22 @@ that this fork has also modified**, including all three of the highest-risk ones
 Expect roughly a third of the files in any upstream release to land on fork-modified
 files until the structural drift is reverted.
 
+### Sentinels
+
+`components/fork-extractions.test.mjs` turns that silent failure into a loud one. It
+covers both directions a clean-but-wrong merge can go:
+
+- **Resurrection** — code the fork moved elsewhere reappears at its origin, e.g.
+  `displayCwd` getting redefined inside `SessionSidebar.tsx` while `path-ui.tsx` also
+  exports it. Importing a moved symbol is fine; redefining it is the signal.
+- **Erosion** — a fork change is dropped and the file quietly reverts toward upstream,
+  e.g. `AppShell.tsx` losing `data-tauri-drag-region`, or `app/layout.tsx` losing its
+  `native-theme.css` import (which would revert the entire restyle).
+
+The assertions are validated by mutation: each failure mode was injected and confirmed
+to fail the test. When one fires after a merge, re-apply the fork change — do not delete
+the assertion. Add a new entry whenever code is moved out of, or added to, a shared file.
+
 ## Rules for changing a shared file
 
 In order of preference:

@@ -178,6 +178,7 @@
     "components/UpdateReminder.tsx",
     "components/AppSettings.tsx",
     "components/path-ui.tsx",
+    "components/fork-extractions.test.mjs",
     "lib/branding.ts",
     "lib/branding.test.mjs",
     "lib/app-updates.ts",
