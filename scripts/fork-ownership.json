@@ -95,12 +95,6 @@
       "reason": "Already the correct shape: 3 structural lines out of 44, the rest is style-to-className substitution. Nothing to revert.",
       "structuralDrift": 3
     },
-    "lib/api-types.ts": {
-      "risk": "medium",
-      "drift": 30,
-      "reason": "Fork-added update-check types share a file with upstream API types.",
-      "structuralDrift": 30
-    },
     "next.config.ts": {
       "risk": "medium",
       "drift": 21,
@@ -182,6 +176,7 @@
     "components/fork-extractions.test.mjs",
     "lib/branding.ts",
     "lib/branding.test.mjs",
+    "lib/app-update-types.ts",
     "lib/app-updates.ts",
     "lib/app-updates.test.mjs",
     "lib/desktop-updater.ts",

@@ -4,7 +4,7 @@ import type {
   AppComponentReleaseInfo,
   AppUpdateInfo,
   AppUpdateProjectId,
-} from "@/lib/api-types";
+} from "@/lib/app-update-types";
 import { APP_DISTRIBUTION_NAME, APP_VERSION } from "./branding";
 
 export const APP_UPDATE_CHECK_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;

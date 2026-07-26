@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { AppUpdateInfo, AppUpdatesResponse } from "@/lib/api-types";
+import type { AppUpdateInfo, AppUpdatesResponse } from "@/lib/app-update-types";
 import { PRODUCT_NAME } from "@/lib/branding";
 
 const RETRY_AFTER_ERROR_MS = 6 * 60 * 60 * 1000;

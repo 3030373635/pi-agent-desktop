@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import type { AppComponentReleaseInfo, AppUpdatesResponse } from "@/lib/api-types";
+import type { AppComponentReleaseInfo, AppUpdatesResponse } from "@/lib/app-update-types";
 import {
   APP_DISTRIBUTION_NAME,
   APP_VERSION_DISPLAY,
