@@ -42,6 +42,10 @@ yarn-error.log*
 next-env.d.ts
 .factory
 
+# local agent tooling state
+/.claude/
+/.spec-workflow/
+
 # generated macOS desktop bundle inputs and Rust build output
 /src-tauri/gen/
 /src-tauri/resources/Pi Web Server.app/

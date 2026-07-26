@@ -5,6 +5,7 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { desktopTargetTriple } from "./desktop-platform.mjs";
+import { piPackageDirNames } from "./pi-packages.mjs";
 
 const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const desktopBuildDir = join(rootDir, ".next-desktop");
@@ -12,12 +13,6 @@ const standaloneDir = join(desktopBuildDir, "standalone");
 const serverResourcesDir = join(rootDir, "src-tauri", "resources", "server");
 const serverHelperDir = join(rootDir, "src-tauri", "resources", "Pi Agent Server.app");
 const windowsNodeDir = join(rootDir, "src-tauri", "resources", "node");
-const externalPackages = [
-  "pi-coding-agent",
-  "pi-agent-core",
-  "pi-ai",
-  "pi-tui",
-];
 
 async function runNextBuild() {
   const require = createRequire(import.meta.url);
@@ -53,7 +48,7 @@ async function assembleServer() {
   // Next's file tracer follows normal imports but intentionally omits files
   // reached through dynamic provider/export/plugin paths. These packages are
   // serverExternalPackages, so preserve their complete runtime `dist/` trees.
-  for (const packageName of externalPackages) {
+  for (const packageName of await piPackageDirNames()) {
     const source = join(rootDir, "node_modules", "@earendil-works", packageName, "dist");
     const destination = join(
       serverResourcesDir,
