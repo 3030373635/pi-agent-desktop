@@ -26,14 +26,15 @@ jobs:
             target: aarch64-apple-darwin
             args: --target aarch64-apple-darwin
             apple_signing_identity: "-"
-          # The Windows x64 leg is temporarily removed. It has never produced a
-          # successful build: `next build` dies with
-          #   EPERM: operation not permitted, scandir 'C:\Users\runneradmin\Application Data'
-          # Keeping a permanently failing platform in the matrix meant every
-          # release stayed a draft with no component manifest, and would now
-          # also file a release-failure issue every single time — which is how
-          # alerts get ignored. Restore this entry once the build is fixed; see
-          # .github/workflows/windows-build-debug.yml.
+          # Restored after the file-tracer fix in eacaca3/7f2a1c0: a literal
+          # homedir() reaching an fs call made @vercel/nft glob the whole
+          # Windows profile at build time, which failed on its junction loops.
+          # Verified through desktop:prepare by windows-build-debug.yml before
+          # re-enabling; Tauri bundling and signing are first exercised here.
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            args: --target x86_64-pc-windows-msvc --bundles nsis
+            apple_signing_identity: ""
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Check out pi-agent-desktop

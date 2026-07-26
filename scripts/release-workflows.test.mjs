@@ -144,7 +144,7 @@ test("the manifest job only publishes when every platform succeeded", async () =
   assert.match(manifestJob, /--draft=false --latest/);
 });
 
-test("release workflow publishes Apple Silicon installers", async () => {
+test("release workflow publishes Apple Silicon and Windows x64 installers", async () => {
   const workflow = await readFile(
     join(root, ".github", "workflows", "release.yml"),
     "utf8",
@@ -154,21 +154,37 @@ test("release workflow publishes Apple Silicon installers", async () => {
   assert.match(workflow, /max-parallel: 1/);
   assert.match(workflow, /runner: macos-15/);
   assert.match(workflow, /target: aarch64-apple-darwin/);
+  assert.match(workflow, /runner: windows-latest/);
+  assert.match(workflow, /target: x86_64-pc-windows-msvc/);
+  assert.match(workflow, /--bundles nsis/);
   assert.doesNotMatch(workflow, /x86_64-apple-darwin/);
   assert.doesNotMatch(workflow, /macos-15-intel/);
   assert.match(workflow, /uploadUpdaterJson: true/);
   assert.match(workflow, /gh release edit "v\$version" --draft=false --latest/);
 });
 
-test("the Windows leg stays out of the matrix until its build is fixed", async () => {
-  // It never produced a successful build. Leaving it in kept every release a
-  // draft with no component manifest, and would now file a release-failure
-  // issue on every run — the fastest way to train everyone to ignore alerts.
-  const workflow = await readFile(join(root, ".github", "workflows", "release.yml"), "utf8");
-  const matrix = workflow.slice(workflow.indexOf("matrix:"), workflow.indexOf("runs-on:"));
+test("nothing reintroduces a literal homedir() into an fs call", async () => {
+  // This is what broke the Windows build for every release: @vercel/nft folds
+  // homedir() at build time and globs the whole user profile, which dies on the
+  // profile's junction loops. lib/user-home.ts exists to keep it dynamic.
+  const guarded = [
+    "lib/file-access.ts",
+    "lib/directory-browser.ts",
+    "lib/skill-lock.ts",
+    "app/api/cwd/validate/route.ts",
+    "app/api/default-cwd/route.ts",
+  ];
 
-  assert.doesNotMatch(matrix, /^\s*- runner: windows-latest/m);
-  assert.match(workflow, /windows-build-debug\.yml/, "point readers at the debug workflow");
+  for (const file of guarded) {
+    const source = await readFile(join(root, file), "utf8");
+    const code = source.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
+    assert.doesNotMatch(
+      code,
+      /\bhomedir\s*\(/,
+      `${file} calls homedir() directly — use userHome() from lib/user-home.ts instead`,
+    );
+    assert.match(code, /userHome\s*\(/, `${file} should resolve the home directory via userHome()`);
+  }
 });
 
 test("the Windows debug workflow cannot release or sign anything", async () => {
