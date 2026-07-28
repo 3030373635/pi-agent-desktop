@@ -27,9 +27,10 @@
   --text: #1a1a1a;
   --text-muted: #6b7280;
   --text-dim: #9ca3af;
-  --accent: #2563eb;
-  --accent-hover: #1d4ed8;
-  --user-bg: #eff6ff;
+  --accent: #1d1d1f;
+  --accent-hover: #3a3a3c;
+  --accent-contrast: #ffffff;
+  --user-bg: #f0eee5;
   --assistant-bg: #ffffff;
   --tool-bg: #f9fafb;
   --bg-subtle: rgba(0,0,0,0.03);
@@ -44,9 +45,10 @@ html.dark {
   --text: #e8e8e8;
   --text-muted: #9ca3af;
   --text-dim: #6b7280;
-  --accent: #60a5fa;
-  --accent-hover: #93c5fd;
-  --user-bg: #1e293b;
+  --accent: #f5f5f7;
+  --accent-hover: #ffffff;
+  --accent-contrast: #1d1d1f;
+  --user-bg: #3a3833;
   --assistant-bg: #1a1a1a;
   --tool-bg: #1f2937;
   --bg-subtle: rgba(255,255,255,0.04);
@@ -871,8 +873,8 @@ span.linenumber {
     transition: width 0.2s ease, min-width 0.2s ease;
   }
   .sidebar-container.sidebar-open {
-    width: 260px;
-    min-width: 260px;
+    width: var(--sidebar-width, 260px);
+    min-width: var(--sidebar-width, 260px);
   }
   .sidebar-container.sidebar-closed {
     width: 0;
@@ -881,8 +883,8 @@ span.linenumber {
   }
   /* keep inner content at fixed width so it doesn't reflow during animation */
   .sidebar-container > * {
-    width: 260px;
-    min-width: 260px;
+    width: var(--sidebar-width, 260px);
+    min-width: var(--sidebar-width, 260px);
   }
 }
 
@@ -895,7 +897,7 @@ span.linenumber {
     flex-shrink: 0;
   }
   .right-panel-container.right-panel-open {
-    width: 42%;
+    width: var(--right-panel-width, 42%);
     min-width: 300px;
   }
   .right-panel-container.right-panel-closed {
@@ -905,8 +907,56 @@ span.linenumber {
   }
   /* keep inner content at fixed width so it doesn't reflow during animation */
   .right-panel-container > * {
-    width: 42vw;
+    width: var(--right-panel-width, 42vw);
     min-width: 300px;
+  }
+}
+
+/* Column resize handles between the three panes (desktop only).
+   A 7px invisible hit area straddling the pane boundary; a thin 1px
+   line tints on hover and darkens slightly while dragging. */
+@media (min-width: 641px) {
+  .column-resize-handle {
+    flex: 0 0 7px;
+    width: 7px;
+    margin: 0 -3px 0 -4px;
+    position: relative;
+    z-index: 300;
+    cursor: col-resize;
+    background: transparent;
+    touch-action: none;
+  }
+  .column-resize-handle::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 3px;
+    width: 1px;
+    border-radius: 1px;
+    background: transparent;
+    transition: background 0.15s ease 0.05s;
+  }
+  .column-resize-handle:hover::after {
+    background: color-mix(in srgb, var(--accent) 35%, transparent);
+  }
+  .column-resize-handle.is-active::after {
+    background: color-mix(in srgb, var(--accent) 60%, transparent);
+  }
+  /* While dragging: kill the open/close width transitions so the pane
+     tracks the pointer 1:1, and lock cursor/selection globally. */
+  .app-shell.is-col-resizing .sidebar-container,
+  .app-shell.is-col-resizing .right-panel-container {
+    transition: none !important;
+  }
+  .app-shell.is-col-resizing {
+    cursor: col-resize;
+    user-select: none;
+  }
+}
+@media (max-width: 640px) {
+  .column-resize-handle {
+    display: none;
   }
 }
 

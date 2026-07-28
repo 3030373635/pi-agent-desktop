@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { getLocalePlugin, getSupportedLocales, resolveBrowserLocale } from "@/lib/i18n/registry";
+import { getLocalePlugin, getSupportedLocales } from "@/lib/i18n/registry";
 import { translateMessage } from "@/lib/i18n/format";
 import type { Locale, LocalePlugin, TranslationParams } from "@/lib/i18n/types";
 
@@ -29,9 +29,11 @@ function readInitialLocale(): Locale {
     const stored = window.localStorage.getItem(LOCALE_STORAGE_KEY);
     if (stored === "en" || stored === "zh-CN") return stored;
   } catch {
-    // 隐私模式或存储不可用时继续使用浏览器语言。
+    // 隐私模式或存储不可用时回退到默认语言。
   }
-  return resolveBrowserLocale(window.navigator.languages.length ? window.navigator.languages : [window.navigator.language]);
+  // UI defaults to English; browser language is intentionally not consulted
+  // (the topbar language switcher was removed).
+  return defaultLocale;
 }
 
 /**

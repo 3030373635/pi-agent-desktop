@@ -30,10 +30,12 @@ interface ProjectPickerProps {
  * initial "pick a project" entry point and inline in the chat composer once a
  * project is active.
  */
+/** Max entries shown in the dropdown list; extras are simply not rendered. */
+const MAX_VISIBLE_PROJECTS = 7;
+
 export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, homeDir, onSelectCwd, variant = "block", disabled }: ProjectPickerProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
-  const [projectFilter, setProjectFilter] = useState("");
   const [customPathOpen, setCustomPathOpen] = useState(false);
   const [customPathError, setCustomPathError] = useState<string | null>(null);
   const [customPathValidating, setCustomPathValidating] = useState(false);
@@ -41,7 +43,6 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
 
   const closeDropdown = useCallback(() => {
     setDropdownOpen(false);
-    setProjectFilter("");
     setCustomPathOpen(false);
     setCustomPathError(null);
   }, []);
@@ -126,10 +127,13 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
     }
   }, [onSelectCwd, closeDropdown]);
 
-  const showProjectFilter = recentProjects.length > 8;
-  const visibleProjects = projectFilter.trim()
-    ? recentProjects.filter((p) => p.toLowerCase().includes(projectFilter.trim().toLowerCase()))
-    : recentProjects;
+  // Show at most MAX_VISIBLE_PROJECTS entries (like the worktree switcher);
+  // extras are dropped. Keep the selected project visible even when it falls
+  // outside the cap so the checkmark row never disappears.
+  let visibleProjects = recentProjects.slice(0, MAX_VISIBLE_PROJECTS);
+  if (selectedProject && recentProjects.includes(selectedProject) && !visibleProjects.includes(selectedProject)) {
+    visibleProjects = [...visibleProjects.slice(0, MAX_VISIBLE_PROJECTS - 1), selectedProject];
+  }
 
   const isInline = variant === "inline";
 
@@ -165,7 +169,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
     <div ref={dropdownRef} style={{ position: "relative", width: isInline ? undefined : "100%" }}>
       <button
         type="button"
-        className={isInline ? "native-toolbar-button" : "sidebar-project-button"}
+        className={isInline ? "native-toolbar-button" : "sidebar-header-row"}
         disabled={disabled}
         onClick={(e) => {
           if (isInline) {
@@ -190,83 +194,49 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
           opacity: disabled ? 0.5 : 1,
           transition: "background 0.12s, color 0.12s",
         } : {
-          width: "100%",
-          height: 32,
-          boxSizing: "border-box",
-          display: "flex",
-          alignItems: "center",
-          padding: "0 10px",
-          background: selectedCwd ? "var(--bg-hover)" : "rgba(37,99,235,0.06)",
-          border: selectedCwd ? "1px solid var(--border)" : "1px solid rgba(37,99,235,0.4)",
-          borderRadius: 7,
-          cursor: "pointer",
-          fontSize: 12,
-          color: "var(--text)",
-          textAlign: "left",
-          transition: "border-color 0.15s, background 0.15s",
+          background: dropdownOpen ? "var(--bg-hover)" : undefined,
         }}
       >
-        {isInline && (
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-            <path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" />
-          </svg>
-        )}
-        {selectedCwd ? (
-          <PathLabel
-            text={displayCwd(selectedProject ?? selectedCwd, homeDir)}
-            style={{
-              flex: 1,
-              fontFamily: "var(--font-mono)",
-              fontSize: isInline ? 12 : 11,
-              color: isInline ? undefined : "var(--text)",
-            }}
-          />
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, color: isInline ? undefined : "var(--text-muted)" }}>
+          <path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" />
+        </svg>
+        {isInline ? (
+          selectedCwd ? (
+            <PathLabel
+              text={displayCwd(selectedProject ?? selectedCwd, homeDir)}
+              style={{ flex: 1, fontFamily: "var(--font-mono)", fontSize: 12 }}
+            />
+          ) : (
+            <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-dim)" }}>
+              Select project…
+            </span>
+          )
         ) : (
-          <span
-            style={{
-              flex: 1,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              fontFamily: "var(--font-mono)",
-              fontSize: 11,
-              color: "var(--text-dim)",
-            }}
-          >
-            Select project…
-          </span>
+          <>
+            <span
+              style={{
+                flex: 1,
+                minWidth: 0,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                fontSize: 12.5,
+                fontWeight: 500,
+                color: selectedCwd ? "var(--text)" : "var(--accent)",
+              }}
+            >
+              {selectedCwd
+                ? ((selectedProject ?? selectedCwd).split("/").filter(Boolean).pop() ?? displayCwd(selectedProject ?? selectedCwd, homeDir))
+                : "Select project…"}
+            </span>
+            <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="var(--text-dim)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+              <polyline points="2 3.5 5 6.5 8 3.5" />
+            </svg>
+          </>
         )}
       </button>
 
       <AnimatedDropdown className="native-popover" open={dropdownOpen} style={panelStyle}>
-        {showProjectFilter && (
-          <div style={{ padding: "6px 8px", borderBottom: "1px solid var(--border)" }}>
-            <input
-              value={projectFilter}
-              onChange={(e) => setProjectFilter(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  setProjectFilter("");
-                  setDropdownOpen(false);
-                }
-              }}
-              placeholder="Filter projects…"
-              autoFocus
-              style={{
-                width: "100%",
-                fontSize: 11,
-                fontFamily: "var(--font-mono)",
-                padding: "5px 8px",
-                border: "1px solid var(--border)",
-                borderRadius: 5,
-                outline: "none",
-                background: "var(--bg)",
-                color: "var(--text)",
-                boxSizing: "border-box",
-              }}
-            />
-          </div>
-        )}
         <div style={{ maxHeight: "min(50vh, 380px)", overflowY: "auto" }}>
           {visibleProjects.map((project) => (
             <button
@@ -304,9 +274,6 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
               <PathLabel text={displayCwd(project, homeDir)} style={{ flex: 1 }} />
             </button>
           ))}
-          {visibleProjects.length === 0 && projectFilter.trim() && (
-            <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--text-dim)" }}>No matching projects</div>
-          )}
         </div>
 
         {/* Default cwd shortcut */}

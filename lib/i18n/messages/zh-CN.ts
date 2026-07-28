@@ -115,6 +115,7 @@ export const zhCNLocale: LocalePlugin = {
     "sidebar.delete": "删除",
     "sidebar.deleteWithShiftClick": "删除（按住 Shift 点击可跳过确认）",
     "sidebar.moreActions": "会话操作",
+    "sidebar.newChat": "New",
     "sidebar.expandForks": "展开分叉",
     "sidebar.collapseForks": "折叠分叉",
     "sidebar.messagesCount": "{count} 条消息",

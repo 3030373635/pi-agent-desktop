@@ -363,7 +363,7 @@ function AddPluginPanel({
           style={{
             ...buttonStyle(busy || !source.trim()),
             background: "var(--accent)",
-            color: "white",
+            color: "var(--accent-contrast)",
             borderColor: "var(--accent)",
           }}
         >

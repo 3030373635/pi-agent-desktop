@@ -36,14 +36,12 @@ type AutoNameStatus =
   | { kind: "error"; message: string };
 
 const TOP_BAR_ICON_BUTTON_SIZE = 36;
-const LANGUAGE_MENU_WIDTH = 176;
-
 export function AppShell() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [initialNavigation] = useState(() => getInitialNavigation(searchParams));
   const { isDark, toggleTheme } = useTheme();
-  const { locale, setLocale, t: translate, supportedLocales } = useI18n();
+  const { locale, t: translate } = useI18n();
   const isMobile = useIsMobile();
   const [selectedSession, setSelectedSession] = useState<SessionInfo | null>(null);
   // When user clicks +, we only store the cwd — no fake session id
@@ -80,8 +78,6 @@ export function AppShell() {
   }, []);
   const chatInputRef = useRef<ChatInputHandle | null>(null);
   const topBarRef = useRef<HTMLDivElement>(null);
-  const languageBtnRef = useRef<HTMLButtonElement>(null);
-
   // Branch navigator state — populated by ChatWindow via onBranchDataChange
   const [branchTree, setBranchTree] = useState<SessionTreeNode[]>([]);
   const [branchActiveLeafId, setBranchActiveLeafId] = useState<string | null>(null);
@@ -136,12 +132,12 @@ export function AppShell() {
   }, []);
 
   // Single active panel — only one dropdown open at a time
-  const [activeTopPanel, setActiveTopPanel] = useState<"branches" | "system" | "session" | "language" | null>(null);
+  const [activeTopPanel, setActiveTopPanel] = useState<"branches" | "system" | "session" | null>(null);
   const [topMoreOpen, setTopMoreOpen] = useState(false);
   const topMoreRef = useRef<HTMLDivElement>(null);
   const [topPanelPos, setTopPanelPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
-  const toggleTopPanel = useCallback((panel: "branches" | "system" | "session" | "language") => {
+  const toggleTopPanel = useCallback((panel: "branches" | "system" | "session") => {
     if (isMobile) setSidebarOpen(false);
     setTopMoreOpen(false);
     setActiveTopPanel((cur) => cur === panel ? null : panel);
@@ -183,22 +179,11 @@ export function AppShell() {
     if (!activeTopPanel || !topBarRef.current) return;
     const update = () => {
       const topBarRect = topBarRef.current!.getBoundingClientRect();
-      if (activeTopPanel === "language" && !isMobile && languageBtnRef.current) {
-        const buttonRect = languageBtnRef.current.getBoundingClientRect();
-        const width = Math.min(LANGUAGE_MENU_WIDTH, topBarRect.width);
-        const left = Math.min(
-          buttonRect.left - 1,
-          Math.max(topBarRect.left, topBarRect.right - width),
-        );
-        setTopPanelPos({ top: topBarRect.bottom, left, width });
-        return;
-      }
       setTopPanelPos({ top: topBarRect.bottom, left: topBarRect.left, width: topBarRect.width });
     };
     update();
     const ro = new ResizeObserver(update);
     ro.observe(topBarRef.current);
-    if (languageBtnRef.current) ro.observe(languageBtnRef.current);
     return () => ro.disconnect();
   }, [activeTopPanel, isMobile]);
 
@@ -206,6 +191,53 @@ export function AppShell() {
   const [fileTabs, setFileTabs] = useState<Tab[]>([]);
   const [activeFileTabId, setActiveFileTabId] = useState<string | null>(null);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
+
+  // Column widths, adjustable by dragging the dividers (desktop only).
+  // Applied as CSS vars on the shell; null right-panel width = CSS default (42%).
+  const SIDEBAR_MIN = 200, SIDEBAR_MAX = 440, RIGHT_PANEL_MIN = 320;
+  const [sidebarWidth, setSidebarWidth] = useState(284);
+  const [rightPanelWidth, setRightPanelWidth] = useState<number | null>(null);
+  const [resizingColumn, setResizingColumn] = useState<"sidebar" | "rightPanel" | null>(null);
+
+  useEffect(() => {
+    const sw = Number(localStorage.getItem("pi-sidebar-width"));
+    if (sw >= SIDEBAR_MIN && sw <= SIDEBAR_MAX) setSidebarWidth(sw);
+    const rw = Number(localStorage.getItem("pi-right-panel-width"));
+    if (rw >= RIGHT_PANEL_MIN) setRightPanelWidth(rw);
+     
+  }, []);
+
+  const beginColumnResize = useCallback((which: "sidebar" | "rightPanel", e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    // Capture the pointer so dragging keeps working over iframes/webviews.
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    const startX = e.clientX;
+    const startWidth = which === "sidebar"
+      ? sidebarWidth
+      : (rightPanelWidth ?? Math.round(window.innerWidth * 0.42));
+    let lastWidth = startWidth;
+    setResizingColumn(which);
+    const onMove = (ev: PointerEvent) => {
+      const dx = ev.clientX - startX;
+      if (which === "sidebar") {
+        lastWidth = Math.round(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, startWidth + dx)));
+        setSidebarWidth(lastWidth);
+      } else {
+        const max = Math.max(RIGHT_PANEL_MIN, Math.round(window.innerWidth * 0.72));
+        lastWidth = Math.round(Math.min(max, Math.max(RIGHT_PANEL_MIN, startWidth - dx)));
+        setRightPanelWidth(lastWidth);
+      }
+    };
+    const onUp = () => {
+      setResizingColumn(null);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      localStorage.setItem(which === "sidebar" ? "pi-sidebar-width" : "pi-right-panel-width", String(lastWidth));
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+     
+  }, [sidebarWidth, rightPanelWidth]);
 
   // Same @mention format as the chat input's @ autocomplete, so the agent's
   // read tool resolves it the same way (it strips the @ prefix).
@@ -582,6 +614,44 @@ export function AppShell() {
     return () => observer.disconnect();
   }, [windowTitle]);
 
+  // Theme + collapse controls at the sidebar's own top-right (Claude Desktop
+  // style). When the sidebar is closed, the topbar shows a reopen button.
+  const sidebarHeaderControls = (
+    <>
+      <button
+        className="sidebar-chrome-button"
+        onClick={toggleTheme}
+        title={isDark ? translate("theme.light") : translate("theme.dark")}
+        aria-label={isDark ? translate("theme.light") : translate("theme.dark")}
+        aria-pressed={isDark}
+      >
+        {isDark ? (
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="5" />
+            <line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" />
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+            <line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" />
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+          </svg>
+        ) : (
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+          </svg>
+        )}
+      </button>
+      <button
+        className="sidebar-chrome-button"
+        onClick={handleSidebarToggle}
+        title={translate("sidebar.hide")}
+        aria-label={translate("sidebar.hide")}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="3" x2="9" y2="21" />
+        </svg>
+      </button>
+    </>
+  );
+
   const sidebarContent = (
     <>
       <SessionSidebar
@@ -601,6 +671,7 @@ export function AppShell() {
         onExplorerRefresh={handleExplorerRefresh}
         onAtMention={handleAtMention}
         onAtMentions={handleAtMentions}
+        headerControls={sidebarHeaderControls}
       />
       <div className="sidebar-footer" style={{ padding: "8px", flexShrink: 0, display: "flex", justifyContent: "space-between", gap: 4 }}>
         {([
@@ -720,7 +791,14 @@ export function AppShell() {
         }
       }
     `}</style>
-    <div className="app-shell" style={{ display: "flex", height: "100dvh", overflow: "hidden", background: "var(--bg)" }}>
+    <div
+      className={`app-shell${resizingColumn ? " is-col-resizing" : ""}`}
+      style={{
+        display: "flex", height: "100dvh", overflow: "hidden", background: "var(--bg)",
+        "--sidebar-width": `${sidebarWidth}px`,
+        ...(rightPanelWidth != null ? { "--right-panel-width": `${rightPanelWidth}px` } : null),
+      } as React.CSSProperties}
+    >
       {/* Mobile overlay backdrop */}
       <div
         className={`sidebar-overlay-backdrop${mobileSidebarReady ? "" : " sidebar-mobile-pending"}`}
@@ -751,6 +829,16 @@ export function AppShell() {
         {sidebarContent}
       </div>
 
+      {/* Drag handle: sidebar / center */}
+      {sidebarOpen && !isMobile && (
+        <div
+          className={`column-resize-handle${resizingColumn === "sidebar" ? " is-active" : ""}`}
+          role="separator"
+          aria-orientation="vertical"
+          onPointerDown={(e) => beginColumnResize("sidebar", e)}
+        />
+      )}
+
       {/* Center: chat */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         {/* Top bar with sidebar toggle */}
@@ -760,101 +848,27 @@ export function AppShell() {
           {...desktopChrome.dragRegionProps}
           style={{ display: "flex", alignItems: "center", flexShrink: 0, borderBottom: "1px solid var(--border)", height: 36, background: "var(--bg-panel)" }}
         >
-          <button
-            className="native-icon-button"
-            onClick={handleSidebarToggle}
-             title={sidebarOpen ? translate("sidebar.hide") : translate("sidebar.show")}
-             aria-label={sidebarOpen ? translate("sidebar.hide") : translate("sidebar.show")}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: TOP_BAR_ICON_BUTTON_SIZE, height: TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
-              background: "none", border: "none", borderRight: "1px solid var(--border)",
-              color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
-          >
-            {sidebarOpen ? (
+          {/* Sidebar reopen — only while the sidebar (and its own toggle) is hidden */}
+          {!sidebarOpen && (
+            <button
+              className="native-icon-button"
+              onClick={handleSidebarToggle}
+              title={translate("sidebar.show")}
+              aria-label={translate("sidebar.show")}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                width: TOP_BAR_ICON_BUTTON_SIZE, height: TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
+                background: "none", border: "none", borderRight: "1px solid var(--border)",
+                color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
+            >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="3" x2="9" y2="21" />
               </svg>
-            ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
-              </svg>
-            )}
-          </button>
-          <button
-            className="native-icon-button"
-            onClick={toggleTheme}
-            title={isDark ? translate("theme.light") : translate("theme.dark")}
-            aria-label={isDark ? translate("theme.light") : translate("theme.dark")}
-            aria-pressed={isDark}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: TOP_BAR_ICON_BUTTON_SIZE, height: TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
-              background: "none", border: "none", borderRight: "1px solid var(--border)",
-              color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
-          >
-            {isDark ? (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="5" />
-                <line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" />
-                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-                <line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" />
-                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-              </svg>
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-              </svg>
-            )}
-          </button>
-          <button
-            ref={languageBtnRef}
-            className="native-icon-button"
-            type="button"
-            onClick={() => toggleTopPanel("language")}
-            title={translate("common.language")}
-            aria-label={translate("common.language")}
-            aria-haspopup="menu"
-            aria-expanded={activeTopPanel === "language"}
-            aria-pressed={activeTopPanel === "language"}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: TOP_BAR_ICON_BUTTON_SIZE, height: TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
-              background: activeTopPanel === "language" ? "var(--bg-selected)" : "none",
-              border: "none", borderRight: "1px solid var(--border)",
-              color: activeTopPanel === "language" ? "var(--text)" : "var(--text-muted)",
-              cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = activeTopPanel === "language" ? "var(--text)" : "var(--text-muted)";
-            }}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="m5 8 6 6" />
-              <path d="m4 14 6-6 2-3" />
-              <path d="M2 5h12" />
-              <path d="M7 2h1" />
-              <path d="m22 22-5-10-5 10" />
-              <path d="M14 18h6" />
-            </svg>
-          </button>
+            </button>
+          )}
           <div className="app-topbar-title" title={topBarTitle}>
             <span>{topBarTitle}</span>
             <small>{topBarSubtitle}</small>
@@ -1145,49 +1159,6 @@ export function AppShell() {
               overflowY: "auto",
               zIndex: 500,
             }}>
-              {activeTopPanel === "language" && (
-                <div
-                  role="menu"
-                  aria-label={translate("common.language")}
-                  style={{
-                    background: "var(--bg-panel)",
-                    borderLeft: "1px solid var(--border)",
-                    borderRight: "1px solid var(--border)",
-                    borderBottom: "1px solid var(--border)",
-                    overflow: "hidden",
-                    padding: 4,
-                  }}
-                >
-                  {supportedLocales.map((plugin) => (
-                    <button
-                      key={plugin.id}
-                      type="button"
-                      onClick={() => {
-                        setLocale(plugin.id as typeof locale);
-                        setActiveTopPanel(null);
-                      }}
-                      role="menuitemradio"
-                      aria-checked={locale === plugin.id}
-                      style={{
-                        display: "flex", alignItems: "center",
-                        width: "100%", height: 34, padding: "0 10px",
-                        border: "none", borderRadius: 4,
-                        background: locale === plugin.id ? "var(--bg-selected)" : "transparent",
-                        color: "var(--text)", cursor: "pointer", textAlign: "left", fontSize: 12,
-                        transition: "background 0.1s",
-                      }}
-                      onMouseEnter={(e) => {
-                        if (locale !== plugin.id) e.currentTarget.style.background = "var(--bg-hover)";
-                      }}
-                      onMouseLeave={(e) => {
-                        if (locale !== plugin.id) e.currentTarget.style.background = "transparent";
-                      }}
-                    >
-                      <span>{plugin.label}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
               {activeTopPanel === "system" && (
                 <div style={{
                   background: "var(--bg-panel)",
@@ -1374,6 +1345,29 @@ export function AppShell() {
             </div>
           )}
 
+          {/* Right panel opener — while the panel (and its own close button) is hidden.
+              Sits at the window's top-right, the same corner the close button
+              occupies when the panel is open. */}
+          {!rightPanelOpen && (
+            <button
+              className="native-icon-button"
+              onClick={() => setRightPanelOpen(true)}
+              title={translate("files.showPanel")}
+              aria-label={translate("files.showPanel")}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                width: TOP_BAR_ICON_BUTTON_SIZE, height: TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
+                background: "none", border: "none", borderLeft: "1px solid var(--border)",
+                color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="15" y1="3" x2="15" y2="21" />
+              </svg>
+            </button>
+          )}
           <WindowControls />
         </div>
 
@@ -1440,6 +1434,16 @@ export function AppShell() {
         </div>
       </div>
 
+      {/* Drag handle: center / right panel */}
+      {rightPanelOpen && !isMobile && (
+        <div
+          className={`column-resize-handle${resizingColumn === "rightPanel" ? " is-active" : ""}`}
+          role="separator"
+          aria-orientation="vertical"
+          onPointerDown={(e) => beginColumnResize("rightPanel", e)}
+        />
+      )}
+
       {/* Right panel: file viewer — always mounted, width animated via CSS */}
       <div
         className={`right-panel-container${rightPanelOpen ? " right-panel-open" : " right-panel-closed"}`}
@@ -1460,7 +1464,17 @@ export function AppShell() {
               onCloseTab={handleCloseFileTab}
             />
           </div>
-
+          {/* Panel close at its own top-right — same window corner as the topbar opener */}
+          <button
+            className="right-panel-close"
+            onClick={() => setRightPanelOpen(false)}
+            title={translate("files.hidePanel")}
+            aria-label={translate("files.hidePanel")}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="15" y1="3" x2="15" y2="21" />
+            </svg>
+          </button>
         </div>
 
         {/* File content */}
@@ -1493,28 +1507,6 @@ export function AppShell() {
         </div>
       </div>
     </div>
-    {/* File panel toggle — always visible at top-right */}
-    <button
-      className="right-panel-toggle"
-      onClick={() => setRightPanelOpen((v) => !v)}
-       title={rightPanelOpen ? translate("files.hidePanel") : translate("files.showPanel")}
-       aria-label={rightPanelOpen ? translate("files.hidePanel") : translate("files.showPanel")}
-      style={{
-        // Vertically centered within the 48px top bar so it lines up with the left sidebar toggle.
-        position: "fixed", top: 6, right: 9, zIndex: 300,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        width: 36, height: 36, padding: 0,
-        background: "none", border: "none",
-        color: rightPanelOpen ? "var(--text)" : "var(--text-muted)",
-        cursor: "pointer", transition: "color 0.12s",
-      }}
-      onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-      onMouseLeave={(e) => { e.currentTarget.style.color = rightPanelOpen ? "var(--text)" : "var(--text-muted)"; }}
-    >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="15" y1="3" x2="15" y2="21" />
-      </svg>
-    </button>
     {modelsConfigOpen && <ModelsConfig onClose={() => { setModelsConfigOpen(false); setModelsRefreshKey((k) => k + 1); }} />}
     {projectTrustDialogOpen && projectTrustCwd && (
       <ProjectTrustDialog

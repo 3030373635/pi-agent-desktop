@@ -19,7 +19,7 @@
   --bg: #f7f7f5;
   --bg-panel: rgba(241, 241, 239, 0.92);
   --bg-hover: rgba(29, 29, 31, 0.055);
-  --bg-selected: rgba(0, 122, 255, 0.1);
+  --bg-selected: rgba(29, 29, 31, 0.08);
   --border: rgba(60, 60, 67, 0.16);
   --separator: rgba(60, 60, 67, 0.12);
   --surface: #ffffff;
@@ -29,15 +29,16 @@
   --text-muted: #68686d;
   --text-dim: #94949a;
   --text-meta: #85858b;
-  --accent: #007aff;
-  --accent-hover: #006ee6;
-  --accent-soft: rgba(0, 122, 255, 0.1);
-  --accent-border: rgba(0, 122, 255, 0.24);
-  --focus-ring: rgba(0, 122, 255, 0.28);
+  --accent: #1d1d1f;
+  --accent-hover: #3a3a3c;
+  --accent-contrast: #ffffff;
+  --accent-soft: rgba(29, 29, 31, 0.08);
+  --accent-border: rgba(29, 29, 31, 0.22);
+  --focus-ring: rgba(29, 29, 31, 0.25);
   --danger: #d92d20;
   --success: #248a3d;
   --warning: #b87503;
-  --user-bg: rgba(0, 122, 255, 0.085);
+  --user-bg: #f0eee5;
   --assistant-bg: transparent;
   --tool-bg: rgba(118, 118, 128, 0.08);
   --bg-subtle: rgba(60, 60, 67, 0.055);
@@ -71,7 +72,7 @@ html.dark {
   --bg: #1c1c1e;
   --bg-panel: rgba(36, 36, 38, 0.94);
   --bg-hover: rgba(255, 255, 255, 0.075);
-  --bg-selected: rgba(10, 132, 255, 0.18);
+  --bg-selected: rgba(255, 255, 255, 0.12);
   --border: rgba(235, 235, 245, 0.15);
   --separator: rgba(235, 235, 245, 0.1);
   --surface: #252527;
@@ -81,15 +82,16 @@ html.dark {
   --text-muted: rgba(235, 235, 245, 0.64);
   --text-dim: rgba(235, 235, 245, 0.38);
   --text-meta: rgba(235, 235, 245, 0.44);
-  --accent: #0a84ff;
-  --accent-hover: #409cff;
-  --accent-soft: rgba(10, 132, 255, 0.18);
-  --accent-border: rgba(10, 132, 255, 0.32);
-  --focus-ring: rgba(10, 132, 255, 0.34);
+  --accent: #f5f5f7;
+  --accent-hover: #ffffff;
+  --accent-contrast: #1d1d1f;
+  --accent-soft: rgba(245, 245, 247, 0.14);
+  --accent-border: rgba(245, 245, 247, 0.3);
+  --focus-ring: rgba(245, 245, 247, 0.32);
   --danger: #ff6961;
   --success: #30d158;
   --warning: #ffd60a;
-  --user-bg: rgba(10, 132, 255, 0.16);
+  --user-bg: #3a3833;
   --assistant-bg: transparent;
   --tool-bg: rgba(255, 255, 255, 0.055);
   --bg-subtle: rgba(255, 255, 255, 0.055);
@@ -230,86 +232,155 @@ pre, code {
 }
 
 .session-sidebar-header {
-  padding: 14px 12px 11px !important;
+  padding: 8px 6px 4px !important;
   border-bottom: 0 !important;
 }
 
-/* This header sits in the window's top-left corner — reserve vertical room
-   so the macOS traffic-light controls (overlaid via titleBarStyle: Overlay)
-   don't sit on top of the project picker / New / Refresh row. */
+/* On macOS (titleBarStyle: Overlay) the traffic lights float over the
+   sidebar's top-left; the right-aligned controls row shares that strip, so
+   only a small extra inset is needed to keep the rows below clear. */
 .session-sidebar-header--mac-inset {
-  padding-top: 30px !important;
+  padding-top: 12px !important;
 }
 
-.sidebar-new-button {
-  height: 30px !important;
-  padding: 0 11px !important;
-  border: 0 !important;
-  border-radius: 8px !important;
-  background: var(--accent) !important;
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 25%, transparent);
-  color: #fff !important;
-  font-size: 12px !important;
-  font-weight: 600 !important;
+/* Window-chrome controls row at the sidebar's top-right (theme + collapse). */
+.sidebar-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 0 2px 4px;
 }
 
-.sidebar-new-button:hover:not(:disabled) {
-  background: var(--accent-hover) !important;
-  color: #fff !important;
+.sidebar-chrome-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease;
 }
 
-.sidebar-new-button:active:not(:disabled),
-.sidebar-refresh-button:active:not(:disabled),
-.sidebar-project-button:active:not(:disabled) {
-  transform: scale(0.96);
+.sidebar-chrome-button:hover {
+  background: var(--bg-hover);
+  color: var(--text);
 }
 
-.sidebar-new-button:disabled {
-  background: var(--bg-hover) !important;
-  box-shadow: none;
-  color: var(--text-dim) !important;
+.sidebar-chrome-button:active {
+  transform: scale(0.94);
 }
 
+/* Flat full-width header rows (New chat / folder / branch) — Claude Desktop
+   style: icon + label, no borders, hover shows a rounded highlight. */
+.sidebar-header-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.sidebar-header-row:hover:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--bg-hover);
+}
+
+.sidebar-header-row:active:not(:disabled):not([aria-disabled="true"]) {
+  transform: scale(0.985);
+}
+
+.sidebar-new-row {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.sidebar-new-row:disabled {
+  color: var(--text-dim);
+  cursor: not-allowed;
+}
+
+.sidebar-new-plus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* Bare 14px leading icons (folder / branch rows) get 2px side margins so
+   their centers line up with the 18px "+" badge above. */
+.sidebar-header-row > svg:first-child {
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+
+.sidebar-new-row:disabled .sidebar-new-plus {
+  background: var(--bg-subtle);
+}
+
+/* Refresh: hidden until the folder row is hovered (sessions auto-refresh;
+   manual refresh is a low-frequency escape hatch). */
 .sidebar-refresh-button {
-  width: 30px !important;
-  height: 30px !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px !important;
+  height: 24px !important;
+  padding: 0;
+  flex-shrink: 0;
+  border-radius: 6px !important;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 140ms ease, background 140ms ease, color 140ms ease;
 }
 
-.sidebar-project-button {
-  min-height: 32px;
-  padding: 0 10px !important;
-  border: 1px solid var(--separator) !important;
-  border-radius: 9px !important;
-  background: color-mix(in srgb, var(--surface) 64%, transparent) !important;
-  box-shadow: var(--shadow-control);
-  transition:
-    background 120ms ease,
-    border-color 120ms ease,
-    transform 120ms var(--ease-native) !important;
+.sidebar-folder-row:hover .sidebar-refresh-button,
+.sidebar-refresh-button:focus-visible,
+.sidebar-refresh-button.is-done {
+  opacity: 1;
 }
 
-.sidebar-project-button:hover {
-  border-color: var(--border) !important;
-  background: var(--surface) !important;
+.sidebar-refresh-button:active {
+  transform: scale(0.94);
 }
 
+/* Divider + breathing room between the folder/worktree rows above and the tabs */
 .sidebar-view-switcher {
   display: grid;
   grid-template-columns: 1fr 1fr;
   flex: 0 0 auto;
-  margin: 1px 10px 7px;
-  padding: 2px;
-  background: var(--bg-subtle);
-  border: 1px solid var(--separator);
-  border-radius: 9px;
+  margin: 8px 0 7px;
+  padding: 8px 10px 0;
+  border-top: 1px solid var(--separator);
+  gap: 2px;
 }
 
 .sidebar-view-switcher button {
-  height: 26px;
+  height: 28px;
   padding: 0 10px;
   border: 0;
   border-radius: 7px;
-  background: transparent;
+  background: var(--bg-hover);
   color: var(--text-muted);
   font-size: 11.5px;
   font-weight: 550;
@@ -325,8 +396,7 @@ pre, code {
 }
 
 .sidebar-view-switcher button.is-active {
-  background: var(--surface);
-  box-shadow: var(--shadow-control);
+  background: var(--bg-selected);
   color: var(--text);
 }
 
@@ -338,18 +408,20 @@ pre, code {
   padding: 0 0 6px !important;
 }
 
+/* Session rows match the view-switcher tab height (28px) */
 .session-item {
   width: calc(100% - 14px);
-  height: 44px !important;
+  height: 28px !important;
   margin: 2px 7px;
   padding-right: 7px !important;
   border-left: 0 !important;
-  border-radius: 9px;
+  border-radius: 8px;
 }
 
+/* Border blends into the selected background — no darker accent ring */
 .session-item.is-selected {
   background: var(--bg-selected) !important;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: none;
 }
 
 .session-item-title {
@@ -788,10 +860,16 @@ pre, code {
   display: flex !important;
   height: 34px !important;
   margin-left: auto;
-  /* Clear the fixed right-panel toggle pinned to the window's top-right corner. */
-  margin-right: 52px;
+  margin-right: 2px;
   align-items: center !important;
   gap: 1px;
+}
+
+/* Wrapper divs (BranchNavigator, More menu anchor) must center their 28px
+   buttons vertically, otherwise they hug the top of the 34px row. */
+.app-topbar-actions > div {
+  display: flex !important;
+  align-items: center !important;
 }
 
 .app-topbar-actions .native-toolbar-button,
@@ -1170,7 +1248,7 @@ pre, code {
   border-color: transparent !important;
   background: var(--accent) !important;
   box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 30%, transparent);
-  color: #fff !important;
+  color: var(--accent-contrast) !important;
   font-weight: 620;
 }
 
@@ -1356,7 +1434,7 @@ pre, code {
   border-radius: var(--radius-md);
   background: var(--accent);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 28%, transparent);
-  color: #fff;
+  color: var(--accent-contrast);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -1412,9 +1490,7 @@ pre, code {
 
 .chat-composer:focus-within {
   border-color: var(--accent-border) !important;
-  box-shadow:
-    0 0 0 3px var(--focus-ring),
-    var(--shadow-composer) !important;
+  box-shadow: var(--shadow-composer) !important;
 }
 
 .chat-composer textarea {
@@ -1893,19 +1969,22 @@ pre, code {
   background: var(--surface) !important;
 }
 
+/* Same height and background as .app-topbar so the fixed right-panel toggle
+   pinned to the window corner reads as part of the same bar whether the
+   panel is open or closed. */
 .right-panel-tab-strip {
   display: flex;
-  height: 42px;
-  flex: 0 0 42px;
+  height: 48px;
+  flex: 0 0 48px;
   align-items: center;
   border-bottom: 1px solid var(--separator);
-  background: color-mix(in srgb, var(--bg-panel) 78%, var(--surface));
+  background: color-mix(in srgb, var(--bg) 88%, var(--surface));
 }
 
 .file-tab-bar {
   display: flex;
-  height: 42px;
-  padding: 5px 42px 5px 6px;
+  height: 100%;
+  padding: 5px 6px;
   align-items: center;
   gap: 4px;
   overflow-x: auto;
@@ -2029,21 +2108,28 @@ pre, code {
   transform: scale(0.9);
 }
 
-.right-panel-toggle {
+/* Close button at the right panel's own top-right corner — the same window
+   corner where the topbar opener sits while the panel is closed. */
+.right-panel-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin-right: 7px;
+  padding: 0;
+  flex-shrink: 0;
+  border: 0;
   border-radius: 8px;
-  transition:
-    color 140ms ease,
-    background 140ms ease,
-    transform 140ms var(--ease-native) !important;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 140ms ease, background 140ms ease;
 }
 
-.right-panel-toggle:hover {
-  background: color-mix(in srgb, var(--bg-panel) 65%, var(--surface)) !important;
-  color: var(--text) !important;
-}
-
-.right-panel-toggle:active {
-  transform: scale(0.94);
+.right-panel-close:hover {
+  background: color-mix(in srgb, var(--bg-panel) 65%, var(--surface));
+  color: var(--text);
 }
 
 .file-panel-empty-state {
@@ -2675,8 +2761,8 @@ span.linenumber {
     transition: width 0.2s ease, min-width 0.2s ease;
   }
   .sidebar-container.sidebar-open {
-    width: 284px;
-    min-width: 284px;
+    width: var(--sidebar-width, 284px);
+    min-width: var(--sidebar-width, 284px);
   }
   .sidebar-container.sidebar-closed {
     width: 0;
@@ -2685,8 +2771,8 @@ span.linenumber {
   }
   /* keep inner content at fixed width so it doesn't reflow during animation */
   .sidebar-container > * {
-    width: 284px;
-    min-width: 284px;
+    width: var(--sidebar-width, 284px);
+    min-width: var(--sidebar-width, 284px);
   }
 }
 
@@ -2699,7 +2785,7 @@ span.linenumber {
     flex-shrink: 0;
   }
   .right-panel-container.right-panel-open {
-    width: 42%;
+    width: var(--right-panel-width, 42%);
     min-width: 300px;
   }
   .right-panel-container.right-panel-closed {
@@ -2709,7 +2795,7 @@ span.linenumber {
   }
   /* keep inner content at fixed width so it doesn't reflow during animation */
   .right-panel-container > * {
-    width: 42vw;
+    width: var(--right-panel-width, 42vw);
     min-width: 300px;
   }
 }

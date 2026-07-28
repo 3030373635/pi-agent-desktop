@@ -43,7 +43,7 @@ function getMessagePreview(msg: AgentMessage | Partial<AgentMessage>): string {
 
 function getNodeColor(msg: AgentMessage | Partial<AgentMessage>): { bg: string; border: string } {
   if (msg.role === "user") {
-    return { bg: "rgba(37,99,235,0.18)", border: "rgba(37,99,235,0.7)" };
+    return { bg: "var(--accent-soft)", border: "var(--accent)" };
   }
   return { bg: "rgba(107,114,128,0.12)", border: "rgba(107,114,128,0.5)" };
 }
@@ -71,6 +71,10 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
   const [nodes, setNodes] = useState<NodeInfo[]>([]);
   const [minimapHovered, setMinimapHovered] = useState(false);
   const [mouseYRatio, setMouseYRatio] = useState<number | null>(null);
+  // Overlay-scrollbar behavior (matches the sidebar session list): the thumb
+  // is only shown while the chat is actively scrolling or the strip is hovered.
+  const [scrolling, setScrolling] = useState(false);
+  const scrollingHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draggingRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -142,8 +146,23 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
   useEffect(() => {
     const el = scrollContainer.current;
     if (!el) return;
-    el.addEventListener("scroll", updateScroll, { passive: true });
-    return () => el.removeEventListener("scroll", updateScroll);
+    const onScroll = () => {
+      updateScroll();
+      setScrolling(true);
+      if (scrollingHideTimerRef.current) clearTimeout(scrollingHideTimerRef.current);
+      scrollingHideTimerRef.current = setTimeout(() => {
+        setScrolling(false);
+        scrollingHideTimerRef.current = null;
+      }, 800);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      if (scrollingHideTimerRef.current) {
+        clearTimeout(scrollingHideTimerRef.current);
+        scrollingHideTimerRef.current = null;
+      }
+    };
   }, [scrollContainer, updateScroll]);
 
   // Keep both node positions and viewport ratios in sync with layout changes.
@@ -247,6 +266,7 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
 
   const viewportBoxTop = scrollRatio * (1 - viewportRatio) * 100;
   const viewportBoxHeight = viewportRatio * 100;
+  const thumbVisible = scrolling || minimapHovered;
 
   // Find the node closest to the current mouse position
   const nearestIndex = mouseYRatio !== null && nodes.length > 0
@@ -271,29 +291,33 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
         position: "relative",
         cursor: "default",
         userSelect: "none",
-        borderLeft: "1px solid var(--border)",
-        background: "var(--bg-panel)",
+        background: "transparent",
         overflow: "visible",
       }}
     >
-      {/* Viewport indicator */}
+      {/* Viewport thumb — styled like the sidebar overlay scrollbar:
+          thin rounded pill, hidden while idle. */}
       <div
         style={{
           position: "absolute",
-          left: 0,
-          right: 0,
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: 4,
+          borderRadius: 999,
           top: `${viewportBoxTop}%`,
           height: `${viewportBoxHeight}%`,
-          background: "rgba(100,100,100,0.1)",
-          borderTop: "1px solid rgba(100,100,100,0.2)",
-          borderBottom: "1px solid rgba(100,100,100,0.2)",
+          minHeight: 24,
+          maxHeight: "100%",
+          background: minimapHovered ? "var(--text-dim)" : "var(--border)",
+          opacity: thumbVisible ? 1 : 0,
+          transition: "opacity 0.25s ease, background 0.15s ease",
           pointerEvents: "none",
           zIndex: 1,
         }}
       />
 
-      {/* Message nodes */}
-      {nodes.map((node) => {
+      {/* Message nodes — only revealed on hover so the idle strip stays clean */}
+      {minimapHovered && nodes.map((node) => {
         const color = getNodeColor(node.msg);
         const isNearest = minimapHovered && nearestIndex === node.index;
         const isUser = node.msg.role === "user";
@@ -336,19 +360,21 @@ export function ChatMinimap({ messages, streamingMessage, scrollContainer, messa
         );
       })}
 
-      {/* Center line */}
-      <div
-        style={{
-          position: "absolute",
-          left: "50%",
-          top: 0,
-          bottom: 0,
-          width: 1,
-          background: "var(--border)",
-          transform: "translateX(-50%)",
-          zIndex: 0,
-        }}
-      />
+      {/* Center line — hover affordance only */}
+      {minimapHovered && (
+        <div
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: 0,
+            bottom: 0,
+            width: 1,
+            background: "var(--border)",
+            transform: "translateX(-50%)",
+            zIndex: 0,
+          }}
+        />
+      )}
 
       {/* Tooltips for all nodes, collision-free positions */}
       {minimapHovered && nodes.map((node, i) => {

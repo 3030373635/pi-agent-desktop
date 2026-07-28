@@ -21,7 +21,7 @@ export function registerAbortHandler(handler: (() => void) | null): void {
 // ---------------------------------------------------------------------------
 
 interface UseGlobalKeyboardShortcutsOptions {
-  /** Called when Ctrl+Alt+N is pressed. Receives current cwd. */
+  /** Called when ⌘N (macOS) / Ctrl+N is pressed. Receives current cwd. */
   onNewSession?: (cwd: string) => void;
   /** The currently selected project directory (sidebar cwd). */
   activeCwd?: string | null;
@@ -31,8 +31,9 @@ interface UseGlobalKeyboardShortcutsOptions {
  * Register global keyboard shortcuts for the application.
  *
  * Shortcuts handled here:
- *   Esc          – stop the running agent (via module-level abort handler)
- *   Ctrl+Alt+N   – create a new session in the active project directory
+ *   Esc              – stop the running agent (via module-level abort handler)
+ *   ⌘N / Ctrl+N      – create a new session in the active project directory
+ *                      (Ctrl+Alt+N still works for backwards familiarity)
  *
  * Note: Esc inside <textarea> or <input> is deliberately NOT handled here.
  * ChatInput manages its own Esc logic (closing slash / @ file menus, stopping
@@ -59,8 +60,10 @@ export function useGlobalKeyboardShortcuts(
         return;
       }
 
-      // ---- Ctrl+Alt+N: new session ----
-      if (e.key === "n" && e.ctrlKey && e.altKey) {
+      // ---- ⌘N / Ctrl+N: new session ----
+      // Note: regular browsers reserve ⌘N/Ctrl+N for "new window"; this works
+      // in the desktop (Tauri) build where the page receives the event.
+      if (e.key.toLowerCase() === "n" && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
         if (!activeCwd || !onNewSession) return;
         e.preventDefault();
         onNewSession(activeCwd);

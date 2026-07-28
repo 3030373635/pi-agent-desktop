@@ -401,7 +401,7 @@ function ThinkingLevelMapEditor({
         };
         const btnActive: React.CSSProperties = {
           background: "var(--accent)",
-          color: "#fff",
+          color: "var(--accent-contrast)",
           fontWeight: 600,
         };
         const btnActiveDisabled: React.CSSProperties = {
