@@ -101,6 +101,25 @@ body {
   background: var(--text-dim);
 }
 
+/* Sidebar session list: scrollbar thumb only visible while scrolling
+   (`is-scrolling` is toggled by the scroll handler in SessionSidebar). */
+.sidebar-session-list {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.sidebar-session-list.is-scrolling {
+  scrollbar-color: var(--border) transparent;
+}
+.sidebar-session-list::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+.sidebar-session-list.is-scrolling::-webkit-scrollbar-thumb {
+  background: var(--border);
+}
+.sidebar-session-list.is-scrolling::-webkit-scrollbar-thumb:hover {
+  background: var(--text-dim);
+}
+
 :root {
   --font-mono: var(--font-noto-mono), 'JetBrains Mono', 'Fira Code', 'Consolas', ui-monospace, 'PingFang SC', 'Microsoft YaHei', monospace;
 }

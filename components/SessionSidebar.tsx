@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useState, useCallback, useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { SessionInfo } from "@/lib/types";
 import { useI18n } from "@/hooks/useI18n";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
@@ -236,6 +237,20 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const sessionRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const explorerRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileExplorerRef = useRef<FileExplorerHandle>(null);
+  // Overlay-style scrollbar: only visible while the list is actually scrolling.
+  const listScrollHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleListScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    el.classList.add("is-scrolling");
+    if (listScrollHideTimerRef.current) clearTimeout(listScrollHideTimerRef.current);
+    listScrollHideTimerRef.current = setTimeout(() => {
+      el.classList.remove("is-scrolling");
+      listScrollHideTimerRef.current = null;
+    }, 800);
+  }, []);
+  useEffect(() => () => {
+    if (listScrollHideTimerRef.current) clearTimeout(listScrollHideTimerRef.current);
+  }, []);
 
   const loadSessions = useCallback(async (showLoading = false) => {
     try {
@@ -1023,7 +1038,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       )}
 
       {/* Session list */}
-      <div className="sidebar-session-list" style={{ display: sidebarView === "chats" ? "block" : "none", flex: "1 1 auto", overflowY: "auto", padding: "0", minHeight: 80 }}>
+      <div className="sidebar-session-list" onScroll={handleListScroll} style={{ display: sidebarView === "chats" ? "block" : "none", flex: "1 1 auto", overflowY: "auto", padding: "0", minHeight: 80 }}>
         {loading && (
           <div style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: 12 }}>
             {t("sidebar.loading")}
@@ -1330,12 +1345,15 @@ function SessionItem({
   const [renameValue, setRenameValue] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
 
   const title = session.name || session.firstMessage.slice(0, 50) || session.id.slice(0, 12);
 
-  const startRename = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
+  const startRename = useCallback(() => {
     setRenameValue(session.name ?? "");
     setRenaming(true);
     setTimeout(() => inputRef.current?.select(), 0);
@@ -1368,14 +1386,41 @@ function SessionItem({
     }
   }, [session.id, onDeleted]);
 
-  const handleDeleteClick = useCallback((e: React.MouseEvent) => {
+  // "…" menu: fixed-position portal so the sidebar's overflow/backdrop-filter can't clip it
+  const MENU_WIDTH = 190;
+  const toggleMenu = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    if (e.shiftKey) {
-      void performDelete();
-    } else {
-      setConfirmDelete(true);
-    }
-  }, [performDelete]);
+    if (menuOpen) { setMenuOpen(false); return; }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const estHeight = 124;
+    const left = Math.max(8, Math.min(rect.right - MENU_WIDTH, window.innerWidth - MENU_WIDTH - 8));
+    let top = rect.bottom + 4;
+    if (top + estHeight > window.innerHeight - 8) top = rect.top - estHeight - 4;
+    setMenuPos({ top, left });
+    setMenuOpen(true);
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointerDown = (ev: MouseEvent) => {
+      const target = ev.target as Node;
+      if (menuRef.current?.contains(target)) return;
+      if (menuButtonRef.current?.contains(target)) return;
+      setMenuOpen(false);
+    };
+    const onKeyDown = (ev: KeyboardEvent) => { if (ev.key === "Escape") setMenuOpen(false); };
+    const onScrollOrResize = () => setMenuOpen(false);
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("scroll", onScrollOrResize, true);
+    window.addEventListener("resize", onScrollOrResize);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("scroll", onScrollOrResize, true);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
+  }, [menuOpen]);
 
   const handleDeleteConfirm = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1388,7 +1433,7 @@ function SessionItem({
   }, []);
 
   // Fixed-height outer wrapper — content swaps in place so the list never reflows
-  const ITEM_HEIGHT = 54;
+  const ITEM_HEIGHT = 44;
 
   return (
     <div
@@ -1405,7 +1450,7 @@ function SessionItem({
         cursor: confirmDelete || renaming ? "default" : "pointer",
         background: confirmDelete
           ? "color-mix(in srgb, var(--danger) 6%, transparent)"
-          : isSelected ? "var(--bg-selected)" : hovered ? "var(--bg-hover)" : "transparent",
+          : isSelected ? "var(--bg-selected)" : (hovered || menuOpen) ? "var(--bg-hover)" : "transparent",
         borderLeft: confirmDelete
           ? "2px solid var(--danger)"
           : isSelected ? "2px solid var(--accent)" : "2px solid transparent",
@@ -1481,61 +1526,42 @@ function SessionItem({
           }}
         />
       ) : (
-        /* ── Normal view ── */
+        /* ── Normal view: single line — leading icon + title + "…" menu ── */
         <>
-          {/* Fork indicator for child sessions */}
-          {depth > 0 && (
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+          {/* Leading icon: running/unread state takes priority, fork icon for children, chat bubble otherwise */}
+          {isRunning ? (
+            <RunningSessionIndicator />
+          ) : isUnread ? (
+            <UnreadSessionIndicator />
+          ) : depth > 0 ? (
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
               <line x1="6" y1="3" x2="6" y2="15" />
               <circle cx="18" cy="6" r="3" />
               <circle cx="6" cy="18" r="3" />
               <path d="M18 9a9 9 0 0 1-9 9" />
             </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+            </svg>
           )}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div
-              className="session-item-title"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 5,
-                minWidth: 0,
-                fontSize: 12,
-                fontWeight: isSelected ? 500 : 400,
-                lineHeight: 1.4,
-                color: "var(--text)",
-              }}
-              title={title}
-            >
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
-                {title}
-              </span>
-            </div>
-            <div className="session-item-meta" style={{ marginTop: 2, display: "flex", alignItems: "center", gap: 8, color: "var(--text-dim)", fontSize: 11, minWidth: 0 }}>
-              {isRunning ? (
-                <RunningSessionIndicator />
-              ) : isUnread ? (
-                <UnreadSessionIndicator />
-              ) : (
-                <span title={session.modified}>{formatRelativeTime(session.modified)}</span>
-              )}
-              <span>{t("sidebar.messagesCount", { count: session.messageCount })}</span>
-              {session.worktreeBranch && (
-                <span
-                  title={`Worktree: ${session.cwd}`}
-                  style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--accent)", minWidth: 0, overflow: "hidden" }}
-                >
-                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                    <line x1="6" y1="3" x2="6" y2="15" />
-                    <circle cx="18" cy="6" r="3" />
-                    <circle cx="6" cy="18" r="3" />
-                    <path d="M18 9a9 9 0 0 1-9 9" />
-                  </svg>
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{session.worktreeBranch}</span>
-                </span>
-              )}
-            </div>
-          </div>
+          <span
+            className="session-item-title"
+            title={title}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              fontSize: 13,
+              fontWeight: isSelected ? 500 : 400,
+              lineHeight: 1.4,
+              color: "var(--text)",
+            }}
+          >
+            {title}
+          </span>
 
           {/* Collapse toggle — always visible when has children */}
           {hasChildren && (
@@ -1557,65 +1583,106 @@ function SessionItem({
             </button>
           )}
 
-          {/* Action buttons — shown on hover */}
-          {hovered && (
-            <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+          {/* "…" menu entry — shown on hover / selection / while menu is open */}
+          {(hovered || isSelected || menuOpen) && (
+            <button
+              ref={menuButtonRef}
+              onClick={toggleMenu}
+              title={t("sidebar.moreActions")}
+              aria-label={t("sidebar.moreActions")}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                width: 24, height: 24, padding: 0, flexShrink: 0,
+                background: menuOpen ? "var(--bg-selected)" : "none",
+                border: "none", borderRadius: 6,
+                color: "var(--text-muted)", cursor: "pointer",
+                transition: "background 0.12s, color 0.12s",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-selected)"; e.currentTarget.style.color = "var(--text)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = menuOpen ? "var(--bg-selected)" : "none"; e.currentTarget.style.color = "var(--text-muted)"; }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="5" cy="12" r="1.7" />
+                <circle cx="12" cy="12" r="1.7" />
+                <circle cx="19" cy="12" r="1.7" />
+              </svg>
+            </button>
+          )}
+
+          {menuOpen && menuPos && createPortal(
+            <div
+              ref={menuRef}
+              className="native-popover session-item-menu"
+              role="menu"
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                position: "fixed", top: menuPos.top, left: menuPos.left,
+                width: MENU_WIDTH, zIndex: 800, padding: 5,
+                display: "flex", flexDirection: "column", gap: 1,
+              }}
+            >
               <button
-                onClick={startRename}
-                title={t("sidebar.rename")}
+                role="menuitem"
+                onClick={() => { setMenuOpen(false); startRename(); }}
                 style={{
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  width: 32, height: 32, padding: 0,
-                  background: "var(--bg-hover)", border: "1px solid var(--border)",
-                  borderRadius: 7, color: "var(--text-muted)",
-                  cursor: "pointer", flexShrink: 0,
-                  transition: "background 0.12s, color 0.12s, border-color 0.12s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "var(--bg-selected)";
-                  e.currentTarget.style.color = "var(--accent)";
-                  e.currentTarget.style.borderColor = "rgba(37,99,235,0.35)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "var(--bg-hover)";
-                  e.currentTarget.style.color = "var(--text-muted)";
-                  e.currentTarget.style.borderColor = "var(--border)";
+                  display: "flex", alignItems: "center", gap: 8,
+                  width: "100%", height: 30, padding: "0 8px",
+                  background: "transparent", border: 0, borderRadius: 7,
+                  color: "var(--text)", cursor: "pointer",
+                  fontSize: 12.5, textAlign: "left",
                 }}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                   <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
                 </svg>
+                {t("sidebar.rename")}
               </button>
               <button
-                onClick={handleDeleteClick}
+                role="menuitem"
+                className="is-danger"
                 title={t("sidebar.deleteWithShiftClick")}
+                onClick={(e) => {
+                  setMenuOpen(false);
+                  if (e.shiftKey) void performDelete();
+                  else setConfirmDelete(true);
+                }}
                 style={{
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  width: 32, height: 32, padding: 0,
-                  background: "var(--bg-hover)", border: "1px solid var(--border)",
-                  borderRadius: 7, color: "var(--text-muted)",
-                  cursor: "pointer", flexShrink: 0,
-                  transition: "background 0.12s, color 0.12s, border-color 0.12s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "color-mix(in srgb, var(--danger) 8%, transparent)";
-                  e.currentTarget.style.color = "var(--danger)";
-                  e.currentTarget.style.borderColor = "color-mix(in srgb, var(--danger) 35%, transparent)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "var(--bg-hover)";
-                  e.currentTarget.style.color = "var(--text-muted)";
-                  e.currentTarget.style.borderColor = "var(--border)";
+                  display: "flex", alignItems: "center", gap: 8,
+                  width: "100%", height: 30, padding: "0 8px",
+                  background: "transparent", border: 0, borderRadius: 7,
+                  color: "var(--danger)", cursor: "pointer",
+                  fontSize: 12.5, textAlign: "left",
                 }}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                   <polyline points="3 6 5 6 21 6" />
                   <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
                   <path d="M10 11v6M14 11v6" />
                   <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
                 </svg>
+                {t("sidebar.delete")}
               </button>
-            </div>
+              <div style={{ height: 1, margin: "4px 3px", background: "var(--border)" }} />
+              <div style={{ padding: "3px 8px 5px", color: "var(--text-dim)", fontSize: 11, lineHeight: 1.6 }}>
+                <div title={session.created}>
+                  {formatRelativeTime(session.created)} · {t("sidebar.messagesCount", { count: session.messageCount })}
+                </div>
+                {session.worktreeBranch && (
+                  <div title={`Worktree: ${session.cwd}`} style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--accent)", minWidth: 0 }}>
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                      <line x1="6" y1="3" x2="6" y2="15" />
+                      <circle cx="18" cy="6" r="3" />
+                      <circle cx="6" cy="18" r="3" />
+                      <path d="M18 9a9 9 0 0 1-9 9" />
+                    </svg>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{session.worktreeBranch}</span>
+                  </div>
+                )}
+              </div>
+            </div>,
+            document.body,
           )}
         </>
       )}

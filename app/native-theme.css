@@ -207,13 +207,10 @@ pre, code {
 }
 
 .sidebar-footer {
-  margin: 0 8px 8px;
-  padding: 5px !important;
+  margin: 0;
+  padding: 6px 8px !important;
   gap: 3px !important;
-  background: color-mix(in srgb, var(--surface) 58%, transparent);
-  border: 1px solid var(--separator);
-  border-radius: 11px;
-  box-shadow: var(--shadow-control);
+  border-top: 1px solid var(--separator);
 }
 
 .sidebar-footer button {
@@ -343,7 +340,7 @@ pre, code {
 
 .session-item {
   width: calc(100% - 14px);
-  height: 50px !important;
+  height: 44px !important;
   margin: 2px 7px;
   padding-right: 7px !important;
   border-left: 0 !important;
@@ -361,10 +358,11 @@ pre, code {
   letter-spacing: -0.006em;
 }
 
-.session-item-meta {
-  margin-top: 3px !important;
-  font-size: 11.5px !important;
-  color: var(--text-meta) !important;
+/* "…" popover menu on session rows: keep the delete item red on hover
+   (the generic .native-popover hover rule would repaint it as plain text) */
+.session-item-menu button.is-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 9%, transparent) !important;
+  color: var(--danger) !important;
 }
 
 .message-meta,
@@ -792,12 +790,8 @@ pre, code {
   margin-left: auto;
   /* Clear the fixed right-panel toggle pinned to the window's top-right corner. */
   margin-right: 52px;
-  padding: 2px;
-  align-items: stretch !important;
+  align-items: center !important;
   gap: 1px;
-  background: var(--bg-subtle);
-  border: 1px solid var(--separator);
-  border-radius: 10px;
 }
 
 .app-topbar-actions .native-toolbar-button,
