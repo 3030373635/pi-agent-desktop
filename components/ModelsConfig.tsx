@@ -309,9 +309,9 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete }: {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <SectionTitle>{t("i18n.provider")}</SectionTitle>
+         <SectionTitle>{t("i18n.provider")}</SectionTitle>
         <button className="native-button native-button-compact native-button-danger" onClick={onDelete}>
-          {t("i18n.delete")}
+           {t("i18n.delete")}
         </button>
       </div>
 
@@ -320,7 +320,7 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete }: {
         {editingName !== name && editingName.trim() && (
           <button className="native-button native-button-compact native-button-primary" onClick={() => onRename(editingName.trim())}
             style={{ marginTop: 4, alignSelf: "flex-start" }}>
-            {t("i18n.rename")}
+             {t("i18n.rename")}
           </button>
         )}
       </Field>
@@ -614,7 +614,7 @@ function ModelDetail({
             className={`native-button native-button-compact${testState.phase === "success" ? " is-success" : ""}`}
             onClick={handleTest}
             disabled={!model.id.trim() || testState.phase === "testing"}
-            title={t("i18n.testConnection")}
+             title={t("i18n.testConnection")}
           >
             {testState.phase === "success" && (
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -624,7 +624,7 @@ function ModelDetail({
              {testState.phase === "testing" ? t("i18n.checking") : testState.phase === "success" ? t("common.ok") : t("i18n.test")}
           </button>
           <button className="native-button native-button-compact native-button-danger" onClick={onDelete}>
-            {t("i18n.remove")}
+             {t("i18n.remove")}
           </button>
         </div>
       </div>
@@ -830,7 +830,7 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.loggedIn ? "var(--success)" : "var(--border)", display: "inline-block" }} />
           <span style={{ fontSize: 11, color: provider.loggedIn ? "var(--success)" : "var(--text-dim)" }}>
-            {provider.loggedIn ? t("i18n.connected") : t("i18n.notConnected")}
+             {provider.loggedIn ? t("i18n.connected") : t("i18n.notConnected")}
           </span>
         </div>
       </div>
@@ -1025,7 +1025,7 @@ function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRef
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.configured ? "var(--success)" : "var(--border)", display: "inline-block" }} />
           <span style={{ fontSize: 11, color: provider.configured ? "var(--success)" : "var(--text-dim)" }}>
-            {provider.configured ? t("i18n.configured") : t("i18n.notConfigured")}
+             {provider.configured ? t("i18n.configured") : t("i18n.notConfigured")}
           </span>
         </div>
       </div>
@@ -1594,7 +1594,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
           <div className="settings-detail" style={{ flex: 1, overflowY: "auto", padding: 20 }}>
             {loading ? null : detailContent ?? (
               <div className="settings-empty-state" style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 13 }}>
-                {t("i18n.selectProviderModel")}
+                 {t("i18n.selectProviderModel")}
               </div>
             )}
           </div>

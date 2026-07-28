@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "upstreamBaseline": "v0.8.1",
+  "upstreamBaseline": "v0.8.2",
   "note": "Single source of truth for the pi-web merge boundary. `driftedUpstreamFiles` lists files agegr/pi-web owns that this fork has also edited — every one is a potential merge conflict, and a potential SILENT semantic conflict when git merges cleanly but the two sides changed different things. The automated sync (.github/workflows/component-updates.yml) intersects each incoming upstream release with this map to decide whether it may push to main unattended. Human-facing rationale lives in docs/ownership-boundaries.md.",
   "ignored": [
     "package-lock.json",
@@ -25,44 +25,44 @@
   "driftedUpstreamFiles": {
     "components/SessionSidebar.tsx": {
       "risk": "high",
-      "drift": 601,
+      "drift": 602,
       "reason": "~500 lines were MOVED OUT into components/ProjectPicker.tsx and components/path-ui.tsx, which do not exist upstream. git merge does not track cross-file moves: an upstream edit to the project-picker block can merge back cleanly and silently resurrect a second copy.",
-      "structuralDrift": 430,
+      "structuralDrift": 433,
       "disposition": "accepted"
     },
     "components/AppShell.tsx": {
       "risk": "high",
-      "drift": 501,
+      "drift": 596,
       "reason": "Top-bar redesign (toolbar consolidated into a more-menu, inline styles to classNames) plus the mount point for desktop chrome. The desktop-only parts moved to components/desktop/; the remaining 376 structural lines are the fork's own interaction design, not desktop plumbing, so this file stays high risk by design rather than by neglect.",
-      "structuralDrift": 376,
+      "structuralDrift": 452,
       "disposition": "accepted"
     },
     "components/FileViewer.tsx": {
       "risk": "high",
-      "drift": 456,
+      "drift": 460,
       "reason": "Adds FileViewerToolbar and FileViewerStatus, file icons, a live-sync indicator and a retry action. Both components are defined inside FileViewer.tsx rather than moved out, so there is no cross-file resurrection risk — only a large diff. Kept deliberately.",
-      "structuralDrift": 305,
+      "structuralDrift": 309,
       "disposition": "accepted"
     },
     "components/FileExplorer.tsx": {
       "risk": "medium",
-      "drift": 168,
+      "drift": 172,
       "reason": "Adds selection highlighting (selectedPath/onSelectPath) and moves git status colours onto CSS variables. Generic improvement, no desktop coupling. Kept deliberately.",
-      "structuralDrift": 61,
+      "structuralDrift": 64,
       "disposition": "accepted"
     },
     "components/ModelsConfig.tsx": {
       "risk": "low",
-      "drift": 146,
-      "reason": "Already the correct shape: upstream inline style objects swapped for native-* classNames, 12 structural lines out of 146. Conflicts here are textual and trivially resolvable. Use this file as the model for restyling a shared component.",
-      "structuralDrift": 12,
+      "drift": 148,
+      "reason": "Already the correct shape: upstream inline style objects swapped for native-* classNames, 14 structural lines out of 148. Conflicts here are textual and trivially resolvable. Use this file as the model for restyling a shared component.",
+      "structuralDrift": 14,
       "disposition": "accepted"
     },
     "components/TabBar.tsx": {
       "risk": "medium",
-      "drift": 112,
+      "drift": 116,
       "reason": "Accessibility work: role=\"tab\", aria-selected, roving tabIndex, arrow-key navigation, Enter/Space activation, plus an empty state. A generic improvement with no desktop coupling, so it cannot be extracted anywhere — the only ways to remove this drift are upstreaming it or deleting the accessibility support. Kept deliberately.",
-      "structuralDrift": 66,
+      "structuralDrift": 70,
       "disposition": "accepted"
     },
     "components/ChatWindow.tsx": {
@@ -81,9 +81,9 @@
     },
     "components/PluginsConfig.tsx": {
       "risk": "low",
-      "drift": 50,
-      "reason": "Already the correct shape: 2 structural lines out of 50, the rest is style-to-className substitution. Nothing to revert.",
-      "structuralDrift": 2,
+      "drift": 54,
+      "reason": "Already the correct shape: 6 structural lines out of 54, the rest is style-to-className substitution. Nothing to revert.",
+      "structuralDrift": 6,
       "disposition": "accepted"
     },
     "components/ChatInput.tsx": {
@@ -95,7 +95,7 @@
     },
     "components/MessageView.tsx": {
       "risk": "low",
-      "drift": 46,
+      "drift": 48,
       "reason": "Message bubble markup adjusted.",
       "structuralDrift": 5,
       "disposition": "accepted"
@@ -106,6 +106,13 @@
       "reason": "Already the correct shape: 3 structural lines out of 44, the rest is style-to-className substitution. Nothing to revert.",
       "structuralDrift": 3,
       "disposition": "accepted"
+    },
+    "lib/i18n/registry.ts": {
+      "risk": "low",
+      "drift": 4,
+      "structuralDrift": 4,
+      "disposition": "accepted",
+      "reason": "Relative imports of ./messages/en and ./messages/zh-CN carry explicit .ts extensions so lib/i18n/registry.test.mjs can load the file through Node's native type stripping (same constraint that put allowImportingTsExtensions in tsconfig.json). Two import lines; conflicts here would be textual."
     },
     "next.config.ts": {
       "risk": "medium",
@@ -251,6 +258,8 @@
     "2026-07-26 — components/AppShell.tsx: desktop window chrome moved to components/desktop/ (-53 structural). The remaining 376 lines are the top-bar redesign; accepted.",
     "2026-07-26 — TabBar, FileExplorer, useTheme, FileViewer: assessed as generic improvements with zero desktop coupling. Upstreaming was declined, so accepted rather than reverted — reverting would delete working features to save CI review time.",
     "2026-07-26 — lib/file-access.ts and app/api/default-cwd/route.ts: a literal homedir() in readdirSync/join arguments made @vercel/nft glob the whole user profile at build time, which is why the Windows release leg never succeeded. Routed both through defaultCwdBase(); accepted as new drift in two upstream files.",
-    "2026-07-26 — lib/user-home.ts added; five upstream files now call userHome() instead of homedir(). A literal homedir() reaching an fs call made @vercel/nft glob the entire user profile at build time. lib/directory-browser.ts (added upstream in v0.8.1) was the source of the fatal <home>/**/* walk, which is why Windows releases started failing exactly when v0.8.1 merged."
+    "2026-07-26 — lib/user-home.ts added; five upstream files now call userHome() instead of homedir(). A literal homedir() reaching an fs call made @vercel/nft glob the entire user profile at build time. lib/directory-browser.ts (added upstream in v0.8.1) was the source of the fatal <home>/**/* walk, which is why Windows releases started failing exactly when v0.8.1 merged.",
+    "2026-07-28 — merged pi-web v0.8.2 (i18n, explorer quick changes viewer, project trust / restricted mode, Shift+Delete). Fork markup kept, upstream i18n strings adopted inside it. The upstream CWD picker and PiWebTitle scramble blocks that merged back into SessionSidebar.tsx were dropped again; the collapsible-explorer chevron stayed out (fork's explorer is always open) while the changes-viewer toggle was kept. Numbers refreshed against the v0.8.2 baseline.",
+    "2026-07-28 — lib/i18n/registry.ts (new upstream file in v0.8.2): added .ts extensions to its two relative imports so its test loads under Node type stripping; accepted as new low drift."
   ]
 }
