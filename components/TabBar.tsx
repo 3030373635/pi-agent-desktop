@@ -1,12 +1,14 @@
 "use client";
 
 import { getFileIcon } from "./FileIcons";
+import { useI18n } from "@/hooks/useI18n";
 
 export interface Tab {
   id: string;
   label: string;
   filePath: string;
   sourceSessionId?: string | null;
+  initialDisplayMode?: "source" | "preview" | "diff";
 }
 
 interface Props {
@@ -17,6 +19,8 @@ interface Props {
 }
 
 export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
+  const { t } = useI18n();
+
   return (
     <div className="file-tab-bar" role="tablist" aria-label="Open files">
       {tabs.length === 0 && (
@@ -77,8 +81,8 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: Props) {
                 onCloseTab(tab.id);
               }}
               className="file-tab-close"
-              title="Close"
-              aria-label={`Close ${tab.label}`}
+              title={t("i18n.close")}
+              aria-label={`${t("i18n.close")} ${tab.label}`}
             >
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true">
                 <line x1="2" y1="2" x2="8" y2="8" />
