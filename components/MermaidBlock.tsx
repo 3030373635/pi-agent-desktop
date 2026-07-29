@@ -1,9 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { vs } from "react-syntax-highlighter/dist/cjs/styles/prism";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
+import { memo, useEffect, useRef, useState, type ReactNode } from "react";
+import { SyntaxHighlighter, vs, vscDarkPlus } from "@/lib/syntax-highlighting";
 import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
 import { copyText } from "@/lib/clipboard";
@@ -229,8 +227,10 @@ interface CodeBlockProps {
 /**
  * Syntax-highlighted code block with copy button.
  * Used as the "source" view for mermaid blocks and for all non-mermaid code fences.
+ * Memoized because Prism tokenization is expensive; for plain fences (no
+ * headerAction) props are stable across parent re-renders.
  */
-export function CodeBlock({ code, lang, headerAction }: CodeBlockProps) {
+export const CodeBlock = memo(function CodeBlock({ code, lang, headerAction }: CodeBlockProps) {
   const { isDark } = useTheme();
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
@@ -275,4 +275,4 @@ export function CodeBlock({ code, lang, headerAction }: CodeBlockProps) {
       </SyntaxHighlighter>
     </div>
   );
-}
+});

@@ -148,6 +148,8 @@ export class AgentSessionWrapper {
     return this._alive && (this.promptRunning || this.inner.isStreaming || this.inner.isCompacting || this.inner.isBashRunning);
   }
 
+  private lastNotifiedRunning: boolean | null = null;
+
   start(): void {
     this.unsubscribe = this.inner.subscribe((event: AgentEvent) => {
       this.resetIdleTimer();
@@ -155,11 +157,18 @@ export class AgentSessionWrapper {
         invalidateSessionListCache();
       }
       this.emit(event);
-      // Streaming / compaction / tool events flow through here; re-broadcast
-      // the running-status snapshot so the sidebar can update live.
-      notifyRunningChange();
+      // Only re-broadcast the running-status snapshot when this session's
+      // running state actually flipped. Streaming deltas arrive at high
+      // frequency and previously triggered a registry scan + sort +
+      // stringify for every single event.
+      const running = this.isRunning();
+      if (running !== this.lastNotifiedRunning) {
+        this.lastNotifiedRunning = running;
+        notifyRunningChange();
+      }
     });
     this.resetIdleTimer();
+    this.lastNotifiedRunning = this.isRunning();
     notifyRunningChange();
   }
 
@@ -627,6 +636,9 @@ export class AgentSessionWrapper {
     for (const id of Array.from(this.activeCustomUis.keys())) this.closeCustomUi(id, undefined);
     this.pendingUiResponses.clear();
     this.pendingUiRequests.clear();
+    // Release SSE event listeners so destroyed wrappers don't keep response
+    // controllers (and their buffered output) alive until GC.
+    this.listeners.length = 0;
     this.onDestroyCallback?.();
     notifyRunningChange();
   }

@@ -12,7 +12,7 @@
     "windows": [],
     "security": {
       "csp": null,
-      "capabilities": ["desktop-updater", "window-controls"]
+      "capabilities": ["desktop-updater", "window-controls", "desktop-dialog"]
     }
   },
   "bundle": {

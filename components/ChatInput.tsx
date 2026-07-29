@@ -376,12 +376,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   // without an extra click. Defer past the click that opened the page (⌘N /
   // sidebar button) which would otherwise steal focus back.
   useEffect(() => {
-    if (!autoFocus) return;
+    if (!autoFocus || isMobile) return;
     const id = window.setTimeout(() => {
       textareaRef.current?.focus();
     }, 0);
     return () => window.clearTimeout(id);
-  }, [autoFocus, draftKey]);
+  }, [autoFocus, isMobile, draftKey]);
 
   const processImageFiles = useCallback(async (files: File[]) => {
     if (isStreaming) return;

@@ -521,6 +521,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [treeRefreshKey, setTreeRefreshKey] = useState(0);
+  const [gitStatusRefreshKey, setGitStatusRefreshKey] = useState(0);
   const [highlightedPaths, setHighlightedPaths] = useState<Set<string>>(new Set());
   const [gitFiles, setGitFiles] = useState<GitFileStatus[]>([]);
   const [gitLineStats, setGitLineStats] = useState({ additions: 0, deletions: 0 });
@@ -573,6 +574,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
     if (uploaded.length > 0) {
       setHighlightedPaths(new Set(uploaded.map((name) => joinFilePath(cwd, name))));
       setTreeRefreshKey((key) => key + 1);
+      setGitStatusRefreshKey((key) => key + 1);
     }
   }, [cwd]);
 
@@ -709,7 +711,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
         }
       });
     return () => { cancelled = true; };
-  }, [cwd, refreshKey, treeRefreshKey]);
+  }, [cwd, refreshKey, gitStatusRefreshKey]);
 
   useEffect(() => {
     onChangesCountChange?.(gitFiles.length);
@@ -718,13 +720,43 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   // Live updates: watch the cwd on the server and silently refresh the tree
   // (expanded folders included) whenever local files change. EventSource
   // auto-reconnects, so a server restart just resumes watching.
+  //
+  // Tree refresh and git status are throttled independently: while an agent
+  // is writing files, change events stream in continuously, and every git
+  // status refresh costs 2-3 git spawns plus per-untracked-file line counts
+  // on the server. Trailing-edge throttle (leading + trailing) keeps the UI
+  // live without hammering the disk.
   useEffect(() => {
     const source = new EventSource(`/api/files/${encodeFilePathForApi(cwd)}?type=watch-dir`);
-    const onChange = () => setTreeRefreshKey((key) => key + 1);
+    const makeThrottle = (fn: () => void, intervalMs: number) => {
+      let lastRun = 0;
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      const run = () => { lastRun = Date.now(); fn(); };
+      return {
+        invoke() {
+          if (timer != null) return;
+          const wait = intervalMs - (Date.now() - lastRun);
+          if (wait <= 0) { run(); return; }
+          timer = setTimeout(() => { timer = null; run(); }, wait);
+        },
+        cancel() {
+          if (timer != null) clearTimeout(timer);
+          timer = null;
+        },
+      };
+    };
+    const treeThrottle = makeThrottle(() => setTreeRefreshKey((key) => key + 1), 1_000);
+    const gitThrottle = makeThrottle(() => setGitStatusRefreshKey((key) => key + 1), 2_500);
+    const onChange = () => {
+      treeThrottle.invoke();
+      gitThrottle.invoke();
+    };
     source.addEventListener("change", onChange);
     return () => {
       source.removeEventListener("change", onChange);
       source.close();
+      treeThrottle.cancel();
+      gitThrottle.cancel();
     };
   }, [cwd]);
 

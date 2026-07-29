@@ -1011,3 +1011,11 @@ span.linenumber {
     padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
   }
 }
+
+/* While the agent or a bash command is running, fork/navigate actions on user
+   messages are inert (the handlers early-return) — hide them here instead of
+   toggling their props, so MessageView memoization survives busy transitions. */
+.chat-window[data-session-busy="true"] .user-msg-actions {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}

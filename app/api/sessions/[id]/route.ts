@@ -7,6 +7,7 @@ import {
   resolveSessionIdByPath,
   invalidateSessionPathCache,
   invalidateSessionListCache,
+  invalidateScannedSession,
   buildSessionContext,
   readSessionHeader,
 } from "@/lib/session-reader";
@@ -220,18 +221,20 @@ export async function DELETE(
       for (const file of files) {
         const childPath = join(dir, file);
         try {
-          const content = readFileSync(childPath, "utf8");
-          const lines = content.split("\n");
-          const header = JSON.parse(lines[0]) as { type?: string; parentSession?: string };
+          // Bounded header read first — only actual children (usually few)
+          // pay for a full-file rewrite. Previously every sibling .jsonl in
+          // the directory was loaded into memory wholesale.
+          const header = readSessionHeader(childPath);
           if (
-            header.type === "session" &&
-            header.parentSession &&
+            header?.parentSession &&
             sessionPathKey(header.parentSession) === targetPathKey
           ) {
-            // Rewrite header with new parentSession
-            header.parentSession = parentSessionPath;
-            lines[0] = JSON.stringify(header);
-            writeFileSync(childPath, lines.join("\n"));
+            const content = readFileSync(childPath, "utf8");
+            const newlineIdx = content.indexOf("\n");
+            const rest = newlineIdx === -1 ? "" : content.slice(newlineIdx);
+            const newHeader = { ...header, parentSession: parentSessionPath };
+            writeFileSync(childPath, JSON.stringify(newHeader) + rest);
+            invalidateScannedSession(childPath);
           }
         } catch { /* skip malformed */ }
       }

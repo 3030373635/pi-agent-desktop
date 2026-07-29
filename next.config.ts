@@ -18,6 +18,9 @@ const nextConfig: NextConfig = {
     "@earendil-works/pi-ai",
     "@earendil-works/pi-tui",
   ],
+  experimental: {
+    optimizePackageImports: ["@lobehub/icons", "react-syntax-highlighter"],
+  },
   allowedDevOrigins: ['192.168.*.*'],
   async headers() {
     return [

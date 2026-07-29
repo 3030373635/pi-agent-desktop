@@ -1,21 +1,25 @@
 import {
   SessionManager,
   buildContextEntries as piBuildContextEntries,
-  buildSessionContext as piBuildSessionContext,
   getAgentDir,
 } from "@earendil-works/pi-coding-agent";
 import { closeSync, openSync, readSync } from "fs";
 import { normalize as normalizePath } from "path";
 import type { AgentMessage, SessionEntry, SessionHeader, SessionInfo, SessionContext } from "./types";
-import type { SessionEntry as PiSessionEntry, SessionInfo as PiSessionInfo } from "@earendil-works/pi-coding-agent";
+import type { SessionEntry as PiSessionEntry } from "@earendil-works/pi-coding-agent";
 import { normalizeToolCalls } from "./normalize";
 import { sessionPathKey } from "./session-path";
+import { scanAllSessions } from "./session-scan";
 import { resolveProject, type ProjectInfo } from "./worktree";
 
 export { getAgentDir };
+export { invalidateScannedSession } from "./session-scan";
 
 async function loadAllSessions(): Promise<SessionInfo[]> {
-  const piSessions: PiSessionInfo[] = await SessionManager.listAll();
+  // Incremental scanner: same per-file semantics as SessionManager.listAll()
+  // but cached by mtime+size, so post-turn refreshes only re-parse the
+  // session that actually changed instead of every .jsonl on disk.
+  const piSessions = await scanAllSessions();
   const pathToId = new Map<string, string>();
   for (const s of piSessions) pathToId.set(sessionPathKey(s.path), s.id);
 
@@ -201,6 +205,45 @@ export function getSessionEntries(filePath: string): SessionEntry[] {
   return entries as unknown as SessionEntry[];
 }
 
+// Mirror of the SDK's (unexported) buildSessionPath + getSessionContextSettings.
+// The SDK's buildSessionContext would walk the tree path a second time AND
+// project every entry into LLM messages we immediately discard — for multi-MB
+// sessions that doubled the cost of every detail load just to read
+// thinkingLevel/model.
+function getContextSettings(
+  entries: SessionEntry[],
+  leafId: string | null | undefined,
+  byId: Map<string, SessionEntry>,
+): { thinkingLevel: string; model: { provider: string; modelId: string } | null } {
+  const path: SessionEntry[] = [];
+  let current: SessionEntry | undefined;
+  if (leafId !== null) {
+    current = (leafId ? byId.get(leafId) : undefined) ?? entries[entries.length - 1];
+  }
+  while (current) {
+    path.push(current);
+    current = current.parentId ? byId.get(current.parentId) : undefined;
+  }
+  path.reverse();
+
+  let thinkingLevel = "off";
+  let model: { provider: string; modelId: string } | null = null;
+  for (const entry of path) {
+    const raw = entry as unknown as Record<string, unknown>;
+    if (raw.type === "thinking_level_change" && typeof raw.thinkingLevel === "string") {
+      thinkingLevel = raw.thinkingLevel;
+    } else if (raw.type === "model_change" && typeof raw.provider === "string" && typeof raw.modelId === "string") {
+      model = { provider: raw.provider, modelId: raw.modelId };
+    } else if (entry.type === "message" && entry.message.role === "assistant") {
+      const message = entry.message as unknown as { provider?: string; model?: string };
+      if (typeof message.provider === "string" && typeof message.model === "string") {
+        model = { provider: message.provider, modelId: message.model };
+      }
+    }
+  }
+  return { thinkingLevel, model };
+}
+
 export function buildSessionContext(
   entries: SessionEntry[],
   leafId?: string | null,
@@ -210,7 +253,7 @@ export function buildSessionContext(
   for (const e of entries) byId.set(e.id, e);
 
   const piEntries = entries as unknown as PiSessionEntry[];
-  const piCtx = piBuildSessionContext(piEntries, leafId, byId as unknown as Map<string, PiSessionEntry>);
+  const settings = getContextSettings(entries, leafId, byId);
 
   const contextEntries = piBuildContextEntries(
     piEntries,
@@ -234,8 +277,8 @@ export function buildSessionContext(
   return {
     messages,
     entryIds,
-    thinkingLevel: piCtx.thinkingLevel,
-    model: piCtx.model,
+    thinkingLevel: settings.thinkingLevel,
+    model: settings.model,
   };
 }
 

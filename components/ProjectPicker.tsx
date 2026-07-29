@@ -304,7 +304,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
           </button>
         )}
 
-        {/* Custom path directory picker */}
+        {/* Open a folder: native dialog on desktop, browsable picker on web */}
         <button
           className="project-picker-option"
           onClick={(e) => {
@@ -330,7 +330,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
             <line x1="5" y1="1" x2="5" y2="9" />
             <line x1="1" y1="5" x2="9" y2="5" />
           </svg>
-          <span>Custom path…</span>
+          <span>Open Folder…</span>
         </button>
       </AnimatedDropdown>
 

@@ -42,45 +42,52 @@ if (typeof window !== "undefined") {
   });
 }
 
+function applyTheme(next: Theme) {
+  const apply = () => {
+    if (next === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+    try {
+      localStorage.setItem("pi-theme", next);
+    } catch {
+      // ignore storage errors (private mode, quota, etc.)
+    }
+    listeners.forEach((cb) => cb());
+  };
+
+  const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const supportsVT = typeof document.startViewTransition === "function";
+
+  if (!supportsVT || reduceMotion) {
+    apply();
+    return;
+  }
+
+  try {
+    const transition = document.startViewTransition(apply);
+    // A navigation or rapid second toggle can legitimately abort a transition.
+    // Consume those promise rejections so they do not surface as app errors.
+    void transition.ready.catch(() => {});
+    void transition.updateCallbackDone.catch(() => {});
+    void transition.finished.catch(() => {});
+  } catch {
+    apply();
+  }
+}
+
 export function useTheme() {
   const theme = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   const toggleTheme = useCallback(() => {
-    const next: Theme = getSnapshot() === "dark" ? "light" : "dark";
-
-    const apply = () => {
-      if (next === "dark") {
-        document.documentElement.classList.add("dark");
-      } else {
-        document.documentElement.classList.remove("dark");
-      }
-      try {
-        localStorage.setItem("pi-theme", next);
-      } catch {
-        // ignore storage errors (private mode, quota, etc.)
-      }
-      listeners.forEach((cb) => cb());
-    };
-
-    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    const supportsVT = typeof document.startViewTransition === "function";
-
-    if (!supportsVT || reduceMotion) {
-      apply();
-      return;
-    }
-
-    try {
-      const transition = document.startViewTransition(apply);
-      // A navigation or rapid second toggle can legitimately abort a transition.
-      // Consume those promise rejections so they do not surface as app errors.
-      void transition.ready.catch(() => {});
-      void transition.updateCallbackDone.catch(() => {});
-      void transition.finished.catch(() => {});
-    } catch {
-      apply();
-    }
+    applyTheme(getSnapshot() === "dark" ? "light" : "dark");
   }, []);
 
-  return { theme, toggleTheme, isDark: theme === "dark" };
+  const setTheme = useCallback((next: Theme) => {
+    if (getSnapshot() === next) return;
+    applyTheme(next);
+  }, []);
+
+  return { theme, toggleTheme, setTheme, isDark: theme === "dark" };
 }

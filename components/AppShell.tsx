@@ -1,16 +1,21 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { SessionSidebar } from "./SessionSidebar";
 import { ChatWindow } from "./ChatWindow";
-import { FileViewer } from "./FileViewer";
 import { TabBar, type Tab } from "./TabBar";
-import { ModelsConfig } from "./ModelsConfig";
-import { SkillsConfig } from "./SkillsConfig";
-import { PluginsConfig } from "./PluginsConfig";
-import { AppSettings } from "./AppSettings";
+
+// Heavy, rarely-used surfaces are code-split out of the main bundle. The
+// config modals may never be opened at all; FileViewer drags in markdown +
+// syntax highlighting a second time and only matters once a file tab opens.
+const FileViewer = dynamic(() => import("./FileViewer").then((m) => m.FileViewer), { ssr: false });
+const ModelsConfig = dynamic(() => import("./ModelsConfig").then((m) => m.ModelsConfig), { ssr: false });
+const SkillsConfig = dynamic(() => import("./SkillsConfig").then((m) => m.SkillsConfig), { ssr: false });
+const PluginsConfig = dynamic(() => import("./PluginsConfig").then((m) => m.PluginsConfig), { ssr: false });
+const AppSettings = dynamic(() => import("./AppSettings").then((m) => m.AppSettings), { ssr: false });
 import { ProjectTrustDialog } from "./ProjectTrustDialog";
 import { BranchNavigator } from "./BranchNavigator";
 import { UpdateReminder } from "./UpdateReminder";

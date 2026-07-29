@@ -13,22 +13,58 @@ import {
   installLatestDesktopRelease,
   type DesktopUpgradeProgress,
 } from "@/lib/desktop-updater";
+import { useI18n } from "@/hooks/useI18n";
+import { useTheme } from "@/hooks/useTheme";
 
-function VersionValue({ component }: { component: AppComponentReleaseInfo }) {
-  if (component.releaseStatus === "unknown") {
-    return <span style={{ color: "var(--text-dim)" }}>Unavailable</span>;
-  }
-  if (component.releaseStatus === "unpublished" || !component.latestVersion) {
-    return <span style={{ color: "var(--text-dim)" }}>No releases</span>;
-  }
+const sectionCardStyle: CSSProperties = {
+  padding: "13px 14px",
+  border: "1px solid var(--border)",
+  borderRadius: 8,
+  background: "var(--bg)",
+};
+
+const sectionTitleStyle: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 700,
+};
+
+const sectionHintStyle: CSSProperties = {
+  marginTop: 3,
+  color: "var(--text-muted)",
+  fontSize: 11,
+  lineHeight: 1.5,
+};
+
+function ChoiceButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
   return (
-    <span style={{ color: component.updateAvailable ? "var(--accent)" : "var(--text-muted)" }}>
-      v{component.latestVersion}
-    </span>
+    <button
+      className="native-button"
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      style={{
+        minWidth: 88,
+        borderColor: active ? "var(--accent)" : "var(--border)",
+        color: active ? "var(--accent)" : "var(--text-muted)",
+        fontWeight: active ? 700 : 500,
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
 export function AppSettings({ onClose }: { onClose: () => void }) {
+  const { t, locale, setLocale, supportedLocales } = useI18n();
+  const { theme, setTheme } = useTheme();
   const [components, setComponents] = useState<AppComponentReleaseInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -49,7 +85,7 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
       })
       .catch((error) => {
         if (error instanceof DOMException && error.name === "AbortError") return;
-        setLoadError("Could not check GitHub releases.");
+        setLoadError("checkFailed");
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -73,22 +109,37 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
     () => components.filter((component) => component.updateAvailable),
     [components],
   );
-  const canUpgrade = !loading && pendingUpdates.length > 0 && !upgradeProgress;
+  const updateAvailable = pendingUpdates.length > 0;
+  const canUpgrade = !loading && updateAvailable && !upgradeProgress;
   const downloadPercent = upgradeProgress?.phase === "downloading"
     && upgradeProgress.totalBytes
     ? Math.min(100, Math.round((upgradeProgress.downloadedBytes ?? 0) / upgradeProgress.totalBytes * 100))
     : null;
   const upgradeLabel = upgradeProgress?.phase === "checking"
-    ? "Preparing update…"
+    ? t("appSettings.preparing")
     : upgradeProgress?.phase === "downloading"
-      ? `Downloading${downloadPercent === null ? "…" : ` ${downloadPercent}%`}`
+      ? (downloadPercent === null
+        ? t("appSettings.downloading")
+        : t("appSettings.downloadingPercent", { percent: downloadPercent }))
       : upgradeProgress?.phase === "installing"
-        ? "Installing and restarting…"
-        : pendingUpdates.length > 0
-          ? `Upgrade ${pendingUpdates.length} ${pendingUpdates.length === 1 ? "component" : "components"}`
-          : loading
-            ? "Checking…"
-            : "Up to date";
+        ? t("appSettings.installing")
+        : t("appSettings.update");
+
+  const latestReleaseText = loading
+    ? "…"
+    : !appRelease || appRelease.releaseStatus === "unknown"
+      ? t("appSettings.releaseUnavailable")
+      : appRelease.releaseStatus === "unpublished" || !appRelease.latestVersion
+        ? t("appSettings.noReleases")
+        : `v${appRelease.latestVersion}`;
+
+  const statusText = loading
+    ? t("appSettings.checkingReleases")
+    : loadError
+      ? t("appSettings.checkFailed")
+      : updateAvailable
+        ? t("appSettings.updateAvailable")
+        : t("appSettings.upToDate");
 
   const handleUpgrade = async () => {
     if (!canUpgrade) return;
@@ -97,18 +148,12 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
       const result = await installLatestDesktopRelease(setUpgradeProgress);
       if (!result.installed) {
         setUpgradeProgress(null);
-        setUpgradeError(
-          "The component updates are detected, but a signed pi-agent-desktop bundle containing them has not been published yet.",
-        );
+        setUpgradeError(t("appSettings.noSignedBundle", { name: APP_DISTRIBUTION_NAME }));
       }
     } catch (error) {
       setUpgradeProgress(null);
       setUpgradeError(error instanceof Error ? error.message : String(error));
     }
-  };
-
-  const upgradeStyle: CSSProperties = {
-    minWidth: 150,
   };
 
   return (
@@ -153,9 +198,9 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
               {PRODUCT_NAME}
             </h2>
             <div style={{ marginTop: 5, color: "var(--text-muted)", fontSize: 12, lineHeight: 1.6 }}>
-              {PRODUCT_NAME} 将 pi 编码智能体的全部能力封进一个优雅的桌面 App。
+              {t("appSettings.tagline", { product: PRODUCT_NAME })}
               <br />
-              浏览会话、实时对话、管理模型与 Skills —— 一切数据都留在你的电脑上。
+              {t("appSettings.taglineDetails")}
             </div>
             <div style={{ marginTop: 7, display: "flex", alignItems: "center", gap: 10, fontFamily: "var(--font-mono)", fontSize: 11 }}>
               <a
@@ -176,96 +221,97 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
             type="button"
             onClick={onClose}
             disabled={Boolean(upgradeProgress)}
-            aria-label="Close settings"
-            title="Close"
+            aria-label={t("appSettings.close")}
+            title={t("appSettings.close")}
             style={{ padding: "1px 5px", border: 0, background: "transparent", color: "var(--text-muted)", cursor: upgradeProgress ? "default" : "pointer", fontSize: 21, lineHeight: 1, opacity: upgradeProgress ? 0.35 : 1 }}
           >
             ×
           </button>
         </header>
 
-        <div style={{ overflowY: "auto", padding: "18px 22px 20px" }}>
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 700 }}>Components</div>
-            <div style={{ marginTop: 4, color: "var(--text-muted)", fontSize: 11, lineHeight: 1.5 }}>
-              This app combines the following open-source projects. GitHub Release versions are checked once a week.
+        <div style={{ overflowY: "auto", padding: "18px 22px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+          <div className="native-settings-card" style={sectionCardStyle}>
+            <div style={sectionTitleStyle}>{t("appSettings.updatesSection")}</div>
+            <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 18px" }}>
+              <div>
+                <div style={{ color: "var(--text-dim)", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  {t("appSettings.currentVersion")}
+                </div>
+                <div style={{ marginTop: 3, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 12 }}>
+                  v{APP_VERSION_DISPLAY}
+                </div>
+              </div>
+              <div>
+                <div style={{ color: "var(--text-dim)", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  {t("appSettings.latestRelease")}
+                </div>
+                <div style={{ marginTop: 3, fontFamily: "var(--font-mono)", fontSize: 12, color: updateAvailable ? "var(--accent)" : "var(--text-muted)" }}>
+                  {latestReleaseText}
+                </div>
+              </div>
             </div>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {loading ? (
-              <div style={{ padding: "24px 12px", textAlign: "center", color: "var(--text-muted)", fontSize: 12 }}>
-                Checking GitHub releases…
+            <div style={{ marginTop: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <span style={{ color: loadError ? "var(--text-dim)" : updateAvailable ? "var(--accent)" : "var(--text-muted)", fontSize: 11, lineHeight: 1.5 }}>
+                {statusText}
+              </span>
+              {(updateAvailable || upgradeProgress) && (
+                <button
+                  className="native-button native-button-primary"
+                  type="button"
+                  disabled={!canUpgrade}
+                  onClick={() => void handleUpgrade()}
+                  style={{ minWidth: 120 }}
+                >
+                  {upgradeLabel}
+                </button>
+              )}
+            </div>
+            {updateAvailable && (
+              <div style={{ marginTop: 8, color: "var(--text-dim)", fontSize: 10, lineHeight: 1.5 }}>
+                {t("appSettings.updateNote", { name: APP_DISTRIBUTION_NAME })}
               </div>
-            ) : components.length > 0 ? components.map((component) => (
-              <div
-                className="native-settings-card"
-                key={component.project}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "minmax(150px, 1fr) auto auto",
-                  alignItems: "center",
-                  gap: "10px 18px",
-                  padding: "12px 13px",
-                  border: "1px solid var(--border)",
-                  borderRadius: 8,
-                  background: "var(--bg)",
-                }}
-              >
-                <div style={{ minWidth: 0 }}>
-                  <a
-                    href={component.repositoryUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{ color: "var(--text)", fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, textDecoration: "none" }}
-                  >
-                    {component.repository}
-                    <span aria-hidden="true" style={{ marginLeft: 5, color: "var(--text-dim)" }}>↗</span>
+            )}
+            {upgradeError && (
+              <div className="native-inline-alert is-error" role="alert" style={{ marginTop: 10 }}>
+                {upgradeError}
+                {appRelease?.releaseUrl && (
+                  <a href={appRelease.releaseUrl} target="_blank" rel="noreferrer" style={{ marginLeft: 6, color: "inherit", fontWeight: 650 }}>
+                    {t("appSettings.openRelease")}
                   </a>
-                </div>
-                <div style={{ minWidth: 74 }}>
-                  <div style={{ color: "var(--text-dim)", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.06em" }}>Bundled</div>
-                  <div style={{ marginTop: 3, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>
-                    v{component.project === "pi-agent-desktop" ? APP_VERSION_DISPLAY : component.currentVersion}
-                  </div>
-                </div>
-                <div style={{ minWidth: 84 }}>
-                  <div style={{ color: "var(--text-dim)", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.06em" }}>GitHub Release</div>
-                  <div style={{ marginTop: 3, fontFamily: "var(--font-mono)", fontSize: 11 }}><VersionValue component={component} /></div>
-                </div>
-              </div>
-            )) : (
-              <div style={{ padding: "20px 12px", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-muted)", fontSize: 12 }}>
-                {loadError ?? "Release information is unavailable."}
+                )}
               </div>
             )}
           </div>
 
-          {loadError && components.length > 0 && (
-            <div className="native-inline-alert is-error" style={{ marginTop: 10 }}>{loadError}</div>
-          )}
-          {upgradeError && (
-            <div className="native-inline-alert is-error" role="alert" style={{ marginTop: 10 }}>
-              {upgradeError}
-              {appRelease?.releaseUrl && (
-                <a href={appRelease.releaseUrl} target="_blank" rel="noreferrer" style={{ marginLeft: 6, color: "inherit", fontWeight: 650 }}>
-                  Open release
-                </a>
-              )}
+          <div className="native-settings-card" style={sectionCardStyle}>
+            <div style={sectionTitleStyle}>{t("appSettings.languageSection")}</div>
+            <div style={sectionHintStyle}>{t("appSettings.languageHint")}</div>
+            <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {supportedLocales.map((plugin) => (
+                <ChoiceButton
+                  key={plugin.id}
+                  active={locale === plugin.id}
+                  onClick={() => setLocale(plugin.id as typeof locale)}
+                >
+                  {plugin.label}
+                </ChoiceButton>
+              ))}
             </div>
-          )}
-        </div>
+          </div>
 
-        <footer className="settings-footer" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 22px", borderTop: "1px solid var(--border)" }}>
-          <span style={{ color: "var(--text-dim)", fontSize: 10, lineHeight: 1.4 }}>
-            {pendingUpdates.length > 0
-              ? `${pendingUpdates.map((component) => component.name).join(" → ")} will be updated through one signed ${APP_DISTRIBUTION_NAME} release.`
-              : `Upgrading installs a complete signed ${APP_DISTRIBUTION_NAME} release.`}
-          </span>
-          <button className="native-button native-button-primary" type="button" disabled={!canUpgrade} onClick={() => void handleUpgrade()} style={upgradeStyle}>
-            {upgradeLabel}
-          </button>
-        </footer>
+          <div className="native-settings-card" style={sectionCardStyle}>
+            <div style={sectionTitleStyle}>{t("appSettings.appearanceSection")}</div>
+            <div style={sectionHintStyle}>{t("appSettings.appearanceHint")}</div>
+            <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+              <ChoiceButton active={theme === "light"} onClick={() => setTheme("light")}>
+                {t("appSettings.themeLight")}
+              </ChoiceButton>
+              <ChoiceButton active={theme === "dark"} onClick={() => setTheme("dark")}>
+                {t("appSettings.themeDark")}
+              </ChoiceButton>
+            </div>
+          </div>
+        </div>
       </section>
     </div>
   );

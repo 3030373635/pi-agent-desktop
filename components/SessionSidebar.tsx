@@ -387,6 +387,10 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
 
   // Load worktrees for the current effective cwd
   const [wtRefreshKey, setWtRefreshKey] = useState(0);
+  // Cwds already resolved once: background refetches (e.g. refreshKey bump on
+  // agent end) stay silent for them, so the transient "checking worktrees"
+  // header row doesn't flash and shove the session list down and back up.
+  const checkedWorktreeCwdsRef = useRef<Set<string>>(new Set());
   useLayoutEffect(() => {
     if (!selectedCwd) {
       setWorktreeState(null);
@@ -394,11 +398,14 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       return;
     }
     let cancelled = false;
-    setWorktreeLoadingCwd(selectedCwd);
+    if (!checkedWorktreeCwdsRef.current.has(selectedCwd)) {
+      setWorktreeLoadingCwd(selectedCwd);
+    }
     fetch(`/api/worktrees?cwd=${encodeURIComponent(selectedCwd)}`)
       .then((r) => r.json())
       .then((d: { projectRoot?: string; isGit?: boolean; isTopLevel?: boolean; worktrees?: WorktreeEntry[]; error?: string }) => {
         if (cancelled) return;
+        checkedWorktreeCwdsRef.current.add(selectedCwd);
         setWorktreeLoadingCwd(null);
         if (d.error || !d.projectRoot) {
           setWorktreeState(null);

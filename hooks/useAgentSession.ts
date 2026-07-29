@@ -32,6 +32,9 @@ interface StreamingState {
   streamingMessage: Partial<AgentMessage> | null;
 }
 
+// Max rate at which streaming markdown re-renders (leading + trailing edge).
+const STREAM_UPDATE_THROTTLE_MS = 80;
+
 type StreamAction =
   | { type: "start" }
   | { type: "update"; message: Partial<AgentMessage> }
@@ -336,7 +339,52 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [activeLeafId, setActiveLeafId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [entryIds, setEntryIds] = useState<string[]>([]);
-  const [streamState, dispatch] = useReducer(streamReducer, { isStreaming: false, streamingMessage: null });
+  const [streamState, rawStreamDispatch] = useReducer(streamReducer, { isStreaming: false, streamingMessage: null });
+
+  // Streaming deltas can arrive many times per frame; each "update" dispatch
+  // re-renders the streaming bubble and re-parses its markdown. Throttle
+  // updates (leading + trailing edge) so rendering happens at most every
+  // STREAM_UPDATE_THROTTLE_MS. Non-update actions flush synchronously and
+  // bump an epoch so a late trailing flush can't resurrect a stale bubble.
+  const streamEpochRef = useRef(0);
+  const pendingStreamUpdateRef = useRef<Partial<AgentMessage> | null>(null);
+  const streamFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastStreamFlushTsRef = useRef(0);
+  const dispatch = useCallback((action: StreamAction) => {
+    if (action.type !== "update") {
+      streamEpochRef.current += 1;
+      pendingStreamUpdateRef.current = null;
+      if (streamFlushTimerRef.current != null) {
+        clearTimeout(streamFlushTimerRef.current);
+        streamFlushTimerRef.current = null;
+      }
+      rawStreamDispatch(action);
+      return;
+    }
+    const now = Date.now();
+    if (streamFlushTimerRef.current == null && now - lastStreamFlushTsRef.current >= STREAM_UPDATE_THROTTLE_MS) {
+      lastStreamFlushTsRef.current = now;
+      rawStreamDispatch(action);
+      return;
+    }
+    pendingStreamUpdateRef.current = action.message;
+    if (streamFlushTimerRef.current == null) {
+      const epoch = streamEpochRef.current;
+      streamFlushTimerRef.current = setTimeout(() => {
+        streamFlushTimerRef.current = null;
+        if (epoch !== streamEpochRef.current) return;
+        const pending = pendingStreamUpdateRef.current;
+        pendingStreamUpdateRef.current = null;
+        if (pending) {
+          lastStreamFlushTsRef.current = Date.now();
+          rawStreamDispatch({ type: "update", message: pending });
+        }
+      }, STREAM_UPDATE_THROTTLE_MS);
+    }
+  }, []);
+  useEffect(() => () => {
+    if (streamFlushTimerRef.current != null) clearTimeout(streamFlushTimerRef.current);
+  }, []);
   const [agentRunning, setAgentRunning] = useState(false);
   const [bashRunning, setBashRunning] = useState(false);
   const [pendingBash, setPendingBash] = useState<{ command: string; excludeFromContext: boolean } | null>(null);
