@@ -30,7 +30,7 @@
   --accent: #1d1d1f;
   --accent-hover: #3a3a3c;
   --accent-contrast: #ffffff;
-  --user-bg: #f0eee5;
+  --user-bg: rgba(29, 29, 31, 0.06);
   --assistant-bg: #ffffff;
   --tool-bg: #f9fafb;
   --bg-subtle: rgba(0,0,0,0.03);
@@ -48,7 +48,7 @@ html.dark {
   --accent: #f5f5f7;
   --accent-hover: #ffffff;
   --accent-contrast: #1d1d1f;
-  --user-bg: #3a3833;
+  --user-bg: rgba(255, 255, 255, 0.09);
   --assistant-bg: #1a1a1a;
   --tool-bg: #1f2937;
   --bg-subtle: rgba(255,255,255,0.04);

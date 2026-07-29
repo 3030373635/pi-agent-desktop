@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { AppComponentReleaseInfo, AppUpdatesResponse } from "@/lib/app-update-types";
 import {
   APP_DISTRIBUTION_NAME,
+  APP_REPOSITORY,
+  APP_REPOSITORY_URL,
   APP_VERSION_DISPLAY,
   PRODUCT_NAME,
 } from "@/lib/branding";
@@ -41,7 +43,8 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
         return response.json() as Promise<AppUpdatesResponse>;
       })
       .then((data) => {
-        setComponents(Array.isArray(data.components) ? data.components : []);
+        const list = Array.isArray(data.components) ? data.components : [];
+        setComponents(list.filter((component) => component.project !== "pi-web"));
         setLoadError(null);
       })
       .catch((error) => {
@@ -145,36 +148,27 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
         }}
       >
         <header className="native-modal-header" style={{ display: "flex", alignItems: "flex-start", gap: 14, padding: "20px 22px 17px", borderBottom: "1px solid var(--border)" }}>
-          <div
-            aria-hidden="true"
-            style={{
-              width: 44,
-              height: 44,
-              flexShrink: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              border: "1px solid var(--border)",
-              borderRadius: 11,
-              background: "var(--bg)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 25,
-              fontWeight: 750,
-            }}
-          >
-            π
-          </div>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-              <h2 className="native-modal-title" id="app-settings-title" style={{ margin: 0, fontSize: 18, lineHeight: 1.25 }}>
-                {APP_DISTRIBUTION_NAME}
-              </h2>
-              <span style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11 }}>
-                v{APP_VERSION_DISPLAY}
-              </span>
+            <h2 className="native-modal-title" id="app-settings-title" style={{ margin: 0, fontSize: 18, lineHeight: 1.25 }}>
+              {PRODUCT_NAME}
+            </h2>
+            <div style={{ marginTop: 5, color: "var(--text-muted)", fontSize: 12, lineHeight: 1.6 }}>
+              {PRODUCT_NAME} 将 pi 编码智能体的全部能力封进一个优雅的桌面 App。
+              <br />
+              浏览会话、实时对话、管理模型与 Skills —— 一切数据都留在你的电脑上。
             </div>
-            <div style={{ marginTop: 5, color: "var(--text-muted)", fontSize: 12, lineHeight: 1.5 }}>
-              {PRODUCT_NAME} for macOS and Windows, packaged and maintained by {APP_DISTRIBUTION_NAME}.
+            <div style={{ marginTop: 7, display: "flex", alignItems: "center", gap: 10, fontFamily: "var(--font-mono)", fontSize: 11 }}>
+              <a
+                href={APP_REPOSITORY_URL}
+                target="_blank"
+                rel="noreferrer"
+                style={{ color: "var(--text-muted)", textDecoration: "none" }}
+              >
+                {APP_REPOSITORY}
+                <span aria-hidden="true" style={{ marginLeft: 4, color: "var(--text-dim)" }}>↗</span>
+              </a>
+              <span style={{ color: "var(--text-dim)" }}>·</span>
+              <span style={{ color: "var(--text-muted)" }}>v{APP_VERSION_DISPLAY}</span>
             </div>
           </div>
           <button

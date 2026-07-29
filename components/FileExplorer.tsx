@@ -250,17 +250,19 @@ function TreeNode({
   const [children, setChildren] = useState<FileNode[]>(node.children ?? []);
   const [loaded, setLoaded] = useState(node.loaded ?? false);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [hovered, setHovered] = useState(false);
 
   const loadChildren = useCallback(async (force = false) => {
     if (loaded && !force) return;
     setLoading(true);
+    setLoadError(null);
     try {
       const entries = await fetchEntries(node.fullPath);
       setChildren(entries);
       setLoaded(true);
-    } catch {
-      // ignore
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
@@ -362,7 +364,7 @@ function TreeNode({
               onAtMention(getRelativeFilePath(node.fullPath, cwd), node.isDir);
             }}
             title={t("files.insertPath")}
-            aria-label={`Mention ${node.name}`}
+            aria-label={t("files.mentionName", { name: node.name })}
             className={`file-tree-action file-tree-mention${!node.isDir ? " has-download" : ""}`}
           >
             <MentionIcon />
@@ -375,7 +377,7 @@ function TreeNode({
             download
             onClick={(e) => e.stopPropagation()}
             title={t("files.download")}
-            aria-label={`Download ${node.name}`}
+            aria-label={t("files.downloadName", { name: node.name })}
             className="file-tree-action file-tree-download"
           >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -388,6 +390,32 @@ function TreeNode({
       </div>
       {node.isDir && open && (
         <div>
+          {loadError && !loading && (
+            <div
+              role="alert"
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                minHeight: 25, paddingLeft: 8 + (depth + 1) * 14, paddingRight: 7,
+                fontSize: 10.5, color: "var(--danger)",
+              }}
+            >
+              <span style={{ minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={loadError}>
+                {t("files.loadFolderFailed")}
+              </span>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); void loadChildren(true); }}
+                style={{
+                  height: 20, padding: "0 7px", flexShrink: 0,
+                  border: "1px solid var(--separator)", borderRadius: 5,
+                  background: "var(--surface)", color: "var(--text)",
+                  fontSize: 10.5, cursor: "pointer",
+                }}
+              >
+                {t("common.retry")}
+              </button>
+            </div>
+          )}
           {children.map((child) => (
             <TreeNode
               key={child.fullPath}
@@ -407,9 +435,9 @@ function TreeNode({
               t={t}
             />
           ))}
-          {children.length === 0 && loaded && (
+          {children.length === 0 && loaded && !loadError && (
             <div className="file-tree-empty-folder" style={{ paddingLeft: 8 + (depth + 1) * 14 }}>
-              Empty folder
+              {t("files.emptyFolder")}
             </div>
           )}
         </div>
@@ -503,6 +531,8 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   const [pendingConflict, setPendingConflict] = useState<PendingConflict | null>(null);
   const prevCwdRef = useRef<string | null>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  const [dropActive, setDropActive] = useState(false);
+  const dragDepthRef = useRef(0);
   const refreshToken = `${refreshKey ?? 0}:${treeRefreshKey}`;
   const uploadBusy = uploadPhase !== "idle";
 
@@ -685,6 +715,19 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
     onChangesCountChange?.(gitFiles.length);
   }, [gitFiles, onChangesCountChange]);
 
+  // Live updates: watch the cwd on the server and silently refresh the tree
+  // (expanded folders included) whenever local files change. EventSource
+  // auto-reconnects, so a server restart just resumes watching.
+  useEffect(() => {
+    const source = new EventSource(`/api/files/${encodeFilePathForApi(cwd)}?type=watch-dir`);
+    const onChange = () => setTreeRefreshKey((key) => key + 1);
+    source.addEventListener("change", onChange);
+    return () => {
+      source.removeEventListener("change", onChange);
+      source.close();
+    };
+  }, [cwd]);
+
   const showUploadFeedback = uploadBusy || pendingConflict !== null || uploadError !== null || uploadSummary !== null;
 
   const addUploadedFilesToChat = useCallback(() => {
@@ -694,8 +737,56 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
     );
   }, [cwd, onAtMentions, uploadSummary]);
 
+  // Drag & drop upload: files dropped anywhere on the tree land in the cwd root.
+  const hasDraggedFiles = (event: React.DragEvent) =>
+    Array.from(event.dataTransfer.types).includes("Files");
+
+  const handleDragEnter = useCallback((event: React.DragEvent) => {
+    if (!hasDraggedFiles(event) || uploadBusy) return;
+    event.preventDefault();
+    dragDepthRef.current += 1;
+    setDropActive(true);
+  }, [uploadBusy]);
+
+  const handleDragOver = useCallback((event: React.DragEvent) => {
+    if (!hasDraggedFiles(event) || uploadBusy) return;
+    event.preventDefault();
+  }, [uploadBusy]);
+
+  const handleDragLeave = useCallback((event: React.DragEvent) => {
+    if (!hasDraggedFiles(event)) return;
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setDropActive(false);
+  }, []);
+
+  const handleDrop = useCallback((event: React.DragEvent) => {
+    if (!hasDraggedFiles(event)) return;
+    event.preventDefault();
+    dragDepthRef.current = 0;
+    setDropActive(false);
+    if (uploadBusy) return;
+    const files = Array.from(event.dataTransfer.files);
+    if (files.length > 0) void prepareUpload(files);
+  }, [prepareUpload, uploadBusy]);
+
   return (
-    <div className="file-tree">
+    <div
+      className={`file-tree${dropActive ? " is-drop-target" : ""}`}
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {dropActive && (
+        <div className="file-tree-drop-overlay" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <path d="m17 8-5-5-5 5" />
+            <path d="M12 3v12" />
+          </svg>
+          <span>{t("files.dropToUpload")}</span>
+        </div>
+      )}
       <input ref={uploadInputRef} type="file" multiple hidden onChange={handleUploadInput} />
       {showUploadFeedback && (
         <div className="file-tree-feedback">
@@ -759,7 +850,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
             <div style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 22, fontSize: 11 }}>
               <div style={{ minWidth: 0, flex: 1, display: "flex", alignItems: "center", gap: 8 }}>
                 {uploadSummary.uploaded.length > 0 && (
-                  <span title={`${uploadSummary.uploaded.length} uploaded`} aria-label={`${uploadSummary.uploaded.length} uploaded`} style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--success)" }}>
+                  <span title={t("files.uploadedCount", { count: uploadSummary.uploaded.length })} aria-label={t("files.uploadedCount", { count: uploadSummary.uploaded.length })} style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--success)" }}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="m5 12 4 4L19 6" />
                     </svg>
@@ -767,7 +858,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
                   </span>
                 )}
                 {uploadSummary.skipped.length > 0 && (
-                  <span title={`${uploadSummary.skipped.length} skipped`} aria-label={`${uploadSummary.skipped.length} skipped`} style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--text-dim)" }}>
+                  <span title={t("files.skippedCount", { count: uploadSummary.skipped.length })} aria-label={t("files.skippedCount", { count: uploadSummary.skipped.length })} style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--text-dim)" }}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
                       <circle cx="12" cy="12" r="9" />
                       <path d="M8 12h8" />
@@ -776,7 +867,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
                   </span>
                 )}
                 {uploadSummary.errors.length > 0 && (
-                  <span title={`${uploadSummary.errors.length} failed`} aria-label={`${uploadSummary.errors.length} failed`} style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--danger)" }}>
+                  <span title={t("files.failedCount", { count: uploadSummary.errors.length })} aria-label={t("files.failedCount", { count: uploadSummary.errors.length })} style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--danger)" }}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M12 3 2.5 20h19L12 3Z" />
                       <path d="M12 9v4" />
@@ -816,7 +907,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
       )}
 
       {!changesCollapsed && gitFiles.length > 0 && (
-        <div style={{ padding: "0 4px 2px" }}>
+        <div style={{ padding: "0 4px 2px", borderBottom: "1px solid var(--separator)" }}>
           <div
             aria-label={t("files.changeStats", {
               count: gitFiles.length,
@@ -831,16 +922,17 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
             <span style={{ color: GIT_STATUS_COLORS.added, fontFamily: "var(--font-mono)" }}>+{gitLineStats.additions}</span>
             <span style={{ color: GIT_STATUS_COLORS.deleted, fontFamily: "var(--font-mono)" }}>-{gitLineStats.deletions}</span>
           </div>
-          {gitFiles.map((status) => (
-            <ChangeRow key={status.filePath} status={status} cwd={cwd} onOpenFile={onOpenFile} t={t} />
-          ))}
+          <div style={{ maxHeight: 220, overflowY: "auto", paddingBottom: 3 }}>
+            {gitFiles.map((status) => (
+              <ChangeRow key={status.filePath} status={status} cwd={cwd} onOpenFile={onOpenFile} t={t} />
+            ))}
+          </div>
         </div>
       )}
 
-      {(changesCollapsed || gitFiles.length === 0) && (
-        <div className="file-tree-list" role="tree" aria-label="Project files">
+      <div className="file-tree-list" role="tree" aria-label={t("sidebar.projectFiles")}>
           {loading ? (
-            <div className="file-tree-loading" role="status" aria-label="Loading files">
+            <div className="file-tree-loading" role="status" aria-label={t("files.loading")}>
               {[0, 1, 2, 3, 4, 5].map((item) => (
                 <span key={item} style={{ "--skeleton-width": `${64 + ((item * 17) % 30)}%` } as CSSProperties} />
               ))}
@@ -855,7 +947,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
                   setTreeRefreshKey((value) => value + 1);
                 }}
               >
-                Retry
+                {t("common.retry")}
               </button>
             </div>
           ) : (
@@ -884,8 +976,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
               <span>{t("files.noFiles")}</span>
             </div>
           )}
-        </div>
-      )}
+      </div>
     </div>
   );
 });

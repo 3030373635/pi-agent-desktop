@@ -298,6 +298,7 @@ export interface ChatInputHandle {
   insertIfEmpty: (content: string) => void;
   prependText: (text: string) => void;
   addImages: (files: File[]) => void;
+  focus: () => void;
 }
 
 export interface AttachedImage {
@@ -493,6 +494,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (showLoading && !messagesLoaded) setLoading(false);
     }
   }, []);
+
+  /** Re-run the initial session load after a failed fetch (error-state Retry). */
+  const retryLoad = useCallback(() => {
+    const sid = sessionIdRef.current;
+    if (!sid) return;
+    setError(null);
+    void loadSession(sid, true, true);
+  }, [loadSession]);
 
   const loadContext = useCallback(async (sid: string, leafId: string | null) => {
     try {
@@ -1643,7 +1652,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     handleSend, handleAbort, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
     handleRecallQueue,
-    handleBuiltinSlashCommand,
+    handleBuiltinSlashCommand, retryLoad,
     handleToolPresetChange, handleThinkingLevelChange, loadTools, loadSlashCommands, setActiveLeafId, setData, setMessages,
     dispatch, setAgentRunning, setForkingEntryId,
     bashRunning, pendingBash,

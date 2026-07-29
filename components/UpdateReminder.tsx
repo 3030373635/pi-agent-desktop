@@ -3,11 +3,56 @@
 import { useEffect, useState } from "react";
 import type { AppUpdateInfo, AppUpdatesResponse } from "@/lib/app-update-types";
 import { PRODUCT_NAME } from "@/lib/branding";
+import { useI18n } from "@/hooks/useI18n";
 
 const RETRY_AFTER_ERROR_MS = 6 * 60 * 60 * 1000;
 const MAX_TIMER_MS = 2_147_000_000;
+const SNOOZE_STORAGE_KEY = "pi-web:update-snooze";
+const SNOOZE_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
+
+interface SnoozeRecord {
+  until: number;
+  /** Which exact update set was dismissed — a newer release reappears immediately. */
+  signature: string;
+}
+
+function updatesSignature(updates: AppUpdateInfo[]): string {
+  return updates
+    .map((update) => `${update.project}@${update.latestVersion}`)
+    .sort()
+    .join(",");
+}
+
+function loadSnooze(): SnoozeRecord | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(SNOOZE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<SnoozeRecord>;
+    if (typeof parsed.until !== "number" || typeof parsed.signature !== "string") return null;
+    return { until: parsed.until, signature: parsed.signature };
+  } catch {
+    return null;
+  }
+}
+
+function saveSnooze(record: SnoozeRecord): void {
+  try {
+    window.localStorage.setItem(SNOOZE_STORAGE_KEY, JSON.stringify(record));
+  } catch {
+    // ignore storage quota / privacy-mode errors
+  }
+}
+
+function isSnoozed(updates: AppUpdateInfo[]): boolean {
+  const snooze = loadSnooze();
+  if (!snooze) return false;
+  if (Date.now() >= snooze.until) return false;
+  return snooze.signature === updatesSignature(updates);
+}
 
 export function UpdateReminder({ onOpenSettings }: { onOpenSettings: () => void }) {
+  const { t } = useI18n();
   const [updates, setUpdates] = useState<AppUpdateInfo[]>([]);
 
   useEffect(() => {
@@ -31,7 +76,7 @@ export function UpdateReminder({ onOpenSettings }: { onOpenSettings: () => void 
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json() as AppUpdatesResponse;
         if (cancelled) return;
-        if (Array.isArray(data.updates) && data.updates.length > 0) {
+        if (Array.isArray(data.updates) && data.updates.length > 0 && !isSnoozed(data.updates)) {
           setUpdates(data.updates);
         }
         const nextCheckAt = Date.parse(data.nextCheckAt);
@@ -57,10 +102,15 @@ export function UpdateReminder({ onOpenSettings }: { onOpenSettings: () => void 
     onOpenSettings();
   };
 
+  const handleSnooze = () => {
+    saveSnooze({ until: Date.now() + SNOOZE_DURATION_MS, signature: updatesSignature(updates) });
+    setUpdates([]);
+  };
+
   return (
     <aside
       className="native-update-reminder"
-      aria-label="Available updates"
+      aria-label={t("updates.available")}
       aria-live="polite"
       style={{
         position: "fixed",
@@ -79,14 +129,14 @@ export function UpdateReminder({ onOpenSettings }: { onOpenSettings: () => void 
       <div className="native-update-reminder-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px 10px" }}>
         <div className="native-update-reminder-title" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 700 }}>
           <span className="native-update-reminder-icon" aria-hidden="true" style={{ color: "var(--accent)", fontSize: 16 }}>↑</span>
-          Updates available
+          {t("updates.available")}
         </div>
         <button
           className="native-modal-close"
           type="button"
-          aria-label="Dismiss update reminder"
-          title="Remind me next week"
-          onClick={() => setUpdates([])}
+          aria-label={t("updates.dismiss")}
+          title={t("updates.remindNextWeek")}
+          onClick={handleSnooze}
           style={{
             padding: "1px 5px",
             border: 0,
@@ -135,12 +185,12 @@ export function UpdateReminder({ onOpenSettings }: { onOpenSettings: () => void 
                 textDecoration: "none",
               }}
             >
-              View release
+              {t("updates.viewRelease")}
             </a>
           </div>
         ))}
         <div className="native-update-reminder-caption" style={{ color: "var(--text-dim)", fontSize: 10, lineHeight: 1.45 }}>
-          {PRODUCT_NAME} checks official GitHub releases once a week. Review and install one complete signed app update in Settings.
+          {t("updates.caption", { product: PRODUCT_NAME })}
         </div>
         <button
           className="native-button native-button-primary"
@@ -148,7 +198,7 @@ export function UpdateReminder({ onOpenSettings }: { onOpenSettings: () => void 
           onClick={handleOpenSettings}
           style={{ alignSelf: "flex-end" }}
         >
-          Open Settings
+          {t("updates.openSettings")}
         </button>
       </div>
     </aside>

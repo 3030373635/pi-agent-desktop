@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
+import { useModalDismiss } from "@/hooks/useModalDismiss";
+import { ConfirmDangerButton } from "./ConfirmDangerButton";
 // Color icons (have their own fill colors — no background needed)
 import AnthropicIcon from "@lobehub/icons/es/Anthropic/components/Mono";
 import OpenAIIcon from "@lobehub/icons/es/OpenAI/components/Mono";
@@ -310,9 +312,7 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete }: {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
          <SectionTitle>{t("i18n.provider")}</SectionTitle>
-        <button className="native-button native-button-compact native-button-danger" onClick={onDelete}>
-           {t("i18n.delete")}
-        </button>
+        <ConfirmDangerButton label={t("i18n.delete")} onConfirm={onDelete} />
       </div>
 
        <Field label={t("i18n.providerName")}>
@@ -594,10 +594,18 @@ function ModelDetail({
                 maxWidth: 260,
                 height: 24,
                 padding: "0 8px",
-                border: `1px solid ${testState.phase === "error" ? "#fecaca" : testState.phase === "success" ? "#bbf7d0" : "var(--border)"}`,
+                border: `1px solid ${testState.phase === "error"
+                  ? "color-mix(in srgb, var(--danger) 40%, transparent)"
+                  : testState.phase === "success"
+                    ? "color-mix(in srgb, var(--success) 40%, transparent)"
+                    : "var(--border)"}`,
                 borderRadius: 4,
-                background: testState.phase === "error" ? "#fee2e2" : testState.phase === "success" ? "#dcfce7" : "#e5e7eb",
-                color: "#111827",
+                background: testState.phase === "error"
+                  ? "color-mix(in srgb, var(--danger) 12%, var(--bg-panel))"
+                  : testState.phase === "success"
+                    ? "color-mix(in srgb, var(--success) 12%, var(--bg-panel))"
+                    : "var(--bg-hover)",
+                color: "var(--text)",
                 fontSize: 11,
                 display: "inline-flex",
                 alignItems: "center",
@@ -623,9 +631,7 @@ function ModelDetail({
             )}
              {testState.phase === "testing" ? t("i18n.checking") : testState.phase === "success" ? t("common.ok") : t("i18n.test")}
           </button>
-          <button className="native-button native-button-compact native-button-danger" onClick={onDelete}>
-             {t("i18n.remove")}
-          </button>
+          <ConfirmDangerButton label={t("i18n.remove")} onConfirm={onDelete} />
         </div>
       </div>
 
@@ -945,12 +951,11 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
                {provider.loggedIn ? t("i18n.relogin") : t("i18n.login")}
             </button>
             {provider.loggedIn && (
-              <button
+              <ConfirmDangerButton
                 className="native-button native-button-danger"
-                onClick={handleLogout}
-              >
-                 {t("i18n.disconnect")}
-              </button>
+                label={t("i18n.disconnect")}
+                onConfirm={handleLogout}
+              />
             )}
           </>
         )}
@@ -1032,8 +1037,8 @@ function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRef
 
       <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
         {provider.configured
-          ? `API key is stored. Enter a new key below to replace it, or disconnect to remove it.`
-          : `Enter your ${provider.displayName} API key to enable ${provider.modelCount} model${provider.modelCount !== 1 ? "s" : ""}.`}
+          ? t("models.apiKeyStored")
+          : t("models.apiKeyPrompt", { name: provider.displayName, count: provider.modelCount })}
       </p>
 
       <Field label="API Key">
@@ -1042,7 +1047,7 @@ function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRef
             value={apiKey}
             onChange={setApiKey}
             onKeyDown={(e) => { if (e.key === "Enter" && apiKey.trim()) handleSave(); }}
-            placeholder={provider.configured ? "Enter new key to replace…" : "sk-…"}
+            placeholder={provider.configured ? t("models.enterNewKey") : "sk-…"}
             style={{ flex: 1 }}
             autoComplete="off"
             spellCheck={false}
@@ -1067,14 +1072,14 @@ function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRef
       {error && <p style={{ margin: 0, fontSize: 12, color: "var(--danger)" }}>{error}</p>}
 
       {provider.configured && (
-        <button
+        <ConfirmDangerButton
           className="native-button native-button-danger"
-          onClick={handleRemove}
-          disabled={removing}
+          label={t("i18n.disconnect")}
+          busyLabel={t("i18n.removing")}
+          busy={removing}
+          onConfirm={handleRemove}
           style={{ alignSelf: "flex-start" }}
-        >
-           {removing ? t("i18n.removing") : t("i18n.disconnect")}
-        </button>
+        />
       )}
     </div>
   );
@@ -1138,6 +1143,7 @@ function AddProviderPicker({
   const [search, setSearch] = useState("");
   const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
+  const pickerRef = useModalDismiss<HTMLDivElement>(onClose);
 
   useEffect(() => { setTimeout(() => inputRef.current?.focus(), 30); }, []);
 
@@ -1171,7 +1177,7 @@ function AddProviderPicker({
       style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="native-modal settings-modal provider-picker" style={{ width: 820, maxWidth: "calc(100vw - 32px)", maxHeight: "min(72vh, calc(100vh - 32px))", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.22)", overflow: "hidden" }}>
+      <div ref={pickerRef} role="dialog" aria-modal="true" className="native-modal settings-modal provider-picker" style={{ width: 820, maxWidth: "calc(100vw - 32px)", maxHeight: "min(72vh, calc(100vh - 32px))", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.22)", overflow: "hidden" }}>
         {/* Search */}
         <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)", flexShrink: 0 }}>
@@ -1182,7 +1188,6 @@ function AddProviderPicker({
             ref={inputRef}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
              placeholder={t("i18n.searchProviders")}
             style={{ flex: 1, background: "none", border: "none", outline: "none", color: "var(--text)", fontSize: 13, boxSizing: "border-box" }}
           />
@@ -1245,7 +1250,7 @@ function AddProviderPicker({
                 >
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.displayName}</div>
-                    <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>{p.modelCount} models</div>
+                    <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>{t("models.modelCount", { count: p.modelCount })}</div>
                   </div>
                   <ProviderIcon id={p.id} size={28} />
                 </button>
@@ -1273,6 +1278,18 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
   const [oauthProviders, setOauthProviders] = useState<OAuthProvider[]>([]);
   const [apiKeyProviders, setApiKeyProviders] = useState<ApiKeyProvider[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Snapshot of the last loaded/saved config — closing with edits beyond this
+  // point asks for confirmation instead of silently discarding them.
+  const savedSnapshotRef = useRef<string>(JSON.stringify({ providers: {} }));
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+
+  const requestClose = useCallback(() => {
+    if (JSON.stringify(config) === savedSnapshotRef.current) onClose();
+    else setConfirmDiscard(true);
+  }, [config, onClose]);
+
+  const panelRef = useModalDismiss<HTMLDivElement>(requestClose);
+  const discardRef = useModalDismiss<HTMLDivElement>(() => setConfirmDiscard(false), confirmDiscard);
 
   const loadOAuthProviders = useCallback(() => {
     fetch("/api/auth/providers")
@@ -1294,6 +1311,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
       .then((d: ModelsJson) => {
         const normalized = d.providers ? d : { ...d, providers: {} };
         setConfig(normalized);
+        savedSnapshotRef.current = JSON.stringify(normalized);
         const keys = Object.keys(normalized.providers ?? {});
         if (keys.length > 0) setSelection({ type: "provider", name: keys[0] });
       })
@@ -1388,7 +1406,11 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
       });
       const d = await res.json() as { success?: boolean; error?: string };
       if (!res.ok || d.error) setSaveError(d.error ?? `HTTP ${res.status}`);
-      else { setSavedOk(true); setTimeout(() => setSavedOk(false), 2000); }
+      else {
+        savedSnapshotRef.current = JSON.stringify(config);
+        setSavedOk(true);
+        setTimeout(() => setSavedOk(false), 2000);
+      }
     } catch (e) {
       setSaveError(String(e));
     } finally {
@@ -1445,8 +1467,8 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
   return (
     <>
     <div className="native-modal-backdrop" style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="native-modal settings-modal models-settings-modal" style={{ width: isMobile ? "calc(100vw - 16px)" : 860, maxWidth: "calc(100vw - 16px)", height: isMobile ? "calc(100dvh - 16px)" : "auto", minHeight: isMobile ? undefined : 560, maxHeight: isMobile ? "calc(100dvh - 16px)" : "min(680px, calc(100dvh - 48px))", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden" }}>
+      onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
+      <div ref={panelRef} role="dialog" aria-modal="true" className="native-modal settings-modal models-settings-modal" style={{ position: "relative", width: isMobile ? "calc(100vw - 16px)" : 860, maxWidth: "calc(100vw - 16px)", height: isMobile ? "calc(100dvh - 16px)" : "auto", minHeight: isMobile ? undefined : 560, maxHeight: isMobile ? "calc(100dvh - 16px)" : "min(680px, calc(100dvh - 48px))", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden" }}>
 
         {/* Header */}
         <div className="native-modal-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
@@ -1454,7 +1476,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
             <span className="native-modal-title" style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{t("common.models")}</span>
             <code style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>~/.pi/agent/models.json</code>
           </div>
-          <button className="native-modal-close" onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "2px 6px" }}>×</button>
+          <button className="native-modal-close" onClick={requestClose} aria-label={t("i18n.close")} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "2px 6px" }}>×</button>
         </div>
 
         {/* Body */}
@@ -1603,7 +1625,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
         {/* Footer */}
         <div className="settings-footer" style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, padding: "10px 18px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
           {saveError && <span className="settings-footer-status is-error" style={{ fontSize: 12, color: "var(--danger)", flex: 1 }}>{saveError}</span>}
-          <button className="native-button" onClick={onClose}>
+          <button className="native-button" onClick={requestClose}>
             {t("i18n.cancel")}
           </button>
           <button className={`native-button native-button-primary${savedOk ? " is-success" : ""}`} onClick={handleSave} disabled={saving || savedOk} style={{
@@ -1620,6 +1642,36 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
              <span>{savedOk ? t("i18n.saved") : saving ? t("i18n.saving") : t("i18n.save")}</span>
           </button>
         </div>
+
+        {/* Unsaved-changes confirmation before discarding edits */}
+        {confirmDiscard && (
+          <div
+            style={{ position: "absolute", inset: 0, zIndex: 20, background: "rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+            onClick={(e) => { if (e.target === e.currentTarget) setConfirmDiscard(false); }}
+          >
+            <div
+              ref={discardRef}
+              role="alertdialog"
+              aria-modal="true"
+              style={{ width: 360, maxWidth: "100%", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, boxShadow: "0 12px 32px rgba(0,0,0,0.25)", padding: "16px 18px" }}
+            >
+              <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
+                {t("models.unsavedTitle")}
+              </div>
+              <div style={{ marginTop: 6, fontSize: 12, lineHeight: 1.55, color: "var(--text-muted)" }}>
+                {t("models.unsavedBody")}
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>
+                <button className="native-button" onClick={() => setConfirmDiscard(false)}>
+                  {t("models.keepEditing")}
+                </button>
+                <button className="native-button native-button-danger" onClick={onClose}>
+                  {t("models.discardChanges")}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
     {pickerOpen && (

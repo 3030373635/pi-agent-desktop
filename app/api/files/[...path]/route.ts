@@ -36,7 +36,7 @@ const IGNORED_NAMES = new Set([
 
 const IGNORED_SUFFIXES = [".pyc"];
 
-const FILE_REQUEST_TYPES = ["list", "read", "download", "meta", "preview", "watch"] as const;
+const FILE_REQUEST_TYPES = ["list", "read", "download", "meta", "preview", "watch", "watch-dir"] as const;
 type FileRequestType = typeof FILE_REQUEST_TYPES[number];
 const FILE_REQUEST_TYPE_SET = new Set<string>(FILE_REQUEST_TYPES);
 const MAX_UPLOAD_FILE_BYTES = 25 * 1024 * 1024;
@@ -569,6 +569,74 @@ export async function GET(
           }
         },
         cancel() {
+          try { watcher?.close(); } catch { /* ignore */ }
+        },
+      });
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache, no-transform",
+          Connection: "keep-alive",
+          "X-Accel-Buffering": "no",
+        },
+      });
+    }
+
+    if (type === "watch-dir") {
+      if (!stat.isDirectory()) {
+        return NextResponse.json({ error: "Not a directory" }, { status: 400 });
+      }
+      let watcher: fs.FSWatcher | null = null;
+      let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+      const isIgnoredEventPath = (eventPath: string | Buffer | null | undefined): boolean => {
+        if (typeof eventPath !== "string" || eventPath.length === 0) return false;
+        return eventPath
+          .split(/[\\/]/)
+          .some((segment) =>
+            IGNORED_NAMES.has(segment) || IGNORED_SUFFIXES.some((s) => segment.endsWith(s)));
+      };
+      const stream = new ReadableStream({
+        start(controller) {
+          const send = (eventName: string, data: Record<string, unknown>) => {
+            const payload = `event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`;
+            try {
+              controller.enqueue(new TextEncoder().encode(payload));
+            } catch {
+              // client disconnected
+            }
+          };
+          send("connected", { path: filePath });
+          // Coalesce bursts (builds, git operations) into a single change event.
+          const scheduleChange = () => {
+            if (debounceTimer) return;
+            debounceTimer = setTimeout(() => {
+              debounceTimer = null;
+              send("change", { timestamp: new Date().toISOString() });
+            }, 400);
+          };
+          const handleEvent = (_event: string, filename: string | Buffer | null) => {
+            if (isIgnoredEventPath(filename)) return;
+            scheduleChange();
+          };
+          try {
+            watcher = fs.watch(filePath, { recursive: true }, handleEvent);
+          } catch {
+            // Recursive watching may be unavailable on some platforms; fall
+            // back to watching only the top-level directory.
+            try {
+              watcher = fs.watch(filePath, handleEvent);
+            } catch {
+              send("error", { message: "Failed to watch directory" });
+              controller.close();
+              return;
+            }
+          }
+          watcher.on("error", () => {
+            try { controller.close(); } catch { /* ignore */ }
+          });
+        },
+        cancel() {
+          if (debounceTimer) clearTimeout(debounceTimer);
           try { watcher?.close(); } catch { /* ignore */ }
         },
       });

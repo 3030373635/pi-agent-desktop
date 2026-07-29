@@ -66,6 +66,8 @@ interface Props {
   draftKey?: string;
   /** Session working directory — enables the @ file autocomplete menu */
   cwd?: string | null;
+  /** Focus the textarea on mount / when this becomes true (e.g. New task page). */
+  autoFocus?: boolean;
 }
 
 export interface ChatInputHandle {
@@ -73,6 +75,7 @@ export interface ChatInputHandle {
   insertIfEmpty: (text: string) => void;
   prependText: (text: string) => void;
   addImages: (files: File[]) => void;
+  focus: () => void;
 }
 
 const TOOL_PRESETS = ["off", "default", "full"] as const;
@@ -168,7 +171,7 @@ function revokeImagePreview(image: AttachedImage): void {
   }
 }
 
-function QueuedMessageRow({ kind, text }: { kind: "steer" | "follow-up"; text: string }) {
+function QueuedMessageRow({ kind, label, text }: { kind: "steer" | "follow-up"; label: string; text: string }) {
   return (
     <div
       title={text}
@@ -193,7 +196,7 @@ function QueuedMessageRow({ kind, text }: { kind: "steer" | "follow-up"; text: s
           color: kind === "steer" ? "var(--accent)" : "var(--text-dim)",
         }}
       >
-        {kind}
+        {label}
       </span>
       <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{text}</span>
     </div>
@@ -201,6 +204,7 @@ function QueuedMessageRow({ kind, text }: { kind: "steer" | "follow-up"; text: s
 }
 
 export function ModelErrorBanner({ error }: { error?: string | null }) {
+  const { t } = useI18n();
   if (!error) return null;
   return (
     <div
@@ -238,7 +242,7 @@ export function ModelErrorBanner({ error }: { error?: string | null }) {
         <line x1="12" y1="17" x2="12.01" y2="17" />
       </svg>
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontWeight: 600 }}>Model error</div>
+        <div style={{ fontWeight: 600 }}>{t("chat.modelError")}</div>
         <div style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{error}</div>
       </div>
     </div>
@@ -256,6 +260,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onPromptWithStreamingBehavior,
   draftKey,
   cwd,
+  autoFocus = false,
 }: Props, ref) {
   const { t } = useI18n();
   const isMobile = useIsMobile();
@@ -362,7 +367,21 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     addImages(files: File[]) {
       processImageFiles(files);
     },
+    focus() {
+      textareaRef.current?.focus();
+    },
   }));
+
+  // Activate the composer so New task / remounted chats are immediately typable
+  // without an extra click. Defer past the click that opened the page (⌘N /
+  // sidebar button) which would otherwise steal focus back.
+  useEffect(() => {
+    if (!autoFocus) return;
+    const id = window.setTimeout(() => {
+      textareaRef.current?.focus();
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [autoFocus, draftKey]);
 
   const processImageFiles = useCallback(async (files: File[]) => {
     if (isStreaming) return;
@@ -887,8 +906,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         if (isStreaming && (onSteer || onFollowUp)) {
-          // Default Enter sends as steer if available, else followup
-          sendQueued(onSteer ? "steer" : "followup");
+          // Enter defaults to the non-interrupting follow-up; steering (which
+          // aborts the current run) must be an explicit button click.
+          sendQueued(onFollowUp ? "followup" : "steer");
         } else {
           handleSend();
         }
@@ -1101,10 +1121,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               )}
             </div>
             {queuedMessages?.steering.map((text, i) => (
-              <QueuedMessageRow key={`steer-${i}`} kind="steer" text={text} />
+              <QueuedMessageRow key={`steer-${i}`} kind="steer" label={t("chat.steer")} text={text} />
             ))}
             {queuedMessages?.followUp.map((text, i) => (
-              <QueuedMessageRow key={`followup-${i}`} kind="follow-up" text={text} />
+              <QueuedMessageRow key={`followup-${i}`} kind="follow-up" label={t("chat.followUp")} text={text} />
             ))}
           </div>
         )}
@@ -1186,7 +1206,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               }}
             >
               <div
-                title="Input history"
+                title={t("chat.inputHistory")}
                 style={{
                   height: 30,
                   padding: "0 10px",
@@ -1552,7 +1572,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 <button
                   onClick={() => sendQueued("steer")}
                   disabled={!canQueueStreamingMessage}
-                  title={attachedImages.length ? "Image attachments cannot be queued while the agent is running" : "Interrupt the current run and inject this message now"}
+                  title={attachedImages.length ? t("chat.imagesCannotQueue") : t("chat.steerTitle")}
                   style={{
                     display: "flex", alignItems: "center", gap: 5,
                     padding: "7px 12px",
@@ -1575,7 +1595,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 <button
                   onClick={() => sendQueued("followup")}
                   disabled={!canQueueStreamingMessage}
-                  title={attachedImages.length ? "Image attachments cannot be queued while the agent is running" : "Queue this message after the agent finishes"}
+                  title={attachedImages.length ? t("chat.imagesCannotQueue") : t("chat.followUpTitle")}
                   style={{
                     display: "flex", alignItems: "center", gap: 5,
                     padding: "7px 12px",

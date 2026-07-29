@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
+import { useModalDismiss } from "@/hooks/useModalDismiss";
 import type {
   SkillInfo as Skill,
   SkillInstallScope,
@@ -694,6 +695,7 @@ export function SkillsConfig({
 }) {
   const isMobile = useIsMobile();
   const { t } = useI18n();
+  const panelRef = useModalDismiss<HTMLDivElement>(onClose);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -877,6 +879,9 @@ export function SkillsConfig({
       }}
     >
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
         className="native-modal settings-modal"
         style={{
           width: isMobile ? "calc(100vw - 16px)" : 860,

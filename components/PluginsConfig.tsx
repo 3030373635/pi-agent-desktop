@@ -5,6 +5,8 @@ import { sendAgentCommand } from "@/lib/agent-client";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import type { PluginPackageInfo, PluginsResponse } from "@/lib/api-types";
 import { useI18n } from "@/hooks/useI18n";
+import { useModalDismiss } from "@/hooks/useModalDismiss";
+import { ConfirmDangerButton } from "./ConfirmDangerButton";
 
 type PluginScope = PluginPackageInfo["scope"];
 type PluginAction = "install" | "remove" | "update" | "disable" | "enable";
@@ -511,14 +513,14 @@ function PackageDetail({
           >
              {reloadBusy ? t("i18n.reloading") : t("i18n.reloadSession")}
           </button>
-          <button
+          <ConfirmDangerButton
             className="native-button native-button-compact native-button-danger"
-            onClick={() => onAction("remove", pkg)}
-            disabled={busy || reloadBusy}
+            label={t("i18n.remove")}
+            busyLabel={t("i18n.removing")}
+            busy={busy || reloadBusy}
+            onConfirm={() => onAction("remove", pkg)}
             style={buttonStyle(busy || reloadBusy, true)}
-          >
-             {busyKey === `remove:${key}` ? t("i18n.removing") : t("i18n.remove")}
-          </button>
+          />
         </div>
       </div>
 
@@ -592,6 +594,7 @@ export function PluginsConfig({
 }) {
   const isMobile = useIsMobile();
   const { t } = useI18n();
+  const panelRef = useModalDismiss<HTMLDivElement>(onClose);
   const [data, setData] = useState<PluginsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -654,22 +657,22 @@ export function PluginsConfig({
       if (action === "remove") {
         setSelected(next.packages[0] ? packageKey(next.packages[0]) : null);
         if (next.packages.length === 0) setAddMode(true);
-        setActionMessage("Package removed.");
+        setActionMessage(t("i18n.packageRemoved"));
       } else {
-        const messages: Record<Exclude<PluginAction, "remove">, string> = {
-          install: "Package installed.",
-          update: "Package updated.",
-          disable: "Package disabled.",
-          enable: "Package enabled.",
+        const messageKeys: Record<Exclude<PluginAction, "remove">, string> = {
+          install: "i18n.packageInstalled",
+          update: "i18n.packageUpdated",
+          disable: "i18n.packageDisabled",
+          enable: "i18n.packageEnabled",
         };
-        setActionMessage(messages[action]);
+        setActionMessage(t(messageKeys[action]));
       }
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusyKey(null);
     }
-  }, [cwd]);
+  }, [cwd, t]);
 
   const installPlugin = useCallback(async () => {
     const source = installSource.trim();
@@ -691,13 +694,13 @@ export function PluginsConfig({
       setSelected(installed ? packageKey(installed) : key);
       setAddMode(false);
       setInstallSource("");
-      setActionMessage("Package installed.");
+      setActionMessage(t("i18n.packageInstalled"));
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusyKey(null);
     }
-  }, [cwd, installScope, installSource]);
+  }, [cwd, installScope, installSource, t]);
 
   const reloadSession = useCallback(async () => {
     if (!sessionId) return;
@@ -708,13 +711,13 @@ export function PluginsConfig({
       await sendAgentCommand(sessionId, { type: "reload" });
       onReloaded?.();
       await loadPlugins();
-      setActionMessage("Session reloaded.");
+      setActionMessage(t("i18n.sessionReloaded"));
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusyKey(null);
     }
-  }, [loadPlugins, onReloaded, sessionId]);
+  }, [loadPlugins, onReloaded, sessionId, t]);
 
   const addBusy = busyKey?.startsWith("install:") ?? false;
 
@@ -735,6 +738,9 @@ export function PluginsConfig({
       }}
     >
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
         className="native-modal settings-modal"
         style={{
           width: isMobile ? "calc(100vw - 16px)" : 860,

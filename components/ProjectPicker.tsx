@@ -3,14 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { AnimatedDropdown, PathLabel, displayCwd } from "./path-ui";
-
-declare global {
-  interface Window {
-    piDesktop?: {
-      selectDirectory: () => Promise<string | null>;
-    };
-  }
-}
+import { isTauriDesktop } from "@/lib/desktop-updater";
+import { selectDirectoryNative } from "@/lib/desktop-window";
 
 interface ProjectPickerProps {
   recentProjects: string[];
@@ -87,8 +81,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
   }, [customPathValidating, onSelectCwd, closeDropdown]);
 
   const handleCustomPathClick = useCallback(async () => {
-    const desktop = window.piDesktop;
-    if (!desktop) {
+    if (!isTauriDesktop()) {
       // Web: open the browsable directory picker modal
       setCustomPathError(null);
       setCustomPathOpen(true);
@@ -100,7 +93,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
     // browsable picker if the dialog fails or the chosen path is rejected.
     try {
       setCustomPathError(null);
-      const path = await desktop.selectDirectory();
+      const path = await selectDirectoryNative(selectedCwd ?? homeDir);
       if (path === null) return;
       const ok = await commitCustomPath(path);
       if (!ok) {
@@ -112,18 +105,25 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
       setCustomPathOpen(true);
       setDropdownOpen(false);
     }
-  }, [commitCustomPath]);
+  }, [commitCustomPath, selectedCwd, homeDir]);
 
   const handleDefaultCwd = useCallback(async () => {
     try {
       const res = await fetch("/api/default-cwd", { method: "POST" });
-      const data = await res.json() as { cwd?: string; error?: string };
+      const data = await res.json().catch(() => ({})) as { cwd?: string; error?: string };
       if (data.cwd) {
         onSelectCwd(data.cwd);
         closeDropdown();
+        return;
       }
-    } catch {
-      // ignore
+      // Surface the failure in the directory picker instead of failing silently
+      setCustomPathError(data.error ?? `HTTP ${res.status}`);
+      setCustomPathOpen(true);
+      setDropdownOpen(false);
+    } catch (e) {
+      setCustomPathError(e instanceof Error ? e.message : String(e));
+      setCustomPathOpen(true);
+      setDropdownOpen(false);
     }
   }, [onSelectCwd, closeDropdown]);
 
@@ -238,9 +238,10 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
 
       <AnimatedDropdown className="native-popover" open={dropdownOpen} style={panelStyle}>
         <div style={{ maxHeight: "min(50vh, 380px)", overflowY: "auto" }}>
-          {visibleProjects.map((project) => (
+          {visibleProjects.map((project, index) => (
             <button
               key={project}
+              className="project-picker-option"
               onClick={() => {
                 onSelectCwd(project);
                 closeDropdown();
@@ -251,9 +252,9 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
                 gap: 7,
                 width: "100%",
                 padding: "8px 10px",
-                background: "var(--bg)",
+                background: "none",
                 border: "none",
-                borderBottom: "1px solid var(--border)",
+                borderBottom: index < visibleProjects.length - 1 ? "1px solid var(--border)" : "none",
                 color: project === selectedProject ? "var(--text)" : "var(--text-muted)",
                 cursor: "pointer",
                 textAlign: "left",
@@ -279,6 +280,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
         {/* Default cwd shortcut */}
         {!customPathOpen && (
           <button
+            className="project-picker-option"
             onClick={(e) => { e.stopPropagation(); void handleDefaultCwd(); }}
             style={{
               display: "flex",
@@ -304,6 +306,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
 
         {/* Custom path directory picker */}
         <button
+          className="project-picker-option"
           onClick={(e) => {
             e.stopPropagation();
             void handleCustomPathClick();
@@ -316,6 +319,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
             padding: "8px 10px",
             background: "none",
             border: "none",
+            borderTop: "1px solid var(--border)",
             color: "var(--text-muted)",
             cursor: "pointer",
             textAlign: "left",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useI18n } from "@/hooks/useI18n";
+import { useModalDismiss } from "@/hooks/useModalDismiss";
 
 export function ProjectTrustDialog({
   cwd,
@@ -16,6 +17,9 @@ export function ProjectTrustDialog({
   onConfirm: () => void;
 }) {
   const { t } = useI18n();
+  const panelRef = useModalDismiss<HTMLDivElement>(() => {
+    if (!busy) onCancel();
+  });
 
   return (
     <div
@@ -35,6 +39,7 @@ export function ProjectTrustDialog({
       }}
     >
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="project-trust-title"

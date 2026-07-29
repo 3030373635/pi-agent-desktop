@@ -210,7 +210,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     handleSend, handleAbort, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
     handleRecallQueue,
-    handleBuiltinSlashCommand,
+    handleBuiltinSlashCommand, retryLoad,
     handleToolPresetChange, handleThinkingLevelChange, loadSlashCommands,
   } = useAgentSession({
     session, newSessionCwd, onAgentEnd: wrappedOnAgentEnd, onSessionCreated, onSessionForked,
@@ -385,8 +385,25 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
   if (error) {
     return (
-      <div className="flex h-full items-center justify-center text-red-400">
-        {error}
+      <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
+        <div style={{ color: "var(--text)", fontSize: 14, fontWeight: 600 }}>
+          {t("chat.loadFailed")}
+        </div>
+        <div style={{ color: "var(--text-dim)", fontSize: 12, lineHeight: 1.45, maxWidth: 480, overflowWrap: "anywhere" }}>
+          {error}
+        </div>
+        <button
+          type="button"
+          onClick={retryLoad}
+          style={{
+            marginTop: 6, height: 28, padding: "0 14px",
+            border: "1px solid var(--separator)", borderRadius: 7,
+            background: "var(--surface)", color: "var(--text)",
+            fontSize: 12.5, fontWeight: 550, cursor: "pointer",
+          }}
+        >
+          {t("common.retry")}
+        </button>
       </div>
     );
   }
@@ -461,8 +478,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               }}
             >
               <div className="chat-empty-brand-copy">
-                <strong>Start a task</strong>
-                <span>{PRODUCT_NAME} can explore, edit, and run this project with you.</span>
+                <strong>{t("chat.emptyTitle")}</strong>
+                <span>{t("chat.emptySubtitle", { product: PRODUCT_NAME })}</span>
               </div>
             </div>
             <NoticeShelf notices={notices} align="right" />
@@ -702,8 +719,11 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               />
             )}
 
+            {/* Spacer so the last user message can scroll near the top while the
+                agent works — capped at 40% of the viewport so the page below the
+                streaming answer doesn't feel like an endless blank. */}
             {agentRunning && (
-              <div style={{ height: scrollContainerRef.current ? scrollContainerRef.current.clientHeight : "80vh" }} />
+              <div style={{ height: scrollContainerRef.current ? Math.round(scrollContainerRef.current.clientHeight * 0.4) : "40vh" }} />
             )}
 
             <div ref={messagesEndRef} />

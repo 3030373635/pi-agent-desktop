@@ -83,7 +83,6 @@ interface Props {
   onOpenFile?: (filePath: string, fileName: string, options?: { sourceSessionId?: string | null; modeHint?: "diff" }) => void;
   selectedFilePath?: string | null;
   explorerRefreshKey?: number;
-  onExplorerRefresh?: () => void;
   onAtMention?: (relativePath: string, isDir: boolean) => void;
   onAtMentions?: (relativePaths: string[]) => void;
   /** Window-chrome controls (theme + sidebar collapse) rendered at the top-right of the sidebar. */
@@ -198,7 +197,7 @@ function buildSessionTree(sessions: SessionInfo[]): SessionTreeNode[] {
   return roots;
 }
 
-export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, selectedFilePath, explorerRefreshKey, onExplorerRefresh, onAtMention, onAtMentions, headerControls }: Props) {
+export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, refreshKey, onSessionDeleted, selectedCwd: selectedCwdProp, onCwdChange, onOpenFile, selectedFilePath, explorerRefreshKey, onAtMention, onAtMentions, headerControls }: Props) {
   const { t } = useI18n();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -219,25 +218,22 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const [wtNewBranch, setWtNewBranch] = useState("");
   const [wtError, setWtError] = useState<string | null>(null);
   const [wtBusy, setWtBusy] = useState(false);
-  const [wtConfirmRemove, setWtConfirmRemove] = useState<string | null>(null);
+  const [wtConfirmRemove, setWtConfirmRemove] = useState<{ path: string; force: boolean } | null>(null);
   const [worktreeLoadingCwd, setWorktreeLoadingCwd] = useState<string | null>(null);
   const wtDropdownRef = useRef<HTMLDivElement>(null);
   const wtNewInputRef = useRef<HTMLInputElement>(null);
   const [sidebarView, setSidebarView] = useState<"chats" | "files">("chats");
+  const [sessionQuery, setSessionQuery] = useState("");
   const [explorerKey, setExplorerKey] = useState(0);
   const [explorerUploadBusy, setExplorerUploadBusy] = useState(false);
   const [changesCount, setChangesCount] = useState(0);
   const [changesCollapsed, setChangesCollapsed] = useState(true);
-  const [sessionRefreshDone, setSessionRefreshDone] = useState(false);
-  const [explorerRefreshDone, setExplorerRefreshDone] = useState(false);
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(() => new Set());
   const [unreadSessionIds, setUnreadSessionIds] = useState<Set<string>>(() => loadUnreadSessionIds());
   const previousRunningSessionIdsRef = useRef<Set<string>>(new Set());
   // Once the SSE stream has delivered a frame it is the source of truth for
   // running state; late /api/sessions responses must not overwrite it.
   const sseAuthoritativeRef = useRef(false);
-  const sessionRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const explorerRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileExplorerRef = useRef<FileExplorerHandle>(null);
   // Overlay-style scrollbar: only visible while the list is actually scrolling.
   const listScrollHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -274,11 +270,6 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         return next.size === prev.size ? prev : next;
       });
       setError(null);
-      if (!showLoading) {
-        setSessionRefreshDone(true);
-        if (sessionRefreshTimerRef.current) clearTimeout(sessionRefreshTimerRef.current);
-        sessionRefreshTimerRef.current = setTimeout(() => setSessionRefreshDone(false), 2000);
-      }
     } catch (e) {
       setError(String(e));
     } finally {
@@ -501,8 +492,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       const data = await res.json().catch(() => ({})) as { error?: string; dirty?: boolean };
       if (!res.ok) {
         if (data.dirty && !force) {
-          // Dirty worktree — ask the user to confirm a force removal
-          setWtConfirmRemove(path);
+          // Dirty worktree — escalate the confirm row to a force removal
+          setWtConfirmRemove({ path, force: true });
           return;
         }
         setWtError(data.error ?? `HTTP ${res.status}`);
@@ -577,6 +568,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     ? {
         label: t("sidebar.openRepoRoot"),
         title: t("sidebar.openRepoRootTitle"),
+        onClick: () => setSelectedCwd(worktreeState.projectRoot),
       }
     : null;
   const worktreeLoading = Boolean(selectedCwd && worktreeLoadingCwd === selectedCwd);
@@ -585,11 +577,18 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       ? {
            label: t("sidebar.worktrees"),
            title: t("sidebar.checkingWorktrees"),
+           onClick: undefined,
         }
       : null);
 
-  // Build parent-child tree within the filtered set
-  const sessionTree = buildSessionTree(filteredSessions);
+  // Build parent-child tree within the filtered set, narrowed by the search box
+  const sessionSearch = sessionQuery.trim().toLowerCase();
+  const searchedSessions = sessionSearch
+    ? filteredSessions.filter((s) =>
+        (s.name ?? "").toLowerCase().includes(sessionSearch)
+        || s.firstMessage.toLowerCase().includes(sessionSearch))
+    : filteredSessions;
+  const sessionTree = buildSessionTree(searchedSessions);
 
   return (
     <div className="session-sidebar" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
@@ -627,7 +626,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           {t("sidebar.newChat")}
         </button>
 
-        {/* Row 2: current folder — flat row, refresh icon revealed on hover */}
+        {/* Row 2: current folder — flat row */}
         <div className="sidebar-folder-row" style={{ display: "flex", alignItems: "center", gap: 2 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <ProjectPicker
@@ -639,22 +638,6 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               variant="block"
             />
           </div>
-          <button
-            className={`native-icon-button sidebar-refresh-button${sessionRefreshDone ? " is-done" : ""}`}
-            onClick={() => loadSessions(false)}
-            title={t("sidebar.refresh")}
-          >
-            {sessionRefreshDone ? (
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            ) : (
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                <path d="M3 3v5h5" />
-              </svg>
-            )}
-          </button>
         </div>
 
         {/* Worktree switcher — shown only for git projects at a checkout top
@@ -726,18 +709,19 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                       return shown;
                     })().map((wt) => {
                       const isCurrent = wt.path === selectedCwd || (wt.isMain && !worktreeState.worktrees.some((w) => w.path === selectedCwd));
-                      if (wtConfirmRemove === wt.path) {
+                      if (wtConfirmRemove?.path === wt.path) {
+                        const isForce = wtConfirmRemove.force;
                         return (
                           <div key={wt.path} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", borderBottom: "1px solid var(--border)", background: "color-mix(in srgb, var(--danger) 6%, transparent)" }}>
                             <span style={{ flex: 1, fontSize: 11, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              {t("sidebar.forceRemoveCheckout")}
+                              {isForce ? t("sidebar.forceRemoveCheckout") : t("sidebar.confirmRemoveWorktree")}
                             </span>
                             <button
-                              onClick={() => void handleRemoveWorktree(wt.path, true)}
+                              onClick={() => void handleRemoveWorktree(wt.path, isForce)}
                               disabled={wtBusy}
                               style={{ padding: "3px 9px", background: "var(--danger)", border: "none", borderRadius: 5, color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
                             >
-                              {t("sidebar.force")}
+                              {isForce ? t("sidebar.force") : t("i18n.remove")}
                             </button>
                             <button
                               onClick={() => setWtConfirmRemove(null)}
@@ -789,7 +773,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                           </button>
                           {!wt.isMain && (
                             <button
-                              onClick={() => void handleRemoveWorktree(wt.path, false)}
+                              onClick={() => { setWtError(null); setWtConfirmRemove({ path: wt.path, force: false }); }}
                               disabled={wtBusy}
                                title={t("sidebar.removeWorktreeTitle", { path: wt.path })}
                               style={{
@@ -935,10 +919,13 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           <button
             type="button"
             className="sidebar-header-row"
-            aria-disabled="true"
-            tabIndex={-1}
+            aria-disabled={inactiveWorktreeSelector.onClick ? undefined : "true"}
+            tabIndex={inactiveWorktreeSelector.onClick ? undefined : -1}
+            onClick={inactiveWorktreeSelector.onClick}
             title={inactiveWorktreeSelector.title}
-            style={{ color: "var(--text-dim)", cursor: "default", opacity: 0.82 }}
+            style={inactiveWorktreeSelector.onClick
+              ? { color: "var(--text-muted)" }
+              : { color: "var(--text-dim)", cursor: "default", opacity: 0.82 }}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
               <line x1="6" y1="3" x2="6" y2="15" />
@@ -952,25 +939,67 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       </div>
 
       {(selectedCwdProp || selectedCwd) && (
-        <div className="sidebar-view-switcher" role="tablist" aria-label="Sidebar view">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={sidebarView === "chats"}
-            className={sidebarView === "chats" ? "is-active" : undefined}
-            onClick={() => setSidebarView("chats")}
-          >
-            Chats
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={sidebarView === "files"}
-            className={sidebarView === "files" ? "is-active" : undefined}
-            onClick={() => setSidebarView("files")}
-          >
-            Files
-          </button>
+        <div className="sidebar-view-switcher" data-active={sidebarView}>
+          <div className="sidebar-view-switcher-track" role="tablist" aria-label={t("sidebar.viewSwitcher")}>
+            <span className="sidebar-view-switcher-thumb" aria-hidden="true" />
+            <button
+              type="button"
+              role="tab"
+              aria-selected={sidebarView === "chats"}
+              className={sidebarView === "chats" ? "is-active" : undefined}
+              onClick={() => setSidebarView("chats")}
+            >
+              {t("sidebar.tabChats")}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={sidebarView === "files"}
+              className={sidebarView === "files" ? "is-active" : undefined}
+              onClick={() => setSidebarView("files")}
+            >
+              {t("sidebar.tabFiles")}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Session search — narrows the list to matching titles / first messages */}
+      {(selectedCwdProp || selectedCwd) && sidebarView === "chats" && (
+        <div className="sidebar-search-wrap">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="sidebar-search-icon">
+            <circle cx="11" cy="11" r="7" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            type="search"
+            className="sidebar-search-input"
+            value={sessionQuery}
+            onChange={(e) => setSessionQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.stopPropagation();
+                if (sessionQuery) setSessionQuery("");
+                else e.currentTarget.blur();
+              }
+            }}
+            placeholder={t("sidebar.searchSessions")}
+            aria-label={t("sidebar.searchSessions")}
+          />
+          {sessionQuery && (
+            <button
+              type="button"
+              className="sidebar-search-clear"
+              onClick={() => setSessionQuery("")}
+              title={t("sidebar.clearSearch")}
+              aria-label={t("sidebar.clearSearch")}
+            >
+              <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true">
+                <line x1="2" y1="2" x2="8" y2="8" />
+                <line x1="8" y1="2" x2="2" y2="8" />
+              </svg>
+            </button>
+          )}
         </div>
       )}
 
@@ -981,14 +1010,36 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             {t("sidebar.loading")}
           </div>
         )}
-        {error && (
-          <div style={{ padding: "12px 14px", color: "var(--danger)", fontSize: 12 }}>
-            {error}
+        {error && !loading && (
+          <div style={{ padding: "14px", fontSize: 12 }}>
+            <div style={{ color: "var(--text)", fontWeight: 600, marginBottom: 3 }}>
+              {t("sidebar.loadFailed")}
+            </div>
+            <div style={{ color: "var(--text-dim)", fontSize: 11, lineHeight: 1.4, overflowWrap: "anywhere", marginBottom: 8 }}>
+              {error}
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadSessions(true)}
+              style={{
+                height: 26, padding: "0 10px",
+                border: "1px solid var(--separator)", borderRadius: 7,
+                background: "var(--surface)", color: "var(--text)",
+                fontSize: 11.5, fontWeight: 550, cursor: "pointer",
+              }}
+            >
+              {t("common.retry")}
+            </button>
           </div>
         )}
         {!loading && !error && filteredSessions.length === 0 && (
           <div style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: 12 }}>
             {t("sidebar.noSessions")}
+          </div>
+        )}
+        {!loading && !error && filteredSessions.length > 0 && searchedSessions.length === 0 && (
+          <div style={{ padding: "16px 14px", color: "var(--text-muted)", fontSize: 12 }}>
+            {t("sidebar.noMatchingSessions")}
           </div>
         )}
         {sessionTree.map((node) => (
@@ -1040,7 +1091,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 textAlign: "left",
               }}
             >
-              Project files
+              {t("sidebar.projectFiles")}
             </div>
             {changesCount > 0 && (
               <ToolbarIconButton
@@ -1068,31 +1119,6 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                   <path d="m17 8-5-5-5 5" />
                   <path d="M12 3v12" />
                 </svg>
-            </ToolbarIconButton>
-            <ToolbarIconButton
-              onClick={() => {
-                if (onExplorerRefresh) onExplorerRefresh();
-                else setExplorerKey((k) => k + 1);
-                setExplorerRefreshDone(true);
-                if (explorerRefreshTimerRef.current) clearTimeout(explorerRefreshTimerRef.current);
-                explorerRefreshTimerRef.current = setTimeout(() => setExplorerRefreshDone(false), 2000);
-              }}
-              title={t("sidebar.refreshExplorer")}
-              skipHover={explorerRefreshDone}
-              color={explorerRefreshDone ? "var(--success)" : "var(--text-dim)"}
-              background={explorerRefreshDone ? "rgba(74,222,128,0.18)" : "none"}
-              marginRight={6}
-            >
-              {explorerRefreshDone ? (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              ) : (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                  <path d="M3 3v5h5" />
-                </svg>
-              )}
             </ToolbarIconButton>
           </div>
           <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
@@ -1144,7 +1170,7 @@ function SessionTreeItem({
         {depth > 0 && (
           <div style={{
             position: "absolute",
-            left: depth * 12 + 6,
+            left: depth * 20 + 6,
             top: 0, bottom: 0,
             width: 1,
             background: "var(--border)",
@@ -1383,7 +1409,7 @@ function SessionItem({
         height: ITEM_HEIGHT,
         display: "flex",
         alignItems: "center",
-        paddingLeft: depth > 0 ? depth * 12 + 14 : 14,
+        paddingLeft: depth > 0 ? depth * 20 + 14 : 14,
         paddingRight: 8,
         cursor: confirmDelete || renaming ? "default" : "pointer",
         background: confirmDelete
@@ -1466,8 +1492,8 @@ function SessionItem({
       ) : (
         /* ── Normal view: single line — leading icon + title + "…" menu ── */
         <>
-          {/* Leading icon only as a status reminder: running / unread / fork child.
-              Plain sessions keep an empty slot so titles stay aligned. */}
+          {/* Leading icon: running / unread / fork child, falling back to a
+              chat-bubble glyph (Claude Desktop style) for plain sessions. */}
           {isRunning ? (
             <RunningSessionIndicator />
           ) : isUnread ? (
@@ -1480,7 +1506,9 @@ function SessionItem({
               <path d="M18 9a9 9 0 0 1-9 9" />
             </svg>
           ) : (
-            <span aria-hidden="true" style={{ width: 14, height: 14, flexShrink: 0 }} />
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+            </svg>
           )}
           <span
             className="session-item-title"

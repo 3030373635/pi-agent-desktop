@@ -444,10 +444,6 @@ export function AppShell() {
     setAutoNameStatus({ kind: "idle" });
   }, [selectedSession?.id]);
 
-  const handleExplorerRefresh = useCallback(() => {
-    setExplorerRefreshKey((k) => k + 1);
-  }, []);
-
   const handleSessionForked = useCallback((newSessionId: string) => {
     setRefreshKey((k) => k + 1);
     setSessionKey((k) => k + 1);
@@ -597,11 +593,11 @@ export function AppShell() {
   const activeCwdName = activeCwd ? getFileName(activeCwd) || activeCwd : null;
   const windowTitle = activeCwdName ? `${activeCwdName} - ${PRODUCT_NAME}` : PRODUCT_NAME;
   const topBarTitle = selectedSession
-    ? selectedSession.name || selectedSession.firstMessage || "Untitled task"
+    ? selectedSession.name || selectedSession.firstMessage || translate("appshell.untitledTask")
     : showChat
-      ? "New task"
+      ? translate("appshell.newTask")
       : PRODUCT_NAME;
-  const topBarSubtitle = activeCwdName ?? "Local coding agent";
+  const topBarSubtitle = activeCwdName ?? translate("appshell.subtitle");
 
   useEffect(() => {
     const syncWindowTitle = () => {
@@ -668,7 +664,6 @@ export function AppShell() {
         onOpenFile={handleOpenFile}
         selectedFilePath={activeFileTab?.filePath ?? null}
         explorerRefreshKey={explorerRefreshKey}
-        onExplorerRefresh={handleExplorerRefresh}
         onAtMention={handleAtMention}
         onAtMentions={handleAtMentions}
         headerControls={sidebarHeaderControls}
@@ -992,17 +987,17 @@ export function AppShell() {
                 const isSuccess = autoNameStatus.kind === "success";
                 const isError = autoNameStatus.kind === "error";
                 const nameLabel = autoNameStatus.kind === "naming"
-                  ? "Generating…"
+                  ? translate("title.generating")
                   : isSuccess
-                    ? "Title updated"
+                    ? translate("title.updated")
                     : isError
-                      ? "Generation failed"
-                      : "Generate title";
+                      ? translate("title.failed")
+                      : translate("title.generate");
                 const nameDescription = !hasMessages
-                  ? "Available after the first message"
+                  ? translate("appshell.afterFirstMessage")
                   : isError
                     ? autoNameStatus.message
-                    : "Create a concise title for this session";
+                    : translate("title.generateSession");
 
                 return (
                   <div className="app-topbar-more" ref={topMoreRef}>
@@ -1013,8 +1008,8 @@ export function AppShell() {
                         setActiveTopPanel(null);
                         setTopMoreOpen((open) => !open);
                       }}
-                      title="More session actions"
-                      aria-label="More session actions"
+                      title={translate("appshell.moreActions")}
+                      aria-label={translate("appshell.moreActions")}
                       aria-expanded={topMoreOpen}
                       aria-haspopup="menu"
                       style={{
@@ -1034,10 +1029,10 @@ export function AppShell() {
                         <circle cx="12" cy="12" r="1.65" />
                         <circle cx="19" cy="12" r="1.65" />
                       </svg>
-                      {!isMobile && <span>More</span>}
+                      {!isMobile && <span>{translate("appshell.more")}</span>}
                     </button>
                     {topMoreOpen && (
-                      <div className="native-popover app-topbar-more-menu" role="menu" aria-label="More session actions">
+                      <div className="native-popover app-topbar-more-menu" role="menu" aria-label={translate("appshell.moreActions")}>
                         <button
                           className="app-topbar-more-item"
                           type="button"
@@ -1100,8 +1095,8 @@ export function AppShell() {
                             </svg>
                           </span>
                           <span className="app-topbar-more-copy">
-                            <span>System prompt</span>
-                            <small>{systemPrompt === null ? "Loads after the first message" : systemPrompt ? "View active instructions" : "Tools are disabled"}</small>
+                            <span>{translate("system.prompt")}</span>
+                            <small>{systemPrompt === null ? translate("appshell.systemLoads") : systemPrompt ? translate("appshell.viewInstructions") : translate("appshell.toolsDisabled")}</small>
                           </span>
                         </button>
                         {(() => {
@@ -1115,7 +1110,7 @@ export function AppShell() {
                           if (contextUsage?.contextWindow && contextUsage.percent !== null) {
                             parts.push(`${contextUsage.percent.toFixed(0)}% ctx`);
                           }
-                          const summary = parts.length > 0 ? parts.join(" · ") : "Tokens, cost and context";
+                          const summary = parts.length > 0 ? parts.join(" · ") : translate("appshell.statsHint");
                           return (
                             <button
                               className="app-topbar-more-item"
@@ -1135,7 +1130,7 @@ export function AppShell() {
                                 </svg>
                               </span>
                               <span className="app-topbar-more-copy">
-                                <span>Session stats</span>
+                                <span>{translate("appshell.sessionStats")}</span>
                                 <small>{summary}</small>
                               </span>
                             </button>
@@ -1501,7 +1496,7 @@ export function AppShell() {
                 </svg>
               </span>
               <strong>{translate("files.noneOpen")}</strong>
-              <span>Choose a file from the sidebar to preview it here.</span>
+              <span>{translate("files.choosePreview")}</span>
             </div>
           )}
         </div>
