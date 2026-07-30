@@ -64,9 +64,15 @@ app/api/
   skills/install/route.ts         POST install skills through npx skills add
   skills/search/route.ts          GET/POST skills.sh search
   worktrees/route.ts              GET/POST/DELETE git worktrees
+  desktop/read-images/route.ts    POST read natively-picked images into attachment payloads
+  desktop/save/route.ts           POST copy a file to, or write bytes at, a natively-picked path
 
 lib/
   agent-client.ts      typed fetch helper for /api/agent commands
+  app-prefs.ts         APP_PREF_KEYS + typed localStorage accessors (SSR/private-mode safe)
+  desktop-connection.ts useDesktopConnection() — local server health probe for the reconnect banner
+  desktop-native.ts    native dialogs, open/reveal path, external links, save/import, window lifecycle
+  desktop-notify.ts    native completion notifications (skipped while the window is focused)
   draft-store.ts       local draft persistence helpers
   file-access.ts       allowed file roots for /api/files and worktrees
   file-paths.ts        client/server path encoding helpers
@@ -78,6 +84,7 @@ lib/
   tool-presets.ts     PRESET_NONE/DEFAULT/FULL + getPresetFromTools()
   types.ts            shared TypeScript types
   normalize.ts        normalizeToolCalls() — field name mismatch between file format and our types
+  workspace-state.ts  persisted session/cwd/file-tab restore for desktop cold starts
   worktree.ts         project/worktree resolution and git worktree operations
 
 components/
@@ -175,6 +182,20 @@ Newer pi emits `compaction_start` / `compaction_end`; older versions emitted `au
 
 ### Exported session HTML
 - `/api/sessions/[id]/export` delegates to pi's export helper, then patches recursive tree helpers in the generated HTML to iterative versions so very deep linear sessions do not overflow the browser call stack.
+
+### Desktop shell (Tauri)
+- `lib/desktop-native.ts` is the only place the UI touches Tauri APIs; every entry point checks `isTauriDesktop()` and degrades to a web equivalent. Tauri commands are declared in `src-tauri/src/lib.rs`, their permissions in `src-tauri/permissions/desktop-shell.toml`, and both must be listed in `src-tauri/capabilities/desktop-dialog.json` or the call fails at runtime only.
+- `/api/desktop/read-images` and `/api/desktop/save` deliberately accept **any** absolute path: the path comes from a native dialog the server cannot predict, so `lib/file-access.ts` allow-lists do not apply (`save` still allow-lists its *source*). They are guarded only by `isApiRequestAllowed`. If these ever need locking down, add a desktop-only token — a path allow-list would break the feature.
+- `read-images` caps the file count at `MAX_ATTACHED_IMAGES` from `lib/image-attachments.ts`. Keep it derived from that constant; a separate literal silently 400s selections the composer considered valid.
+- Open a local path with `explorer.exe` on Windows, never `cmd.exe /C start` — Rust's argument escaping does not apply to the cmd parser, so a legal path like `C:\src\R&D\x.txt` would split into commands.
+- `lib/app-prefs.ts` owns every `localStorage` key. Theme is additionally mirrored into the app config dir via the `set_ui_theme` command, because the packaged server's port (and therefore the WebView origin, and therefore `localStorage`) can change between cold starts.
+- `lib/workspace-state.ts` restores the last session/cwd/file tabs on cold start. URL params always win over the persisted workspace.
+- `useDesktopConnection` polls `/api/home` to drive the offline banner. Its cleanup must stop in-flight probes from rescheduling, otherwise an unmount leaves a timer nobody owns and it pings forever.
+
+### Upstream merge sentinels (not the same "fork" as session fork)
+This repo is a fork of `agegr/pi-web` and periodically merges upstream. `components/fork-extractions.test.mjs` guards the failure mode that a clean merge can still be wrong: code this fork *moved* to another file reappears at its origin, or a fork change is silently reverted. Git does not track cross-file moves, so neither shows up in `tsc`, eslint, or the upstream suite.
+
+When one of those assertions fails, the default is to restore the behaviour, not to delete the assertion. A failure saying a marker is "absent from the origin but also from the extraction targets — it looks deleted, not moved" means the feature is probably gone: that is exactly how the project-picker filter box was found missing after a restyle had left every project past the 7-row cap unreachable. Risk levels live in `scripts/fork-ownership.json`; the reasoning is in `docs/ownership-boundaries.md`.
 
 ## Pi Session File Format
 

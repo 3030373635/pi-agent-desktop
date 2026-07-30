@@ -22,11 +22,18 @@ import { UpdateReminder } from "./UpdateReminder";
 import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { APP_PREF_KEYS, getPref, getPrefBool, getPrefJson, setPref, setPrefJson } from "@/lib/app-prefs";
 import { copyText } from "@/lib/clipboard";
+import { useDesktopConnection } from "@/lib/desktop-connection";
+import { isTauriDesktop, setCloseQuitsNative } from "@/lib/desktop-native";
 import { getFileName } from "@/lib/file-paths";
 import { buildAtMentionText, buildFileAtMentionsText, buildFileLineMentionText } from "@/lib/file-fuzzy";
 import { PRODUCT_NAME } from "@/lib/branding";
-import { getInitialNavigation } from "@/lib/initial-navigation";
+import {
+  resolveInitialNavigation,
+  workspaceFileTabsMatchContext,
+  type PersistedWorkspace,
+} from "@/lib/workspace-state";
 import { WindowControls, useDesktopChrome } from "./desktop";
 import type { SessionInfo, SessionTreeNode } from "@/lib/types";
 import type { ProjectTrustStatus } from "@/lib/api-types";
@@ -44,7 +51,9 @@ const TOP_BAR_ICON_BUTTON_SIZE = 36;
 export function AppShell() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [initialNavigation] = useState(() => getInitialNavigation(searchParams));
+  const [persistedWorkspace] = useState(() => getPrefJson<PersistedWorkspace>(APP_PREF_KEYS.workspace));
+  const [initialNavigation] = useState(() => resolveInitialNavigation(searchParams, persistedWorkspace));
+  const [workspaceHydrated, setWorkspaceHydrated] = useState(false);
   const { isDark, toggleTheme } = useTheme();
   const { locale, t: translate } = useI18n();
   const isMobile = useIsMobile();
@@ -205,12 +214,16 @@ export function AppShell() {
   const [resizingColumn, setResizingColumn] = useState<"sidebar" | "rightPanel" | null>(null);
 
   useEffect(() => {
-    const sw = Number(localStorage.getItem("pi-sidebar-width"));
+    const sw = Number(getPref(APP_PREF_KEYS.sidebarWidth));
     if (sw >= SIDEBAR_MIN && sw <= SIDEBAR_MAX) setSidebarWidth(sw);
-    const rw = Number(localStorage.getItem("pi-right-panel-width"));
+    const rw = Number(getPref(APP_PREF_KEYS.rightPanelWidth));
     if (rw >= RIGHT_PANEL_MIN) setRightPanelWidth(rw);
-     
+    if (isTauriDesktop()) {
+      void setCloseQuitsNative(getPrefBool(APP_PREF_KEYS.closeQuits, false));
+    }
   }, []);
+
+  const { state: connectionState, retry: retryConnection } = useDesktopConnection();
 
   const beginColumnResize = useCallback((which: "sidebar" | "rightPanel", e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -237,7 +250,10 @@ export function AppShell() {
       setResizingColumn(null);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
-      localStorage.setItem(which === "sidebar" ? "pi-sidebar-width" : "pi-right-panel-width", String(lastWidth));
+      setPref(
+        which === "sidebar" ? APP_PREF_KEYS.sidebarWidth : APP_PREF_KEYS.rightPanelWidth,
+        String(lastWidth),
+      );
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
@@ -330,7 +346,6 @@ export function AppShell() {
       if (prev && prev !== cwd) return null;
       return prev;
     });
-    setSessionKey((k) => k + 1);
     setBranchTree([]);
     setBranchActiveLeafId(null);
     setSystemPrompt(null);
@@ -349,7 +364,8 @@ export function AppShell() {
   const handleSelectSession = useCallback((session: SessionInfo, isRestore = false) => {
     setNewSessionCwd(null);
     setSelectedSession(session);
-    setSessionKey((k) => k + 1);
+    // Do not bump sessionKey here — ChatWindow stays mounted and swaps
+    // session data in place so the fixed input dock does not flash.
     setSystemPrompt(null);
     setInitialSessionRestored(true);
     // On mobile, collapse the overlay drawer so the chat is revealed after pick.
@@ -369,7 +385,6 @@ export function AppShell() {
   const handleNewSession = useCallback((_sessionId: string, cwd: string) => {
     setSelectedSession(null);
     setNewSessionCwd(cwd);
-    setSessionKey((k) => k + 1);
     setBranchTree([]);
     setBranchActiveLeafId(null);
     setSystemPrompt(null);
@@ -451,7 +466,6 @@ export function AppShell() {
 
   const handleSessionForked = useCallback((newSessionId: string) => {
     setRefreshKey((k) => k + 1);
-    setSessionKey((k) => k + 1);
     setNewSessionCwd(null);
     setSelectedSession((prev) => ({
       ...(prev ?? { path: "", cwd: "", created: "", modified: "", messageCount: 0, firstMessage: "" }),
@@ -471,7 +485,6 @@ export function AppShell() {
       const cwd = selectedSession.cwd;
       setSelectedSession(null);
       setNewSessionCwd(cwd ?? null);
-      setSessionKey((k) => k + 1);
       setBranchTree([]);
       setBranchActiveLeafId(null);
       setSystemPrompt(null);
@@ -535,11 +548,20 @@ export function AppShell() {
 
   const handleViewFullHistory = useCallback(() => {
     if (!selectedSession) return;
-    window.open(
-      `/api/sessions/${encodeURIComponent(selectedSession.id)}/export?inline=1`,
-      "_blank",
-      "noopener,noreferrer",
-    );
+    const exportUrl = `/api/sessions/${encodeURIComponent(selectedSession.id)}/export`;
+    void (async () => {
+      const { downloadUrlAsFile, isTauriDesktop, openExternal } = await import("@/lib/desktop-native");
+      if (isTauriDesktop()) {
+        const name = (selectedSession.name || selectedSession.id).replace(/[^\w.-]+/g, "_") || "session";
+        try {
+          await downloadUrlAsFile(`${exportUrl}?inline=0`, `${name}.html`);
+        } catch (error) {
+          console.error("Failed to export session:", error);
+        }
+        return;
+      }
+      await openExternal(`${exportUrl}?inline=1`);
+    })();
   }, [selectedSession]);
 
   // Show chat area if a session is selected, or if we have a cwd to start a new session in
@@ -548,6 +570,76 @@ export function AppShell() {
   const projectTrustCwd = selectedSession?.cwd ?? effectiveNewSessionCwd;
   // While restoring initial session from URL, don't show the placeholder
   const showPlaceholder = initialSessionRestored && !showChat;
+
+  // Reopen the last file tabs after the cold-start session/cwd restore settles.
+  useEffect(() => {
+    if (!initialSessionRestored || workspaceHydrated) return;
+
+    const cwd = selectedSession?.cwd ?? newSessionCwd ?? activeCwd;
+    const canMatch = workspaceFileTabsMatchContext(
+      persistedWorkspace,
+      selectedSession?.id ?? null,
+      cwd,
+    );
+    const hasSavedTabs = Boolean(persistedWorkspace?.fileTabs?.length);
+
+    // Wait for sidebar auto-select before giving up on tab restore.
+    if (hasSavedTabs && !canMatch && !cwd && !showPlaceholder) return;
+
+    if (canMatch && persistedWorkspace) {
+      const tabs: Tab[] = persistedWorkspace.fileTabs.map((tab) => ({
+        id: `file:${tab.filePath}`,
+        label: tab.label,
+        filePath: tab.filePath,
+        sourceSessionId: tab.sourceSessionId,
+        initialDisplayMode: tab.initialDisplayMode,
+      }));
+      setFileTabs(tabs);
+      const activeId = persistedWorkspace.activeFileTabId;
+      setActiveFileTabId(
+        activeId && tabs.some((tab) => tab.id === activeId)
+          ? activeId
+          : (tabs[0]?.id ?? null),
+      );
+      setRightPanelOpen(Boolean(persistedWorkspace.rightPanelOpen && tabs.length > 0));
+    }
+    setWorkspaceHydrated(true);
+  }, [
+    initialSessionRestored,
+    workspaceHydrated,
+    persistedWorkspace,
+    selectedSession?.id,
+    selectedSession?.cwd,
+    newSessionCwd,
+    activeCwd,
+    showPlaceholder,
+  ]);
+
+  // Persist workspace so the next desktop cold start can restore chat + files.
+  useEffect(() => {
+    if (!workspaceHydrated) return;
+    setPrefJson(APP_PREF_KEYS.workspace, {
+      sessionId: selectedSession?.id ?? null,
+      cwd: selectedSession?.cwd ?? newSessionCwd ?? activeCwd,
+      fileTabs: fileTabs.map((tab) => ({
+        filePath: tab.filePath,
+        label: tab.label,
+        sourceSessionId: tab.sourceSessionId,
+        initialDisplayMode: tab.initialDisplayMode,
+      })),
+      activeFileTabId,
+      rightPanelOpen,
+    } satisfies PersistedWorkspace);
+  }, [
+    workspaceHydrated,
+    selectedSession?.id,
+    selectedSession?.cwd,
+    newSessionCwd,
+    activeCwd,
+    fileTabs,
+    activeFileTabId,
+    rightPanelOpen,
+  ]);
 
   useEffect(() => {
     setProjectTrust(null);
@@ -794,11 +886,49 @@ export function AppShell() {
     <div
       className={`app-shell${resizingColumn ? " is-col-resizing" : ""}`}
       style={{
-        display: "flex", height: "100dvh", overflow: "hidden", background: "var(--bg)",
+        display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden", background: "var(--bg)",
         "--sidebar-width": `${sidebarWidth}px`,
         ...(rightPanelWidth != null ? { "--right-panel-width": `${rightPanelWidth}px` } : null),
       } as React.CSSProperties}
     >
+      {connectionState === "offline" && (
+        <div
+          role="alert"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 10,
+            flexShrink: 0,
+            padding: "7px 12px",
+            background: "color-mix(in srgb, var(--danger) 14%, var(--bg-panel))",
+            borderBottom: "1px solid color-mix(in srgb, var(--danger) 35%, var(--border))",
+            color: "var(--text)",
+            fontSize: 12,
+            zIndex: 300,
+          }}
+        >
+          <span>{translate("connection.offline")}</span>
+          <button
+            type="button"
+            onClick={retryConnection}
+            style={{
+              height: 24,
+              padding: "0 10px",
+              border: "1px solid var(--border)",
+              borderRadius: 5,
+              background: "var(--bg)",
+              color: "var(--accent)",
+              cursor: "pointer",
+              fontSize: 11,
+              fontWeight: 600,
+            }}
+          >
+            {translate("connection.retry")}
+          </button>
+        </div>
+      )}
+      <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
       {/* Mobile overlay backdrop */}
       <div
         className={`sidebar-overlay-backdrop${mobileSidebarReady ? "" : " sidebar-mobile-pending"}`}
@@ -1505,6 +1635,7 @@ export function AppShell() {
             </div>
           )}
         </div>
+      </div>
       </div>
     </div>
     {modelsConfigOpen && <ModelsConfig onClose={() => { setModelsConfigOpen(false); setModelsRefreshKey((k) => k + 1); }} />}

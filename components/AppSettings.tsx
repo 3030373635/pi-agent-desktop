@@ -9,10 +9,13 @@ import {
   APP_VERSION_DISPLAY,
   PRODUCT_NAME,
 } from "@/lib/branding";
+import { APP_PREF_KEYS, getPrefBool, setPrefBool } from "@/lib/app-prefs";
 import {
   installLatestDesktopRelease,
+  isTauriDesktop,
   type DesktopUpgradeProgress,
 } from "@/lib/desktop-updater";
+import { handleExternalLinkClick, quitAppNative, setCloseQuitsNative } from "@/lib/desktop-native";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
 
@@ -65,11 +68,14 @@ function ChoiceButton({
 export function AppSettings({ onClose }: { onClose: () => void }) {
   const { t, locale, setLocale, supportedLocales } = useI18n();
   const { theme, setTheme } = useTheme();
+  const desktop = isTauriDesktop();
   const [components, setComponents] = useState<AppComponentReleaseInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [upgradeProgress, setUpgradeProgress] = useState<DesktopUpgradeProgress | null>(null);
   const [upgradeError, setUpgradeError] = useState<string | null>(null);
+  const [closeQuits, setCloseQuits] = useState(() => getPrefBool(APP_PREF_KEYS.closeQuits, false));
+  const [notifyOnComplete, setNotifyOnComplete] = useState(() => getPrefBool(APP_PREF_KEYS.notifyOnComplete, true));
 
   useEffect(() => {
     const controller = new AbortController();
@@ -208,6 +214,7 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
                 target="_blank"
                 rel="noreferrer"
                 style={{ color: "var(--text-muted)", textDecoration: "none" }}
+                onClick={(event) => handleExternalLinkClick(event, APP_REPOSITORY_URL)}
               >
                 {APP_REPOSITORY}
                 <span aria-hidden="true" style={{ marginLeft: 4, color: "var(--text-dim)" }}>↗</span>
@@ -275,7 +282,13 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
               <div className="native-inline-alert is-error" role="alert" style={{ marginTop: 10 }}>
                 {upgradeError}
                 {appRelease?.releaseUrl && (
-                  <a href={appRelease.releaseUrl} target="_blank" rel="noreferrer" style={{ marginLeft: 6, color: "inherit", fontWeight: 650 }}>
+                  <a
+                    href={appRelease.releaseUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ marginLeft: 6, color: "inherit", fontWeight: 650 }}
+                    onClick={(event) => handleExternalLinkClick(event, appRelease.releaseUrl)}
+                  >
                     {t("appSettings.openRelease")}
                   </a>
                 )}
@@ -311,6 +324,60 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
               </ChoiceButton>
             </div>
           </div>
+
+          {desktop && (
+            <div className="native-settings-card" style={sectionCardStyle}>
+              <div style={sectionTitleStyle}>{t("appSettings.desktopSection")}</div>
+              <div style={sectionHintStyle}>{t("appSettings.desktopHint")}</div>
+              <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+                <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={closeQuits}
+                    onChange={(event) => {
+                      const next = event.target.checked;
+                      setCloseQuits(next);
+                      setPrefBool(APP_PREF_KEYS.closeQuits, next);
+                      void setCloseQuitsNative(next);
+                    }}
+                    style={{ marginTop: 2 }}
+                  />
+                  <span>
+                    <div style={{ fontSize: 12, fontWeight: 600 }}>{t("appSettings.closeQuits")}</div>
+                    <div style={{ marginTop: 2, color: "var(--text-dim)", fontSize: 11, lineHeight: 1.45 }}>
+                      {t("appSettings.closeQuitsHint")}
+                    </div>
+                  </span>
+                </label>
+                <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={notifyOnComplete}
+                    onChange={(event) => {
+                      const next = event.target.checked;
+                      setNotifyOnComplete(next);
+                      setPrefBool(APP_PREF_KEYS.notifyOnComplete, next);
+                    }}
+                    style={{ marginTop: 2 }}
+                  />
+                  <span>
+                    <div style={{ fontSize: 12, fontWeight: 600 }}>{t("appSettings.notifyOnComplete")}</div>
+                    <div style={{ marginTop: 2, color: "var(--text-dim)", fontSize: 11, lineHeight: 1.45 }}>
+                      {t("appSettings.notifyOnCompleteHint")}
+                    </div>
+                  </span>
+                </label>
+                <button
+                  type="button"
+                  className="native-button"
+                  onClick={() => void quitAppNative()}
+                  style={{ alignSelf: "flex-start", marginTop: 2 }}
+                >
+                  {t("appSettings.quitApp")}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </section>
     </div>

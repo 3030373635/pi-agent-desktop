@@ -16,19 +16,47 @@ use std::os::unix::process::CommandExt as _;
 use std::os::windows::process::CommandExt as _;
 
 use tauri::{
-    webview::NewWindowResponse, Manager, RunEvent, Url, WebviewUrl, WebviewWindow,
-    WebviewWindowBuilder,
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    webview::{Color, NewWindowResponse},
+    AppHandle, Manager, RunEvent, Theme, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
 };
 
 const WINDOW_LABEL: &str = "main";
 #[cfg(not(feature = "custom-protocol"))]
 const DEV_SERVER_URL: &str = "http://127.0.0.1:30141";
+/// Preferred localhost port for the packaged Next server. Keeping this stable
+/// matters because the webview's localStorage is origin-scoped (`host:port`).
+#[cfg(feature = "custom-protocol")]
+const DESKTOP_SERVER_PORT: u16 = 38471;
+#[cfg(feature = "custom-protocol")]
 const SERVER_START_TIMEOUT: Duration = Duration::from_secs(30);
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
+const LIGHT_WINDOW_BG: Color = Color(247, 247, 245, 255);
+const DARK_WINDOW_BG: Color = Color(28, 28, 30, 255);
+
 struct DesktopServer {
     child: Mutex<Option<Child>>,
+}
+
+/// When true, closing the main window quits the app; otherwise it hides to tray.
+struct CloseQuits(Mutex<bool>);
+
+fn show_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
+fn quit_application(app: &AppHandle) {
+    if let Some(server) = app.try_state::<DesktopServer>() {
+        server.stop();
+    }
+    app.exit(0);
 }
 
 impl DesktopServer {
@@ -118,6 +146,242 @@ fn open_external(url: &Url) {
             .creation_flags(CREATE_NO_WINDOW)
             .spawn();
     }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let _ = Command::new("xdg-open").arg(url.as_str()).spawn();
+    }
+}
+
+fn open_path_with_default_app(path: &Path) -> Result<(), String> {
+    if !path.exists() {
+        return Err(format!("Path does not exist: {}", path.display()));
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("/usr/bin/open")
+            .arg(path)
+            .spawn()
+            .map_err(|error| error.to_string())?;
+        return Ok(());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        // explorer.exe applies the default file association without going
+        // through the cmd parser, where `&` or `^` in an otherwise legal path
+        // (`C:\src\R&D\notes.txt`) would be read as a command separator.
+        Command::new("explorer.exe")
+            .arg(path)
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+            .map_err(|error| error.to_string())?;
+        return Ok(());
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        Command::new("xdg-open")
+            .arg(path)
+            .spawn()
+            .map_err(|error| error.to_string())?;
+        return Ok(());
+    }
+
+    #[allow(unreachable_code)]
+    Err("Opening local paths is unsupported on this platform".into())
+}
+
+fn reveal_path_in_file_manager(path: &Path) -> Result<(), String> {
+    if !path.exists() {
+        return Err(format!("Path does not exist: {}", path.display()));
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("/usr/bin/open")
+            .args(["-R"])
+            .arg(path)
+            .spawn()
+            .map_err(|error| error.to_string())?;
+        return Ok(());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("explorer.exe")
+            .arg(format!("/select,{}", path.to_string_lossy()))
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+            .map_err(|error| error.to_string())?;
+        return Ok(());
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let parent = if path.is_dir() {
+            path
+        } else {
+            path.parent().unwrap_or(path)
+        };
+        Command::new("xdg-open")
+            .arg(parent)
+            .spawn()
+            .map_err(|error| error.to_string())?;
+        return Ok(());
+    }
+
+    #[allow(unreachable_code)]
+    Err("Reveal in folder is unsupported on this platform".into())
+}
+
+#[tauri::command]
+fn open_external_url(url: String) -> Result<(), String> {
+    let parsed = Url::parse(&url).map_err(|error| error.to_string())?;
+    if !matches!(parsed.scheme(), "http" | "https" | "mailto") {
+        return Err("Only http, https, and mailto URLs can be opened externally".into());
+    }
+    open_external(&parsed);
+    Ok(())
+}
+
+#[tauri::command]
+fn open_path(path: String) -> Result<(), String> {
+    open_path_with_default_app(Path::new(&path))
+}
+
+#[tauri::command]
+fn reveal_item_in_dir(path: String) -> Result<(), String> {
+    reveal_path_in_file_manager(Path::new(&path))
+}
+
+#[tauri::command]
+fn set_close_quits(app: AppHandle, quit: bool) -> Result<(), String> {
+    if let Some(state) = app.try_state::<CloseQuits>() {
+        *state
+            .0
+            .lock()
+            .map_err(|_| "close-behavior lock poisoned".to_string())? = quit;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn quit_app(app: AppHandle) -> Result<(), String> {
+    quit_application(&app);
+    Ok(())
+}
+
+#[tauri::command]
+fn show_main_window_cmd(app: AppHandle) -> Result<(), String> {
+    show_main_window(&app);
+    Ok(())
+}
+
+/// Persist the UI theme outside the webview origin so cold starts keep the
+/// user's light/dark choice even when the local server port changes.
+#[tauri::command]
+fn set_ui_theme(app: AppHandle, theme: String) -> Result<(), String> {
+    let theme = normalize_theme(&theme).ok_or_else(|| {
+        "theme must be \"light\" or \"dark\"".to_string()
+    })?;
+    write_ui_prefs_theme(&app, theme)?;
+    apply_window_theme(&app, theme);
+    Ok(())
+}
+
+fn ui_prefs_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|error| error.to_string())?;
+    Ok(dir.join("ui-prefs.json"))
+}
+
+fn normalize_theme(theme: &str) -> Option<&'static str> {
+    match theme {
+        "light" => Some("light"),
+        "dark" => Some("dark"),
+        _ => None,
+    }
+}
+
+fn read_ui_prefs(app: &AppHandle) -> serde_json::Value {
+    let Ok(path) = ui_prefs_path(app) else {
+        return serde_json::json!({});
+    };
+    fs::read_to_string(path)
+        .ok()
+        .and_then(|raw| serde_json::from_str(&raw).ok())
+        .unwrap_or_else(|| serde_json::json!({}))
+}
+
+fn write_ui_prefs(app: &AppHandle, prefs: &serde_json::Value) -> Result<(), String> {
+    let path = ui_prefs_path(app)?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    let raw = serde_json::to_string_pretty(prefs).map_err(|error| error.to_string())?;
+    fs::write(path, raw).map_err(|error| error.to_string())
+}
+
+fn read_stored_theme(app: &AppHandle) -> Option<&'static str> {
+    read_ui_prefs(app)
+        .get("theme")
+        .and_then(|value| value.as_str())
+        .and_then(normalize_theme)
+}
+
+fn write_ui_prefs_theme(app: &AppHandle, theme: &str) -> Result<(), String> {
+    let mut prefs = read_ui_prefs(app);
+    prefs["theme"] = serde_json::Value::String(theme.to_string());
+    write_ui_prefs(app, &prefs)
+}
+
+#[cfg(feature = "custom-protocol")]
+fn read_last_server_port(app: &AppHandle) -> Option<u16> {
+    read_ui_prefs(app)
+        .get("serverPort")
+        .and_then(|value| value.as_u64())
+        .and_then(|port| u16::try_from(port).ok())
+        .filter(|port| *port > 0)
+}
+
+#[cfg(feature = "custom-protocol")]
+fn write_last_server_port(app: &AppHandle, port: u16) {
+    let mut prefs = read_ui_prefs(app);
+    prefs["serverPort"] = serde_json::Value::from(port);
+    let _ = write_ui_prefs(app, &prefs);
+}
+
+fn theme_background_color(theme: &str) -> Color {
+    if theme == "dark" {
+        DARK_WINDOW_BG
+    } else {
+        LIGHT_WINDOW_BG
+    }
+}
+
+fn theme_bootstrap_script(theme: &str) -> String {
+    // Runs before page scripts so localStorage/class match the persisted
+    // preference even on a fresh webview origin (new localhost port).
+    format!(
+        r#"(function(){{try{{localStorage.setItem("pi-theme","{theme}");var d="{theme}"==="dark";document.documentElement.classList.toggle("dark",d);document.documentElement.style.colorScheme=d?"dark":"light";}}catch(e){{}}}})();"#
+    )
+}
+
+fn apply_window_theme(app: &AppHandle, theme: &str) {
+    let Some(window) = app.get_webview_window(WINDOW_LABEL) else {
+        return;
+    };
+    let tauri_theme = if theme == "dark" {
+        Theme::Dark
+    } else {
+        Theme::Light
+    };
+    let _ = window.set_theme(Some(tauri_theme));
+    let _ = window.set_background_color(Some(theme_background_color(theme)));
 }
 
 fn same_origin(candidate: &Url, app_url: &Url) -> bool {
@@ -128,8 +392,9 @@ fn same_origin(candidate: &Url, app_url: &Url) -> bool {
 
 fn build_window(app: &tauri::AppHandle, app_url: Url) -> tauri::Result<WebviewWindow> {
     let navigation_origin = app_url.clone();
+    let stored_theme = read_stored_theme(app);
 
-    let builder = WebviewWindowBuilder::new(app, WINDOW_LABEL, WebviewUrl::External(app_url))
+    let mut builder = WebviewWindowBuilder::new(app, WINDOW_LABEL, WebviewUrl::External(app_url))
         .title("Pi Agent")
         .inner_size(1440.0, 900.0)
         .min_inner_size(900.0, 600.0)
@@ -152,16 +417,35 @@ fn build_window(app: &tauri::AppHandle, app_url: Url) -> tauri::Result<WebviewWi
             let _ = window.set_title(&title);
         });
 
+    // Force the native window chrome/background to match an explicit UI theme
+    // before the page paints — otherwise macOS dark mode flashes a black
+    // webview while the user has chosen light mode.
+    if let Some(theme) = stored_theme {
+        let tauri_theme = if theme == "dark" {
+            Theme::Dark
+        } else {
+            Theme::Light
+        };
+        builder = builder
+            .theme(Some(tauri_theme))
+            .background_color(theme_background_color(theme))
+            .initialization_script(theme_bootstrap_script(theme));
+    }
+
     // Hide the native title bar. macOS keeps the traffic-light controls
     // (overlaid on our own top bar); other platforms go fully frameless and
     // rely on custom window controls drawn in the web content instead.
     #[cfg(target_os = "macos")]
-    let builder = builder
-        .title_bar_style(tauri::TitleBarStyle::Overlay)
-        .hidden_title(true);
+    {
+        builder = builder
+            .title_bar_style(tauri::TitleBarStyle::Overlay)
+            .hidden_title(true);
+    }
 
     #[cfg(not(target_os = "macos"))]
-    let builder = builder.decorations(false);
+    {
+        builder = builder.decorations(false);
+    }
 
     builder.build()
 }
@@ -210,9 +494,30 @@ fn server_process_path(node_path: &Path) -> Option<std::ffi::OsString> {
 }
 
 #[cfg(feature = "custom-protocol")]
-fn choose_port() -> io::Result<u16> {
+fn choose_port(app: &AppHandle) -> io::Result<u16> {
+    let mut candidates = Vec::with_capacity(36);
+    if let Some(last) = read_last_server_port(app) {
+        candidates.push(last);
+    }
+    candidates.push(DESKTOP_SERVER_PORT);
+    for offset in 1u16..=32 {
+        candidates.push(DESKTOP_SERVER_PORT.saturating_add(offset));
+    }
+
+    for port in candidates {
+        if let Ok(listener) = TcpListener::bind((Ipv4Addr::LOCALHOST, port)) {
+            let chosen = listener.local_addr()?.port();
+            drop(listener);
+            write_last_server_port(app, chosen);
+            return Ok(chosen);
+        }
+    }
+
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
-    Ok(listener.local_addr()?.port())
+    let chosen = listener.local_addr()?.port();
+    drop(listener);
+    write_last_server_port(app, chosen);
+    Ok(chosen)
 }
 
 #[cfg(feature = "custom-protocol")]
@@ -278,7 +583,7 @@ fn start_packaged_server(
         .open(&log_path)?;
     let stderr = stdout.try_clone()?;
 
-    let port = choose_port()?;
+    let port = choose_port(app)?;
     let mut command = Command::new(&node_path);
     command
         .arg(&server_script)
@@ -324,8 +629,20 @@ fn start_development_server(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_process::init())
+        .manage(CloseQuits(Mutex::new(false)))
+        .invoke_handler(tauri::generate_handler![
+            open_external_url,
+            open_path,
+            reveal_item_in_dir,
+            set_close_quits,
+            quit_app,
+            show_main_window_cmd,
+            set_ui_theme
+        ])
         .setup(|app| {
             // The updater public key is embedded at compile time by the release
             // workflow. Local development builds intentionally omit it, which
@@ -348,13 +665,52 @@ pub fn run() {
 
             app.manage(server);
             build_window(app.handle(), url)?;
+
+            let show_item = MenuItem::with_id(app, "show", "Show Pi Agent", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", "Quit Pi Agent", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+            let icon = app
+                .default_window_icon()
+                .cloned()
+                .ok_or_else(|| std::io::Error::other("missing default window icon"))?;
+
+            let _tray = TrayIconBuilder::new()
+                .icon(icon)
+                .menu(&menu)
+                .tooltip("Pi Agent")
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => show_main_window(app),
+                    "quit" => quit_application(app),
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        show_main_window(tray.app_handle());
+                    }
+                })
+                .build(app)?;
+
             Ok(())
         })
         .on_window_event(|window, event| {
             if window.label() == WINDOW_LABEL {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                    api.prevent_close();
-                    let _ = window.hide();
+                    let quit = window
+                        .app_handle()
+                        .try_state::<CloseQuits>()
+                        .and_then(|state| state.0.lock().ok().map(|guard| *guard))
+                        .unwrap_or(false);
+                    if quit {
+                        quit_application(window.app_handle());
+                    } else {
+                        api.prevent_close();
+                        let _ = window.hide();
+                    }
                 }
             }
         })

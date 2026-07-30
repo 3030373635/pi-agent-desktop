@@ -150,6 +150,104 @@ export async function POST(
       return NextResponse.json(inspectUploadTargets(directory, fileNames));
     }
 
+    if (type === "import") {
+      const strategy = parseUploadConflictStrategy(request.nextUrl.searchParams.get("conflict"));
+      if (!strategy) {
+        return NextResponse.json({ error: "Invalid conflict strategy" }, { status: 400 });
+      }
+
+      const body = await request.json().catch(() => null) as { sourcePaths?: unknown } | null;
+      if (!Array.isArray(body?.sourcePaths) || !body.sourcePaths.every((item) => typeof item === "string")) {
+        return NextResponse.json({ error: "sourcePaths must be an array of strings" }, { status: 400 });
+      }
+      if (body.sourcePaths.length === 0) {
+        return NextResponse.json({ error: "No files selected" }, { status: 400 });
+      }
+
+      const sources: Array<{ sourcePath: string; fileName: string; size: number }> = [];
+      for (const rawPath of body.sourcePaths) {
+        const trimmed = rawPath.trim();
+        if (!trimmed || trimmed.includes("\0")) {
+          return NextResponse.json({ error: `Invalid source path: ${rawPath}` }, { status: 400 });
+        }
+        const useWindows = isWindowsAbsolutePath(trimmed);
+        const resolver = useWindows ? path.win32 : path;
+        if (!resolver.isAbsolute(trimmed)) {
+          return NextResponse.json({ error: `Source path must be absolute: ${rawPath}` }, { status: 400 });
+        }
+        const sourcePath = resolver.resolve(trimmed);
+        let stat: fs.Stats;
+        try {
+          stat = fs.lstatSync(sourcePath);
+        } catch {
+          return NextResponse.json({ error: `File not found: ${path.basename(sourcePath)}` }, { status: 404 });
+        }
+        if (!stat.isFile() || stat.isSymbolicLink()) {
+          return NextResponse.json({ error: `Not a regular file: ${path.basename(sourcePath)}` }, { status: 400 });
+        }
+        if (stat.size > MAX_UPLOAD_FILE_BYTES) {
+          return NextResponse.json({ error: "Each upload must be 25MB or smaller" }, { status: 413 });
+        }
+        sources.push({ sourcePath, fileName: path.basename(sourcePath), size: stat.size });
+      }
+
+      if (sources.reduce((total, file) => total + file.size, 0) > MAX_UPLOAD_TOTAL_BYTES) {
+        return NextResponse.json({ error: "Uploads must total 100MB or less" }, { status: 413 });
+      }
+
+      const fileNames = sources.map((file) => file.fileName);
+      const validationError = validateUploadFileNames(fileNames);
+      if (validationError) {
+        return NextResponse.json({ error: validationError }, { status: 400 });
+      }
+
+      const inspection = inspectUploadTargets(directory, fileNames);
+      if (strategy === "error" && inspection.conflicts.length > 0) {
+        return NextResponse.json({
+          error: "One or more files already exist",
+          conflicts: inspection.conflicts,
+          nonReplaceable: inspection.nonReplaceable,
+        }, { status: 409 });
+      }
+
+      const conflictSet = new Set(inspection.conflicts);
+      const nonReplaceableSet = new Set(inspection.nonReplaceable);
+      const uploaded: string[] = [];
+      const skipped: string[] = [];
+      const errors: Array<{ name: string; error: string }> = [];
+
+      for (const source of sources) {
+        const destination = path.join(directory, source.fileName);
+        if (conflictSet.has(source.fileName) && strategy === "skip") {
+          skipped.push(source.fileName);
+          continue;
+        }
+        if (conflictSet.has(source.fileName) && nonReplaceableSet.has(source.fileName)) {
+          errors.push({ name: source.fileName, error: "Cannot replace a directory or symbolic link" });
+          continue;
+        }
+        if (conflictSet.has(source.fileName)) {
+          try {
+            fs.unlinkSync(destination);
+          } catch (error) {
+            errors.push({ name: source.fileName, error: error instanceof Error ? error.message : String(error) });
+            continue;
+          }
+        }
+        try {
+          fs.copyFileSync(source.sourcePath, destination);
+          uploaded.push(source.fileName);
+        } catch (error) {
+          errors.push({ name: source.fileName, error: error instanceof Error ? error.message : String(error) });
+        }
+      }
+
+      return NextResponse.json(
+        { uploaded, skipped, errors },
+        { status: errors.length > 0 ? 207 : 200 },
+      );
+    }
+
     if (type !== "upload") {
       return NextResponse.json({ error: "Invalid upload request type" }, { status: 400 });
     }

@@ -6,6 +6,7 @@ import { resolveLocalFileHref } from "@/lib/file-links";
 import { encodeFilePathForApi } from "@/lib/file-paths";
 import { markdownRehypePlugins, markdownRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
 import { MermaidBlock, CodeBlock } from "./MermaidBlock";
+import { handleExternalLinkClick } from "@/lib/desktop-native";
 
 interface MarkdownBodyProps {
   children: string;
@@ -50,7 +51,13 @@ function buildComponents(
       const openFile = onOpenFile;
       if (!filePath || !openFile) {
         return (
-          <a href={href} {...props} target="_blank" rel="noopener noreferrer">
+          <a
+            href={href}
+            {...props}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(event) => handleExternalLinkClick(event, href)}
+          >
             {children}
           </a>
         );

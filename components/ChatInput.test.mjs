@@ -11,8 +11,13 @@ const jiti = createJiti(import.meta.url, {
 const { ChatInput, ModelErrorBanner } = await jiti.import("./ChatInput.tsx");
 const { I18nProvider } = await jiti.import("../hooks/useI18n.tsx");
 
+/** The banner reads its title through useI18n, so it needs the provider. */
+function renderWithI18n(element) {
+  return renderToStaticMarkup(React.createElement(I18nProvider, null, element));
+}
+
 test("renders the upstream model error", () => {
-  const html = renderToStaticMarkup(
+  const html = renderWithI18n(
     React.createElement(ModelErrorBanner, {
       error: "Invalid models.json schema:\nproviders.custom.models.0.id must not be empty",
     }),
@@ -24,7 +29,7 @@ test("renders the upstream model error", () => {
 });
 
 test("does not render an empty model error", () => {
-  assert.equal(renderToStaticMarkup(React.createElement(ModelErrorBanner, { error: null })), "");
+  assert.equal(renderWithI18n(React.createElement(ModelErrorBanner, { error: null })), "");
 });
 
 test("keeps the model selector visible when a model error leaves no options", () => {

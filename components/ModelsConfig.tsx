@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalDismiss } from "@/hooks/useModalDismiss";
+import { handleExternalLinkClick, openExternal } from "@/lib/desktop-native";
 import { ConfirmDangerButton } from "./ConfirmDangerButton";
 // Color icons (have their own fill colors — no background needed)
 import AnthropicIcon from "@lobehub/icons/es/Anthropic/components/Mono";
@@ -747,7 +748,7 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
       };
       if (data.type === "auth") {
         setLoginState({ phase: "auth", url: data.url!, instructions: data.instructions ?? null, token: data.token! });
-        window.open(data.url!, "_blank", "noopener,noreferrer");
+        void openExternal(data.url!);
       } else if (data.type === "device_code") {
         setLoginState({
           phase: "device_code",
@@ -756,7 +757,7 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
           intervalSeconds: data.intervalSeconds ?? null,
           expiresInSeconds: data.expiresInSeconds ?? null,
         });
-        window.open(data.verificationUri!, "_blank", "noopener,noreferrer");
+        void openExternal(data.verificationUri!);
       } else if (data.type === "prompt_request") {
         setLoginState({ phase: "prompt", message: data.message!, placeholder: data.placeholder ?? null, token: data.token! });
       } else if (data.type === "select_request") {
@@ -880,7 +881,13 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
             {loginState.phase === "auth" && (
               <p style={{ margin: 0, fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5 }}>
                 If the browser window did not open,{" "}
-                <a href={loginState.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", wordBreak: "break-all" }}>
+                <a
+                  href={loginState.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "var(--accent)", wordBreak: "break-all" }}
+                  onClick={(event) => handleExternalLinkClick(event, loginState.url)}
+                >
                   click here to open the login page
                 </a>
                 .
@@ -915,7 +922,13 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
               {loginState.userCode}
             </div>
             <p style={{ margin: 0, fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5 }}>
-              <a href={loginState.verificationUri} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", wordBreak: "break-all" }}>
+              <a
+                href={loginState.verificationUri}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: "var(--accent)", wordBreak: "break-all" }}
+                onClick={(event) => handleExternalLinkClick(event, loginState.verificationUri)}
+              >
                 {loginState.verificationUri}
               </a>
               {loginState.expiresInSeconds ? ` Expires in ${Math.ceil(loginState.expiresInSeconds / 60)} minutes.` : ""}

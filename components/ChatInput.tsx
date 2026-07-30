@@ -15,6 +15,13 @@ import {
 import { FolderIcon, getFileIcon } from "./FileIcons";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
+import {
+  isTauriDesktop,
+  readDesktopImageAttachments,
+  selectFilesNative,
+} from "@/lib/desktop-native";
+import type { ExtensionStatusItem } from "@/lib/types";
+import { ExtensionStatusBar } from "./ExtensionStatusBar";
 
 export interface AttachedImage {
   data: string;   // base64, no prefix
@@ -68,6 +75,8 @@ interface Props {
   cwd?: string | null;
   /** Focus the textarea on mount / when this becomes true (e.g. New task page). */
   autoFocus?: boolean;
+  /** Extension footer statuses (tools/err/last, etc.) shown next to the model selector */
+  extensionStatuses?: ExtensionStatusItem[];
 }
 
 export interface ChatInputHandle {
@@ -203,9 +212,7 @@ function QueuedMessageRow({ kind, label, text }: { kind: "steer" | "follow-up"; 
   );
 }
 
-export function ModelErrorBanner({ error }: { error?: string | null }) {
-  const { t } = useI18n();
-  if (!error) return null;
+function ErrorBanner({ title, detail }: { title: string; detail: string }) {
   return (
     <div
       role="alert"
@@ -242,11 +249,17 @@ export function ModelErrorBanner({ error }: { error?: string | null }) {
         <line x1="12" y1="17" x2="12.01" y2="17" />
       </svg>
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontWeight: 600 }}>{t("chat.modelError")}</div>
-        <div style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{error}</div>
+        <div style={{ fontWeight: 600 }}>{title}</div>
+        <div style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{detail}</div>
       </div>
     </div>
   );
+}
+
+export function ModelErrorBanner({ error }: { error?: string | null }) {
+  const { t } = useI18n();
+  if (!error) return null;
+  return <ErrorBanner title={t("chat.modelError")} detail={error} />;
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
@@ -261,6 +274,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   draftKey,
   cwd,
   autoFocus = false,
+  extensionStatuses = [],
 }: Props, ref) {
   const { t } = useI18n();
   const isMobile = useIsMobile();
@@ -273,6 +287,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>(() => (
     draftKey ? draftImagesToAttachedImages(getDraft(draftKey)?.images) : []
   ));
+  const [attachError, setAttachError] = useState<string | null>(null);
   const trimmedValue = value.trimStart();
   const bashMode = attachedImages.length === 0 && trimmedValue.startsWith("!");
   const bashExcluded = bashMode && trimmedValue.startsWith("!!");
@@ -383,6 +398,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     return () => window.clearTimeout(id);
   }, [autoFocus, isMobile, draftKey]);
 
+  const appendAttachedImages = useCallback((newImages: AttachedImage[]) => {
+    setAttachedImages((prev) => {
+      const accepted = newImages.slice(0, Math.max(0, MAX_ATTACHED_IMAGES - prev.length));
+      newImages.slice(accepted.length).forEach(revokeImagePreview);
+      return [...prev, ...accepted];
+    });
+  }, []);
+
   const processImageFiles = useCallback(async (files: File[]) => {
     if (isStreaming) return;
     const remaining = Math.max(
@@ -411,15 +434,48 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             })
         )
       );
-      setAttachedImages((prev) => {
-        const accepted = newImages.slice(0, Math.max(0, MAX_ATTACHED_IMAGES - prev.length));
-        newImages.slice(accepted.length).forEach(revokeImagePreview);
-        return [...prev, ...accepted];
-      });
+      appendAttachedImages(newImages);
     } finally {
       pendingImageCountRef.current -= imageFiles.length;
     }
-  }, [isStreaming]);
+  }, [appendAttachedImages, isStreaming]);
+
+  const pickAttachedImages = useCallback(async () => {
+    if (isStreaming) return;
+    if (!isTauriDesktop()) {
+      fileInputRef.current?.click();
+      return;
+    }
+
+    const remaining = Math.max(
+      0,
+      MAX_ATTACHED_IMAGES - attachedImagesRef.current.length - pendingImageCountRef.current,
+    );
+    if (remaining <= 0) return;
+
+    try {
+      setAttachError(null);
+      const paths = await selectFilesNative({
+        multiple: true,
+        title: "Select images",
+        filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"] }],
+      });
+      if (paths.length === 0) return;
+      pendingImageCountRef.current += Math.min(paths.length, remaining);
+      try {
+        const images = await readDesktopImageAttachments(paths.slice(0, remaining));
+        appendAttachedImages(images.map(({ data, mimeType, previewUrl }) => ({
+          data,
+          mimeType,
+          previewUrl,
+        })));
+      } finally {
+        pendingImageCountRef.current -= Math.min(paths.length, remaining);
+      }
+    } catch (error) {
+      setAttachError(error instanceof Error ? error.message : String(error));
+    }
+  }, [appendAttachedImages, isStreaming]);
 
   const removeImage = useCallback((index: number) => {
     setAttachedImages((prev) => {
@@ -1060,6 +1116,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       />
       <div className="chat-composer-wrap" style={{ maxWidth: 820, margin: "0 auto" }}>
         <ModelErrorBanner error={modelError} />
+        {attachError && <ErrorBanner title={t("chat.attachmentError")} detail={attachError} />}
         {/* Queued steering / follow-up messages (delivered by pi on upcoming turns) */}
         {((queuedMessages?.steering.length ?? 0) + (queuedMessages?.followUp.length ?? 0)) > 0 && (
           <div style={{
@@ -1667,7 +1724,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           <div style={{ flex: isMobile ? "1 1 auto" : "0 0 auto", minWidth: 0, display: "flex", alignItems: "center", gap: 2 }}>
             <button
               className="native-toolbar-button"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => { void pickAttachedImages(); }}
               disabled={isStreaming}
              title={t("chat.attachImage")}
               style={{
@@ -1814,6 +1871,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   })()}
                 </div>
             )}
+            <ExtensionStatusBar statuses={extensionStatuses} />
           </div>
 
           {/* spacer */}

@@ -1,11 +1,11 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { APP_PREF_KEYS, getPref, setPref } from "@/lib/app-prefs";
 import { getLocalePlugin, getSupportedLocales } from "@/lib/i18n/registry";
 import { translateMessage } from "@/lib/i18n/format";
 import type { Locale, LocalePlugin, TranslationParams } from "@/lib/i18n/types";
 
-const LOCALE_STORAGE_KEY = "pi-locale";
 const defaultLocale: Locale = "en";
 
 interface I18nContextValue {
@@ -25,12 +25,8 @@ function getMessages(): Record<string, Record<string, string>> {
 }
 
 function readInitialLocale(): Locale {
-  try {
-    const stored = window.localStorage.getItem(LOCALE_STORAGE_KEY);
-    if (stored === "en" || stored === "zh-CN") return stored;
-  } catch {
-    // 隐私模式或存储不可用时回退到默认语言。
-  }
+  const stored = getPref(APP_PREF_KEYS.locale);
+  if (stored === "en" || stored === "zh-CN") return stored;
   // UI defaults to English; browser language is intentionally not consulted
   // (the topbar language switcher was removed).
   return defaultLocale;
@@ -61,11 +57,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     if (!getLocalePlugin(next)) return;
     setLocaleState(next);
     document.documentElement.lang = next;
-    try {
-      window.localStorage.setItem(LOCALE_STORAGE_KEY, next);
-    } catch {
-      // 存储失败不影响当前页面内的语言切换。
-    }
+    setPref(APP_PREF_KEYS.locale, next);
   }, []);
 
   const t = useCallback((key: string, params?: TranslationParams) => translateMessage(locale, key, messages, params), [locale, messages]);

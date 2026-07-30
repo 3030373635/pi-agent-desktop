@@ -8,7 +8,6 @@ import { countToolCallBlocks, getDisplayableAssistantBlocks, splitFinalAssistant
 import { MessageView } from "./MessageView";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { ChatMinimap, useMessageRefs } from "./ChatMinimap";
-import { ExtensionStatusBar } from "./ExtensionStatusBar";
 import { useI18n } from "@/hooks/useI18n";
 import { useAgentSession, type AgentPhase, type NoticeItem } from "@/hooks/useAgentSession";
 import { useAudio } from "@/hooks/useAudio";
@@ -378,7 +377,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   }, [messages]);
   const messageRefs = useMessageRefs(visibleMessages.length);
 
-  const isEmptyNew = isNew && messages.length === 0 && !streamState.isStreaming && !sessionBusy;
+  const isEmptyNew = isNew && !loading && !error && messages.length === 0 && !streamState.isStreaming && !sessionBusy;
   const messageCwd = session?.cwd ?? newSessionCwd ?? undefined;
 
   // Group messages into turns (user prompt → collapsed process → final
@@ -616,44 +615,12 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       draftKey={session?.id ?? (newSessionCwd ? `new:${newSessionCwd}` : undefined)}
       cwd={session?.cwd ?? newSessionCwd}
       autoFocus={isNew}
+      extensionStatuses={extensionStatuses}
     />
   );
 
   const aboveEditorWidgets = extensionWidgets.filter((widget) => widget.placement !== "belowEditor");
   const belowEditorWidgets = extensionWidgets.filter((widget) => widget.placement === "belowEditor");
-
-  if (loading) {
-    return (
-      <div className="flex h-full items-center justify-center text-text-muted">
-         {t("chat.loadingSession")}
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
-        <div style={{ color: "var(--text)", fontSize: 14, fontWeight: 600 }}>
-          {t("chat.loadFailed")}
-        </div>
-        <div style={{ color: "var(--text-dim)", fontSize: 12, lineHeight: 1.45, maxWidth: 480, overflowWrap: "anywhere" }}>
-          {error}
-        </div>
-        <button
-          type="button"
-          onClick={retryLoad}
-          style={{
-            marginTop: 6, height: 28, padding: "0 14px",
-            border: "1px solid var(--separator)", borderRadius: 7,
-            background: "var(--surface)", color: "var(--text)",
-            fontSize: 12.5, fontWeight: 550, cursor: "pointer",
-          }}
-        >
-          {t("common.retry")}
-        </button>
-      </div>
-    );
-  }
 
   return (
     <div
@@ -758,6 +725,35 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pt-4 [scrollbar-width:none]">
           <div style={{ padding: `0 ${CHAT_COLUMN_PADDING}px` }}>
             <div style={{ maxWidth: 820, margin: "0 auto" }}>
+              {loading || error ? (
+                <div className="flex min-h-[40vh] flex-col items-center justify-center gap-2 px-6 text-center">
+                  {loading ? (
+                    <div className="text-text-muted">{t("chat.loadingSession")}</div>
+                  ) : (
+                    <>
+                      <div style={{ color: "var(--text)", fontSize: 14, fontWeight: 600 }}>
+                        {t("chat.loadFailed")}
+                      </div>
+                      <div style={{ color: "var(--text-dim)", fontSize: 12, lineHeight: 1.45, maxWidth: 480, overflowWrap: "anywhere" }}>
+                        {error}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={retryLoad}
+                        style={{
+                          marginTop: 6, height: 28, padding: "0 14px",
+                          border: "1px solid var(--separator)", borderRadius: 7,
+                          background: "var(--surface)", color: "var(--text)",
+                          fontSize: 12.5, fontWeight: 550, cursor: "pointer",
+                        }}
+                      >
+                        {t("common.retry")}
+                      </button>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <>
               <ExtensionWidgets widgets={aboveEditorWidgets} />
 
             {renderedMessages}
@@ -797,6 +793,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
             )}
 
             <div ref={messagesEndRef} />
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -809,7 +807,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           </div>
         </div>
         {chatInputElement}
-        <ExtensionStatusBar statuses={extensionStatuses} />
       </div>
       </div>
       {isMobile ? null : (

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { existsSync } from "fs";
-import { addWorktree, listWorktrees, removeWorktree, resolveProject } from "@/lib/worktree";
+import { addWorktree, listLocalBranches, listWorktrees, removeWorktree, resolveProject } from "@/lib/worktree";
 import { allowFileRoot, getAllowedFileRoots, isExistingFilePathAllowed, isFilePathAllowed } from "@/lib/file-access";
 
 /** Same gate as /api/files: only session cwds / project roots / explicitly
@@ -37,11 +37,23 @@ export async function GET(req: Request) {
     // file explorer to browse them even before they have any session (the
     // in-memory allowlist from addWorktree does not survive server restarts).
     for (const w of worktrees) allowFileRoot(w.path);
+
+    const includeBranches = new URL(req.url).searchParams.get("branches") === "1";
+    let branches: string[] = [];
+    if (includeBranches && isGit) {
+      try {
+        branches = await listLocalBranches(existsSync(cwd) ? cwd : project.projectRoot);
+      } catch {
+        branches = [];
+      }
+    }
+
     return NextResponse.json({
       projectRoot: project.projectRoot,
       isGit,
       isTopLevel: project.isTopLevel,
       worktrees,
+      ...(includeBranches ? { branches } : {}),
     });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });

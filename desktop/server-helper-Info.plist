@@ -5,11 +5,17 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>English</string>
     <key>CFBundleDisplayName</key>
-    <string>Pi Agent Server</string>
+    <string>Pi Agent</string>
     <key>CFBundleExecutable</key>
     <string>node</string>
+    <!--
+      Must match the parent app identifier (com.abcwyc.pi-agent). A distinct
+      helper bundle ID makes macOS Sequoia+ treat Node file access as a separate
+      app (SystemPolicyAppData) and re-prompt "access data from other apps" on
+      every launch even after Allow.
+    -->
     <key>CFBundleIdentifier</key>
-    <string>com.abcwyc.pi-agent.server</string>
+    <string>com.abcwyc.pi-agent</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>

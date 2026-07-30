@@ -207,6 +207,10 @@ async function bundleNodeRuntime() {
 
   let binaryPath;
   if (process.platform === "darwin") {
+    // Wrap Node in an LSBackgroundOnly .app so it does not appear in the Dock.
+    // Info.plist uses the parent CFBundleIdentifier (com.abcwyc.pi-agent) so
+    // macOS TCC SystemPolicyAppData grants persist across launches — a distinct
+    // helper id re-prompts "access data from other apps" every cold start.
     const contentsDir = join(serverHelperDir, "Contents");
     binaryPath = join(contentsDir, "MacOS", "node");
     await mkdir(dirname(binaryPath), { recursive: true });

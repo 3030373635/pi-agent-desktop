@@ -1593,12 +1593,26 @@ function BashExecutionView({ message, sessionId }: { message: BashExecutionMessa
               {loadingFull ? "loading…" : "view full output"}
             </button>
           )}
-          <a
-            href={`${fullOutputUrl}&download=1`}
-            style={{ marginLeft: showFullButton ? 10 : 0, color: "var(--accent)", fontSize: 11, textDecoration: "underline" }}
+          <button
+            type="button"
+            onClick={() => {
+              void import("@/lib/desktop-native").then(({ downloadUrlAsFile }) =>
+                downloadUrlAsFile(`${fullOutputUrl}&download=1`, "bash-output.log"),
+              );
+            }}
+            style={{
+              marginLeft: showFullButton ? 10 : 0,
+              background: "none",
+              border: "none",
+              padding: 0,
+              color: "var(--accent)",
+              fontSize: 11,
+              textDecoration: "underline",
+              cursor: "pointer",
+            }}
           >
             download full output
-          </a>
+          </button>
           {fullError && <span style={{ marginLeft: 6, color: "var(--text-dim)", fontSize: 11 }}>({fullError})</span>}
         </div>
       )}

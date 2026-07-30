@@ -7,7 +7,10 @@ import { useI18n } from "@/hooks/useI18n";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
 import { ProjectPicker } from "./ProjectPicker";
 import { AnimatedDropdown, PathLabel, displayCwd, getRecentProjects } from "./path-ui";
+import { APP_PREF_KEYS, getPrefJson, removePref, setPrefJson } from "@/lib/app-prefs";
+import { notifyDesktop } from "@/lib/desktop-notify";
 import { isTauriDesktop } from "@/lib/desktop-updater";
+import { revealItemInDirNative } from "@/lib/desktop-native";
 import { getDesktopPlatform, type DesktopPlatform } from "@/lib/desktop-window";
 
 function ToolbarIconButton({
@@ -106,29 +109,17 @@ interface WorktreeState {
   worktrees: WorktreeEntry[];
 }
 
-const UNREAD_SESSIONS_STORAGE_KEY = "pi-web:unread-session-ids";
-
 function loadUnreadSessionIds(): Set<string> {
   if (typeof window === "undefined") return new Set();
-  try {
-    const raw = window.localStorage.getItem(UNREAD_SESSIONS_STORAGE_KEY);
-    if (!raw) return new Set();
-    const parsed = JSON.parse(raw) as unknown;
-    if (Array.isArray(parsed)) return new Set(parsed.filter((id): id is string => typeof id === "string"));
-    return new Set();
-  } catch {
-    return new Set();
-  }
+  const parsed = getPrefJson<unknown>(APP_PREF_KEYS.unreadSessionIds);
+  if (Array.isArray(parsed)) return new Set(parsed.filter((id): id is string => typeof id === "string"));
+  return new Set();
 }
 
 function saveUnreadSessionIds(ids: Set<string>): void {
   if (typeof window === "undefined") return;
-  try {
-    if (ids.size === 0) window.localStorage.removeItem(UNREAD_SESSIONS_STORAGE_KEY);
-    else window.localStorage.setItem(UNREAD_SESSIONS_STORAGE_KEY, JSON.stringify([...ids]));
-  } catch {
-    // ignore storage quota / privacy-mode errors
-  }
+  if (ids.size === 0) removePref(APP_PREF_KEYS.unreadSessionIds);
+  else setPrefJson(APP_PREF_KEYS.unreadSessionIds, [...ids]);
 }
 
 function formatRelativeTime(dateStr: string): string {
@@ -216,6 +207,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const [wtDropdownOpen, setWtDropdownOpen] = useState(false);
   const [wtNewOpen, setWtNewOpen] = useState(false);
   const [wtNewBranch, setWtNewBranch] = useState("");
+  const [wtBranches, setWtBranches] = useState<string[]>([]);
   const [wtError, setWtError] = useState<string | null>(null);
   const [wtBusy, setWtBusy] = useState(false);
   const [wtConfirmRemove, setWtConfirmRemove] = useState<{ path: string; force: boolean } | null>(null);
@@ -293,22 +285,49 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   useEffect(() => {
     // Live running status via SSE — no polling. The server pushes the current
     // set of running session ids whenever any session starts/stops working.
-    const source = new EventSource("/api/agent/running/events");
+    let source: EventSource | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let closed = false;
 
-    source.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data) as { type?: string; runningSessionIds?: string[] };
-        if (data.type === "running") {
-          sseAuthoritativeRef.current = true;
-          setRunningSessionIds(new Set(data.runningSessionIds ?? []));
+    const connect = () => {
+      if (closed) return;
+      source?.close();
+      source = new EventSource("/api/agent/running/events");
+      source.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data) as { type?: string; runningSessionIds?: string[] };
+          if (data.type === "running") {
+            sseAuthoritativeRef.current = true;
+            setRunningSessionIds(new Set(data.runningSessionIds ?? []));
+          }
+        } catch {
+          // ignore malformed frames
         }
-      } catch {
-        // ignore malformed frames
-      }
+      };
+      source.onerror = () => {
+        // Force a fresh connection after prolonged failures; EventSource alone
+        // can stall after local server restarts in the desktop shell.
+        if (source?.readyState === EventSource.CLOSED) {
+          if (reconnectTimer) clearTimeout(reconnectTimer);
+          reconnectTimer = setTimeout(connect, 1_500);
+        }
+      };
     };
 
-    // On error EventSource auto-reconnects; keep the last known state meanwhile.
-    return () => source.close();
+    connect();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") connect();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", connect);
+
+    return () => {
+      closed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", connect);
+      source?.close();
+    };
   }, []);
 
   useEffect(() => {
@@ -326,10 +345,20 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     }
     if (completedInBackground.length > 0) {
       loadSessions(false);
+      const sessionName = (id: string) => {
+        const session = allSessions.find((item) => item.id === id);
+        return session?.name || session?.firstMessage || id.slice(0, 8);
+      };
+      for (const id of completedInBackground) {
+        void notifyDesktop({
+          title: "Pi Agent",
+          body: `Finished: ${sessionName(id)}`,
+        });
+      }
     }
 
     previousRunningSessionIdsRef.current = runningSessionIds;
-  }, [runningSessionIds, selectedSessionId, loadSessions]);
+  }, [runningSessionIds, selectedSessionId, loadSessions, allSessions]);
 
   useEffect(() => {
     if (!selectedSessionId) return;
@@ -449,6 +478,20 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       if (projects.length > 0) setSelectedCwd(projects[0]);
     }
   }, [allSessions, selectedCwd, initialSessionId, skipInitialProjectSelection, onSelectSession, onInitialRestoreDone]);
+
+  useEffect(() => {
+    if (!wtNewOpen || !worktreeState) return;
+    let cancelled = false;
+    fetch(`/api/worktrees?cwd=${encodeURIComponent(worktreeState.projectRoot)}&branches=1`)
+      .then((r) => r.json())
+      .then((d: { branches?: string[] }) => {
+        if (!cancelled) setWtBranches(Array.isArray(d.branches) ? d.branches : []);
+      })
+      .catch(() => {
+        if (!cancelled) setWtBranches([]);
+      });
+    return () => { cancelled = true; };
+  }, [wtNewOpen, worktreeState]);
 
   const handleCreateWorktree = useCallback(async () => {
     const branch = wtNewBranch.trim();
@@ -778,6 +821,24 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                             <PathLabel text={wt.branch ?? displayCwd(wt.path, homeDir)} style={{ flex: 1 }} />
                             {wt.isMain && <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>{t("sidebar.main")}</span>}
                           </button>
+                          {isTauriDesktop() && (
+                            <button
+                              type="button"
+                              onClick={() => { void revealItemInDirNative(wt.path); }}
+                              title={t("sidebar.revealWorktree")}
+                              style={{
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                width: 28, height: 28, padding: 0, marginRight: 2,
+                                background: "none", border: "none",
+                                color: "var(--text-dim)", cursor: "pointer",
+                                borderRadius: 5, flexShrink: 0,
+                              }}
+                            >
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+                              </svg>
+                            </button>
+                          )}
                           {!wt.isMain && (
                             <button
                               onClick={() => { setWtError(null); setWtConfirmRemove({ path: wt.path, force: false }); }}
@@ -841,6 +902,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                       <input
                         ref={wtNewInputRef}
                         value={wtNewBranch}
+                        list="pi-worktree-branches"
                         onChange={(e) => {
                           setWtNewBranch(e.target.value);
                           setWtError(null);
@@ -870,6 +932,35 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                           boxSizing: "border-box",
                         }}
                       />
+                      <datalist id="pi-worktree-branches">
+                        {wtBranches.map((branch) => (
+                          <option key={branch} value={branch} />
+                        ))}
+                      </datalist>
+                      {wtBranches.length > 0 && (
+                        <div style={{ marginTop: 5, maxHeight: 96, overflowY: "auto", display: "flex", flexDirection: "column", gap: 2 }}>
+                          {wtBranches.slice(0, 8).map((branch) => (
+                            <button
+                              key={branch}
+                              type="button"
+                              onClick={() => setWtNewBranch(branch)}
+                              style={{
+                                textAlign: "left",
+                                padding: "3px 6px",
+                                border: "none",
+                                borderRadius: 4,
+                                background: branch === wtNewBranch ? "var(--bg-selected)" : "transparent",
+                                color: "var(--text-muted)",
+                                fontFamily: "var(--font-mono)",
+                                fontSize: 10,
+                                cursor: "pointer",
+                              }}
+                            >
+                              {branch}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                       <div style={{ display: "flex", gap: 5, marginTop: 5 }}>
                         <button
                           onClick={() => void handleCreateWorktree()}

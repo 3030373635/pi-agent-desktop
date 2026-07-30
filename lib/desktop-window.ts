@@ -30,14 +30,4 @@ export async function isWindowMaximized(): Promise<boolean> {
   return getCurrentWindow().isMaximized();
 }
 
-/** Native folder-selection dialog (desktop shell only). Resolves null when cancelled. */
-export async function selectDirectoryNative(defaultPath?: string): Promise<string | null> {
-  const { open } = await import("@tauri-apps/plugin-dialog");
-  const selection = await open({
-    directory: true,
-    multiple: false,
-    defaultPath,
-    title: "Select project folder",
-  });
-  return typeof selection === "string" ? selection : null;
-}
+export { selectDirectoryNative } from "@/lib/desktop-native";

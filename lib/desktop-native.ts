@@ -1,0 +1,273 @@
+import { isTauriDesktop } from "@/lib/desktop-updater";
+
+export type DesktopDialogFilter = {
+  name: string;
+  extensions: string[];
+};
+
+export type SelectFilesOptions = {
+  multiple?: boolean;
+  defaultPath?: string;
+  title?: string;
+  filters?: DesktopDialogFilter[];
+};
+
+export type SelectSavePathOptions = {
+  defaultPath?: string;
+  title?: string;
+  filters?: DesktopDialogFilter[];
+};
+
+function asPathArray(selection: string | string[] | null): string[] {
+  if (selection == null) return [];
+  return Array.isArray(selection) ? selection.filter((path) => typeof path === "string") : [selection];
+}
+
+/** Native folder-selection dialog (desktop shell only). Resolves null when cancelled. */
+export async function selectDirectoryNative(defaultPath?: string): Promise<string | null> {
+  if (!isTauriDesktop()) {
+    throw new Error("Native directory selection is only available in the desktop app.");
+  }
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  const selection = await open({
+    directory: true,
+    multiple: false,
+    defaultPath,
+    title: "Select project folder",
+  });
+  return typeof selection === "string" ? selection : null;
+}
+
+/** Native file-selection dialog. Resolves [] when cancelled. */
+export async function selectFilesNative(options: SelectFilesOptions = {}): Promise<string[]> {
+  if (!isTauriDesktop()) {
+    throw new Error("Native file selection is only available in the desktop app.");
+  }
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  const selection = await open({
+    directory: false,
+    multiple: options.multiple ?? true,
+    defaultPath: options.defaultPath,
+    title: options.title ?? "Select files",
+    filters: options.filters,
+  });
+  return asPathArray(selection);
+}
+
+/** Native save dialog. Resolves null when cancelled. */
+export async function selectSavePathNative(options: SelectSavePathOptions = {}): Promise<string | null> {
+  if (!isTauriDesktop()) {
+    throw new Error("Native save dialog is only available in the desktop app.");
+  }
+  const { save } = await import("@tauri-apps/plugin-dialog");
+  const selection = await save({
+    defaultPath: options.defaultPath,
+    title: options.title ?? "Save as",
+    filters: options.filters,
+  });
+  return typeof selection === "string" ? selection : null;
+}
+
+/** Open http(s)/mailto URLs in the system handler; fall back to window.open on web. */
+export async function openExternal(url: string): Promise<void> {
+  const trimmed = url.trim();
+  if (!trimmed) return;
+
+  if (!isTauriDesktop()) {
+    window.open(trimmed, "_blank", "noopener,noreferrer");
+    return;
+  }
+
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("open_external_url", { url: trimmed });
+}
+
+/** Open a local path with the OS default application. */
+export async function openPathNative(path: string): Promise<void> {
+  if (!isTauriDesktop()) {
+    throw new Error("Opening local paths is only available in the desktop app.");
+  }
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("open_path", { path });
+}
+
+/** Reveal a local path in Finder / Explorer / file manager. */
+export async function revealItemInDirNative(path: string): Promise<void> {
+  if (!isTauriDesktop()) {
+    throw new Error("Reveal in folder is only available in the desktop app.");
+  }
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("reveal_item_in_dir", { path });
+}
+
+function triggerBrowserDownload(url: string, fileName?: string): void {
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  if (fileName) anchor.download = fileName;
+  anchor.rel = "noopener noreferrer";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+}
+
+/**
+ * Desktop: save-dialog + write bytes from a same-origin URL.
+ * Web: trigger a normal browser download.
+ * Returns false when the user cancels the save dialog.
+ */
+export async function downloadUrlAsFile(url: string, defaultFileName: string): Promise<boolean> {
+  if (!isTauriDesktop()) {
+    triggerBrowserDownload(url, defaultFileName);
+    return true;
+  }
+
+  const destPath = await selectSavePathNative({ defaultPath: defaultFileName });
+  if (!destPath) return false;
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(text || `Download failed (HTTP ${response.status})`);
+  }
+  const bytes = new Uint8Array(await response.arrayBuffer());
+
+  const saveResponse = await fetch("/api/desktop/save", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/octet-stream",
+      "X-Pi-Dest-Path": encodeURIComponent(destPath),
+    },
+    body: bytes,
+  });
+  if (!saveResponse.ok) {
+    const data = await saveResponse.json().catch(() => ({})) as { error?: string };
+    throw new Error(data.error || `Save failed (HTTP ${saveResponse.status})`);
+  }
+  return true;
+}
+
+/**
+ * Desktop: save-dialog + server-side copy of an allowed local file.
+ * Web: trigger download via the files API.
+ */
+export async function saveLocalFileAs(
+  sourcePath: string,
+  defaultFileName: string,
+  downloadUrl: string,
+): Promise<boolean> {
+  if (!isTauriDesktop()) {
+    triggerBrowserDownload(downloadUrl, defaultFileName);
+    return true;
+  }
+
+  const destPath = await selectSavePathNative({ defaultPath: defaultFileName });
+  if (!destPath) return false;
+
+  const response = await fetch("/api/desktop/save", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sourcePath, destPath }),
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({})) as { error?: string };
+    throw new Error(data.error || `Save failed (HTTP ${response.status})`);
+  }
+  return true;
+}
+
+export type DesktopImageAttachment = {
+  name: string;
+  mimeType: string;
+  data: string;
+  previewUrl: string;
+};
+
+/** Read image files selected via native dialog into chat attachment payloads. */
+export async function readDesktopImageAttachments(paths: string[]): Promise<DesktopImageAttachment[]> {
+  if (paths.length === 0) return [];
+  const response = await fetch("/api/desktop/read-images", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paths }),
+  });
+  const data = await response.json().catch(() => ({})) as {
+    error?: string;
+    files?: Array<{ name: string; mimeType: string; data: string }>;
+  };
+  if (!response.ok) {
+    throw new Error(data.error || `Failed to read images (HTTP ${response.status})`);
+  }
+  return (data.files ?? []).map((file) => ({
+    ...file,
+    previewUrl: `data:${file.mimeType};base64,${file.data}`,
+  }));
+}
+
+export type DesktopImportResult = {
+  uploaded: string[];
+  skipped: string[];
+  errors: Array<{ name: string; error: string }>;
+};
+
+/** Copy local source paths into a project directory (desktop native import). */
+export async function importLocalFiles(options: {
+  destDirectory: string;
+  sourcePaths: string[];
+  conflict: "error" | "overwrite" | "skip";
+  encodeDestPath: (path: string) => string;
+}): Promise<{ status: number; data: DesktopImportResult & { error?: string; conflicts?: string[]; nonReplaceable?: string[] } }> {
+  const response = await fetch(
+    `/api/files/${options.encodeDestPath(options.destDirectory)}?type=import&conflict=${options.conflict}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sourcePaths: options.sourcePaths }),
+    },
+  );
+  const data = await response.json().catch(() => ({})) as DesktopImportResult & {
+    error?: string;
+    conflicts?: string[];
+    nonReplaceable?: string[];
+  };
+  return { status: response.status, data };
+}
+
+/** Intercept primary clicks on external anchors so desktop uses the system browser. */
+export function handleExternalLinkClick(
+  event: {
+    preventDefault(): void;
+    defaultPrevented: boolean;
+    button: number;
+    metaKey: boolean;
+    ctrlKey: boolean;
+    shiftKey: boolean;
+    altKey: boolean;
+  },
+  url: string | undefined | null,
+): void {
+  if (!url || !isTauriDesktop()) return;
+  if (event.defaultPrevented || event.button !== 0) return;
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  event.preventDefault();
+  void openExternal(url);
+}
+
+export async function setCloseQuitsNative(quit: boolean): Promise<void> {
+  if (!isTauriDesktop()) return;
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("set_close_quits", { quit });
+}
+
+export async function quitAppNative(): Promise<void> {
+  if (!isTauriDesktop()) return;
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("quit_app");
+}
+
+export async function showMainWindowNative(): Promise<void> {
+  if (!isTauriDesktop()) return;
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("show_main_window_cmd");
+}
+
+export { isTauriDesktop };

@@ -170,6 +170,27 @@ function sanitizeBranchForDir(branch: string): string {
   return branch.replace(/[\/\\:*?"<>|\s]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
+/** Local branch names for the worktree create UI (newest tip first, capped). */
+export async function listLocalBranches(cwd: string, limit = 40): Promise<string[]> {
+  const repoRoot = await getRepoRoot(cwd);
+  const out = await git(repoRoot, [
+    "for-each-ref",
+    "--sort=-committerdate",
+    "--format=%(refname:short)",
+    "refs/heads",
+  ]);
+  const branches: string[] = [];
+  const seen = new Set<string>();
+  for (const line of out.split("\n")) {
+    const name = line.trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    branches.push(name);
+    if (branches.length >= limit) break;
+  }
+  return branches;
+}
+
 export async function addWorktree(cwd: string, branch: string): Promise<{ path: string; branch: string }> {
   const trimmed = branch.trim();
   if (!trimmed) throw new Error("Branch name is required");

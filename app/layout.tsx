@@ -29,7 +29,10 @@ export default function RootLayout({
         <meta name="google" content="notranslate" />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem("pi-theme");var d=t==="dark"||(t!=="light"&&window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(d)document.documentElement.classList.add("dark")}catch(e){}})();`,
+            // Pin color-scheme + .dark before first paint so a light preference
+            // never flashes the OS dark webview chrome, and so an explicit
+            // "light" choice always clears a leftover .dark class.
+            __html: `(function(){try{var t=localStorage.getItem("pi-theme");var d=t==="dark"||(t!=="light"&&window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",d);document.documentElement.style.colorScheme=d?"dark":"light"}catch(e){}})();`,
           }}
         />
       </head>

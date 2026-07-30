@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { sendAgentCommand } from "@/lib/agent-client";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import type { PluginPackageInfo, PluginsResponse } from "@/lib/api-types";
+import { isTauriDesktop, selectDirectoryNative } from "@/lib/desktop-native";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalDismiss } from "@/hooks/useModalDismiss";
 import { ConfirmDangerButton } from "./ConfirmDangerButton";
@@ -327,28 +328,62 @@ function AddPluginPanel({
         <label htmlFor="plugin-source" style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
           Source
         </label>
-        <input
-          id="plugin-source"
-          ref={inputRef}
-          value={source}
-          onChange={(e) => onSourceChange(e.target.value)}
-          placeholder="npm:@scope/package"
-          style={{
-            width: "100%",
-            height: 36,
-            padding: "0 11px",
-            border: "1px solid var(--border)",
-            borderRadius: 6,
-            background: "var(--bg-panel)",
-            color: "var(--text)",
-            fontFamily: "var(--font-mono)",
-            fontSize: 13,
-            outline: "none",
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && source.trim() && !busy) onInstall();
-          }}
-        />
+        <div style={{ display: "flex", gap: 8 }}>
+          <input
+            id="plugin-source"
+            ref={inputRef}
+            value={source}
+            onChange={(e) => onSourceChange(e.target.value)}
+            placeholder="npm:@scope/package"
+            style={{
+              width: "100%",
+              height: 36,
+              padding: "0 11px",
+              border: "1px solid var(--border)",
+              borderRadius: 6,
+              background: "var(--bg-panel)",
+              color: "var(--text)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 13,
+              outline: "none",
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && source.trim() && !busy) onInstall();
+            }}
+          />
+          {isTauriDesktop() && (
+            <button
+              type="button"
+              className="native-button"
+              disabled={busy}
+              title="Select local plugin folder"
+              onClick={() => {
+                void (async () => {
+                  try {
+                    const path = await selectDirectoryNative();
+                    if (path) onSourceChange(path);
+                  } catch (error) {
+                    console.error("Failed to select plugin folder:", error);
+                  }
+                })();
+              }}
+              style={{
+                height: 36,
+                padding: "0 12px",
+                flexShrink: 0,
+                border: "1px solid var(--border)",
+                borderRadius: 6,
+                background: "var(--bg-panel)",
+                color: "var(--text-muted)",
+                fontSize: 12,
+                cursor: busy ? "not-allowed" : "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Browse…
+            </button>
+          )}
+        </div>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>

@@ -35,6 +35,17 @@ test("sanitizes status text for a single-line display", () => {
   );
 });
 
+test("strips leading decorative status markers including ANSI-colored bullets", () => {
+  assert.equal(
+    sanitizeExtensionStatusText("\x1b[32m●\x1b[0m tools:2 err:0 last:bash"),
+    "tools:2 err:0 last:bash",
+  );
+  assert.equal(
+    sanitizeExtensionStatusText("● tools:2 err:0 last:bash"),
+    "tools:2 err:0 last:bash",
+  );
+});
+
 test("renders a single status line without identifier keys", () => {
   const html = renderToStaticMarkup(
     React.createElement(ExtensionStatusBar, {
@@ -46,9 +57,9 @@ test("renders a single status line without identifier keys", () => {
   );
 
   assert.match(html, /aria-label="ponytail memory"/);
-  assert.match(html, /height:36px/);
-  assert.match(html, /border-top:1px solid var\(--border\)/);
-  assert.match(html, /background:var\(--bg-panel\)/);
+  assert.match(html, /height:32px/);
+  assert.doesNotMatch(html, /border-top/);
+  assert.doesNotMatch(html, /background:var\(--bg-panel\)/);
   assert.match(html, />ponytail <\/span>/);
   assert.match(html, />memory</);
   assert.doesNotMatch(html, /05-ponytail|20-memory/);

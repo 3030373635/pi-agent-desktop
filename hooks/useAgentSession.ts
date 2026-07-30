@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect, useMemo, useReducer } from "react";
+import { useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo, useReducer } from "react";
 import type {
   AgentMessage,
   ExtensionStatusItem,
@@ -332,10 +332,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   } = opts;
 
   const isNew = session === null && newSessionCwd !== null;
+  const sessionIdentity = session?.id ?? (newSessionCwd ? `new:${newSessionCwd}` : null);
 
   const [data, setData] = useState<SessionData | null>(null);
   const [loading, setLoading] = useState(!isNew);
   const [error, setError] = useState<string | null>(null);
+  // Tracks the session identity last applied to local state. When the parent
+  // switches sessions without remounting ChatWindow, we reset visible state
+  // during render so the previous session's messages never flash.
+  const [appliedIdentity, setAppliedIdentity] = useState(sessionIdentity);
   const [activeLeafId, setActiveLeafId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [entryIds, setEntryIds] = useState<string[]>([]);
@@ -439,6 +444,67 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   const setToolPresetState = opts.setToolPreset ?? setToolPreset;
 
+  // Parent switched the active session without remounting. Reset chat state in
+  // render (React-supported prop→state sync) so the message list clears in the
+  // same frame as the session change. Skip the new→created promotion path —
+  // that session is already live under sessionIdRef.
+  if (sessionIdentity !== appliedIdentity) {
+    const previousIdentity = appliedIdentity;
+    const isPromotion =
+      typeof previousIdentity === "string"
+      && previousIdentity.startsWith("new:")
+      && typeof sessionIdentity === "string"
+      && !sessionIdentity.startsWith("new:")
+      && sessionIdRef.current === sessionIdentity;
+
+    setAppliedIdentity(sessionIdentity);
+
+    if (!isPromotion) {
+      // Point the active id at the new session immediately so in-flight
+      // loadSession/SSE handlers for the previous id become no-ops.
+      if (session?.id) sessionIdRef.current = session.id;
+      else if (isNew) sessionIdRef.current = null;
+      agentRunningRef.current = false;
+      bashRunningRef.current = false;
+      initialScrollDoneRef.current = false;
+      pendingScrollToUserRef.current = false;
+      completionScrollAllowedRef.current = true;
+      optimisticUserMessageKeyRef.current = null;
+      dispatch({ type: "reset" });
+      setData(null);
+      setActiveLeafId(null);
+      setMessages([]);
+      setEntryIds([]);
+      setError(null);
+      setAgentRunning(false);
+      setBashRunning(false);
+      setPendingBash(null);
+      setRetryInfo(null);
+      setContextUsage(null);
+      setSystemPrompt(null);
+      setForkingEntryId(null);
+      setCurrentModelOverride(null);
+      setPendingModel(null);
+      setIsCompacting(false);
+      setCompactError(null);
+      setCompactResult(null);
+      setAgentPhase(null);
+      setExtensionDialog(null);
+      setExtensionCustomUi(null);
+      setExtensionStatuses([]);
+      setExtensionWidgets([]);
+      setQueuedMessages({ steering: [], followUp: [] });
+      setSessionStatsOverride(null);
+      setSlashCommands([]);
+      setLoading(Boolean(session?.id));
+      if (isNew) {
+        setToolPreset("default");
+        setThinkingLevel("auto");
+        setNewSessionModel(null);
+      }
+    }
+  }
+
   const currentModel = currentModelOverride ?? data?.context.model ?? pendingModel ?? null;
   const displayModel = isNew ? (newSessionModel ?? newSessionDefaultModel) : currentModel;
 
@@ -482,11 +548,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [messages, sessionStatsOverride, contextUsage, data?.filePath, session?.id, session?.name]);
 
   const loadSession = useCallback(async (sid: string, showLoading = false, includeState = false) => {
+    const isCurrent = () => sessionIdRef.current === sid;
     let messagesLoaded = false;
     try {
       if (showLoading) setLoading(true);
       const params = new URLSearchParams({ deferThinking: "1", deferMedia: "1" });
       const res = await fetch(`/api/sessions/${encodeURIComponent(sid)}?${params}`);
+      if (!isCurrent()) return null;
       if (res.status === 404) {
         if (showLoading) {
           setData(null);
@@ -498,7 +566,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json() as SessionData;
-      if (sessionIdRef.current !== sid) return null;
+      if (!isCurrent()) return null;
       setData(d);
       setActiveLeafId(d.leafId);
       setMessages(d.context.messages);
@@ -517,7 +585,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         const stateRes = await fetch(`/api/sessions/${encodeURIComponent(sid)}/state`);
         if (!stateRes.ok) throw new Error(`HTTP ${stateRes.status}`);
         const agentState = await stateRes.json() as { running: boolean; state?: AgentStateResponse };
-        if (sessionIdRef.current !== sid) return null;
+        if (!isCurrent()) return null;
 
         const liveState = agentState.state;
         if (liveState) {
@@ -536,10 +604,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         return null;
       }
     } catch (e) {
-      setError(String(e));
+      if (isCurrent()) setError(String(e));
       return null;
     } finally {
-      if (showLoading && !messagesLoaded) setLoading(false);
+      if (showLoading && !messagesLoaded && isCurrent()) setLoading(false);
     }
   }, []);
 
@@ -686,6 +754,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           if (eventSourceRef.current === es && agentRunningRef.current) {
             eventSourceRef.current = null;
             setTimeout(() => {
+              // The session may have been switched during the delay. Without
+              // this guard the retry closes the new session's stream and pipes
+              // the old session's events into it.
+              if (sessionIdRef.current !== sid) return;
               if (agentRunningRef.current) void connectEvents(sid);
             }, 1000);
           }
@@ -1402,7 +1474,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           const data = await sendAgentCommand<LastAssistantTextResponse>(sid, { type: "get_last_assistant_text" });
           const textToCopy = data?.text ?? "";
           if (!textToCopy) return complete({ handled: true, error: "No assistant message to copy" });
-          await navigator.clipboard.writeText(textToCopy);
+          const { copyText } = await import("@/lib/clipboard");
+          await copyText(textToCopy);
           return complete({ handled: true, message: "Copied last assistant message" });
         }
 
@@ -1551,47 +1624,85 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     completionScrollAllowedRef.current = false;
   }, []);
 
-  // Load session on mount
-  useEffect(() => {
-    if (session) {
-      sessionIdRef.current = session.id;
-      loadSession(session.id, true, true).then((agentState) => {
-        if (agentState?.running) {
-          loadTools(session.id);
-          if (agentState.state?.isStreaming || agentState.state?.isPromptRunning) {
-            agentRunningRef.current = true;
-            setAgentRunning(true);
-            setAgentPhase(agentState.state.isStreaming ? { kind: "waiting_model" } : { kind: "running_command" });
-            dispatch({ type: "start" });
-            void connectEvents(session.id);
-            if (!agentState.state.isStreaming && agentState.state.isPromptRunning) {
-              void waitForPromptSettlement(session.id);
-            }
-          }
-          if (agentState.state?.isBashRunning) {
-            bashRunningRef.current = true;
-            setBashRunning(true);
-            void waitForBashSettlement(session.id);
-          }
-        }
-        if (agentState?.state) {
-          if (agentState.state.isCompacting !== undefined) setIsCompacting(agentState.state.isCompacting);
-          if (agentState.state.contextUsage !== undefined) setContextUsage(agentState.state.contextUsage ?? null);
-          if (agentState.state.systemPrompt !== undefined) setSystemPrompt(agentState.state.systemPrompt ?? null);
-          if (agentState.state.thinkingLevel !== undefined) setThinkingLevel((agentState.state.thinkingLevel as ThinkingLevelOption) ?? "auto");
-          if (agentState.state.extensionStatuses !== undefined) setExtensionStatuses(agentState.state.extensionStatuses ?? []);
-          if (agentState.state.extensionWidgets !== undefined) setExtensionWidgets(agentState.state.extensionWidgets ?? []);
-          if (agentState.state.queuedMessages !== undefined) setQueuedMessages(normalizeQueuedMessages(agentState.state.queuedMessages));
-        }
-      });
-    }
-    return () => {
-      bashRecoveryIdRef.current += 1;
-      eventSourceRef.current?.close();
-      eventSourceRef.current = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Close SSE / invalidate in-flight work when ChatWindow unmounts.
+  useEffect(() => () => {
+    bashRecoveryIdRef.current += 1;
+    promptRunIdRef.current += 1;
+    eventSourceRef.current?.close();
+    eventSourceRef.current = null;
   }, []);
+
+  // Load (or reset) when the parent switches sessions without remounting.
+  // useLayoutEffect so the previous session's EventSource is closed before
+  // paint. The new→created promotion path is a no-op: messages/SSE are live.
+  useLayoutEffect(() => {
+    if (!sessionIdentity) return;
+
+    const isExisting = !sessionIdentity.startsWith("new:");
+    if (
+      isExisting
+      && sessionIdRef.current === sessionIdentity
+      && newSessionPromotedRef.current
+    ) {
+      return;
+    }
+
+    bashRecoveryIdRef.current += 1;
+    promptRunIdRef.current += 1;
+    eventSourceRef.current?.close();
+    eventSourceRef.current = null;
+
+    if (!isExisting) {
+      sessionIdRef.current = null;
+      newSessionPromotedRef.current = false;
+      ensuringNewSessionRef.current = null;
+      setLoading(false);
+      return;
+    }
+
+    const sid = sessionIdentity;
+    sessionIdRef.current = sid;
+    newSessionPromotedRef.current = false;
+    ensuringNewSessionRef.current = null;
+    void loadSession(sid, true, true).then((agentState) => {
+      if (sessionIdRef.current !== sid) return;
+      void loadTools(sid);
+      if (agentState?.running) {
+        if (agentState.state?.isStreaming || agentState.state?.isPromptRunning) {
+          agentRunningRef.current = true;
+          setAgentRunning(true);
+          setAgentPhase(agentState.state.isStreaming ? { kind: "waiting_model" } : { kind: "running_command" });
+          dispatch({ type: "start" });
+          void connectEvents(sid);
+          if (!agentState.state.isStreaming && agentState.state.isPromptRunning) {
+            void waitForPromptSettlement(sid);
+          }
+        }
+        if (agentState.state?.isBashRunning) {
+          bashRunningRef.current = true;
+          setBashRunning(true);
+          void waitForBashSettlement(sid);
+        }
+      }
+      if (agentState?.state) {
+        if (agentState.state.isCompacting !== undefined) setIsCompacting(agentState.state.isCompacting);
+        if (agentState.state.contextUsage !== undefined) setContextUsage(agentState.state.contextUsage ?? null);
+        if (agentState.state.systemPrompt !== undefined) setSystemPrompt(agentState.state.systemPrompt ?? null);
+        if (agentState.state.thinkingLevel !== undefined) setThinkingLevel((agentState.state.thinkingLevel as ThinkingLevelOption) ?? "auto");
+        if (agentState.state.extensionStatuses !== undefined) setExtensionStatuses(agentState.state.extensionStatuses ?? []);
+        if (agentState.state.extensionWidgets !== undefined) setExtensionWidgets(agentState.state.extensionWidgets ?? []);
+        if (agentState.state.queuedMessages !== undefined) setQueuedMessages(normalizeQueuedMessages(agentState.state.queuedMessages));
+      }
+    });
+  }, [
+    sessionIdentity,
+    connectEvents,
+    dispatch,
+    loadSession,
+    loadTools,
+    waitForBashSettlement,
+    waitForPromptSettlement,
+  ]);
 
   useEffect(() => {
     onSystemPromptChange?.(systemPrompt);

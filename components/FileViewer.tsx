@@ -208,20 +208,81 @@ function getFileApiUrl(
 
 function DownloadLink({ filePath, sourceSessionId }: { filePath: string; sourceSessionId?: string | null }) {
   const { t } = useI18n();
+  const [busy, setBusy] = useState(false);
   return (
-    <a
-      href={getFileApiUrl(filePath, "download", sourceSessionId)}
-      download={getFileName(filePath)}
+    <button
+      type="button"
+      disabled={busy}
       title={t("i18n.downloadFile")}
       aria-label={t("i18n.downloadFile")}
       className="file-viewer-icon-button"
+      onClick={() => {
+        void (async () => {
+          setBusy(true);
+          try {
+            const { saveLocalFileAs } = await import("@/lib/desktop-native");
+            await saveLocalFileAs(
+              filePath,
+              getFileName(filePath),
+              getFileApiUrl(filePath, "download", sourceSessionId),
+            );
+          } catch (error) {
+            console.error("Failed to save file:", error);
+          } finally {
+            setBusy(false);
+          }
+        })();
+      }}
     >
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
         <polyline points="7 10 12 15 17 10" />
         <line x1="12" y1="15" x2="12" y2="3" />
       </svg>
-    </a>
+    </button>
+  );
+}
+
+function DesktopPathActions({ filePath }: { filePath: string }) {
+  const [desktop, setDesktop] = useState(false);
+  useEffect(() => {
+    void import("@/lib/desktop-native").then(({ isTauriDesktop }) => {
+      setDesktop(isTauriDesktop());
+    });
+  }, []);
+  if (!desktop) return null;
+
+  return (
+    <>
+      <button
+        type="button"
+        title="Open with default app"
+        aria-label="Open with default app"
+        className="file-viewer-icon-button"
+        onClick={() => {
+          void import("@/lib/desktop-native").then(({ openPathNative }) => openPathNative(filePath));
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+          <polyline points="15 3 21 3 21 9" />
+          <line x1="10" y1="14" x2="21" y2="3" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        title="Reveal in Finder"
+        aria-label="Reveal in Finder"
+        className="file-viewer-icon-button"
+        onClick={() => {
+          void import("@/lib/desktop-native").then(({ revealItemInDirNative }) => revealItemInDirNative(filePath));
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+        </svg>
+      </button>
+    </>
   );
 }
 
@@ -260,6 +321,7 @@ function FileViewerToolbar({
       </span>
       <div className="file-viewer-controls">
         {children}
+        <DesktopPathActions filePath={filePath} />
         <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />
       </div>
     </div>
@@ -1107,7 +1169,7 @@ function TextFileViewer({ filePath, cwd, sourceSessionId, onOpenFile, onMentionL
         ) : isHtml && effectiveDisplayMode === "preview" ? (
           <iframe
             srcDoc={content}
-            sandbox="allow-scripts"
+            sandbox=""
             style={{ width: "100%", height: "100%", border: "none", background: "var(--bg)" }}
              title={t("i18n.htmlPreview")}
           />

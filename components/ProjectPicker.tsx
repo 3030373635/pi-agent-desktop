@@ -24,12 +24,41 @@ interface ProjectPickerProps {
  * initial "pick a project" entry point and inline in the chat composer once a
  * project is active.
  */
-/** Max entries shown in the dropdown list; extras are simply not rendered. */
+/** Max entries listed before the filter box becomes the way to reach the rest. */
 const MAX_VISIBLE_PROJECTS = 7;
+
+/**
+ * The unfiltered list stays capped so the dropdown reads as a short shortcut
+ * list, but the cap alone would make every project past it unreachable, so
+ * anything over the cap also gets a filter box. Filtering therefore has to
+ * search the *whole* list and return every match (the list scrolls).
+ */
+export function selectVisibleProjects(
+  recentProjects: string[],
+  selectedProject: string | null,
+  filter: string,
+): string[] {
+  const needle = filter.trim().toLowerCase();
+  if (needle) {
+    return recentProjects.filter((p) => p.toLowerCase().includes(needle));
+  }
+  const capped = recentProjects.slice(0, MAX_VISIBLE_PROJECTS);
+  // Keep the selected project visible even when it falls outside the cap so
+  // the checkmark row never disappears.
+  if (selectedProject && recentProjects.includes(selectedProject) && !capped.includes(selectedProject)) {
+    return [...capped.slice(0, MAX_VISIBLE_PROJECTS - 1), selectedProject];
+  }
+  return capped;
+}
+
+export function shouldShowProjectFilter(recentProjects: string[]): boolean {
+  return recentProjects.length > MAX_VISIBLE_PROJECTS;
+}
 
 export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, homeDir, onSelectCwd, variant = "block", disabled }: ProjectPickerProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [projectFilter, setProjectFilter] = useState("");
   const [customPathOpen, setCustomPathOpen] = useState(false);
   const [customPathError, setCustomPathError] = useState<string | null>(null);
   const [customPathValidating, setCustomPathValidating] = useState(false);
@@ -37,6 +66,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
 
   const closeDropdown = useCallback(() => {
     setDropdownOpen(false);
+    setProjectFilter("");
     setCustomPathOpen(false);
     setCustomPathError(null);
   }, []);
@@ -89,21 +119,20 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
       return;
     }
 
-    // Desktop: use the native directory selection dialog; fall back to the
-    // browsable picker if the dialog fails or the chosen path is rejected.
+    // Desktop: native directory dialog only — do not fall back to the web
+    // path browser (users should retry the native picker or see the error).
     try {
       setCustomPathError(null);
       const path = await selectDirectoryNative(selectedCwd ?? homeDir);
       if (path === null) return;
       const ok = await commitCustomPath(path);
       if (!ok) {
-        setCustomPathOpen(true);
-        setDropdownOpen(false);
+        // Keep the dropdown open so the inline error under Open Folder is visible.
+        setDropdownOpen(true);
       }
     } catch (e) {
       setCustomPathError(e instanceof Error ? e.message : String(e));
-      setCustomPathOpen(true);
-      setDropdownOpen(false);
+      setDropdownOpen(true);
     }
   }, [commitCustomPath, selectedCwd, homeDir]);
 
@@ -116,24 +145,23 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
         closeDropdown();
         return;
       }
-      // Surface the failure in the directory picker instead of failing silently
       setCustomPathError(data.error ?? `HTTP ${res.status}`);
-      setCustomPathOpen(true);
-      setDropdownOpen(false);
+      if (!isTauriDesktop()) {
+        setCustomPathOpen(true);
+      }
+      setDropdownOpen(true);
     } catch (e) {
       setCustomPathError(e instanceof Error ? e.message : String(e));
-      setCustomPathOpen(true);
-      setDropdownOpen(false);
+      if (!isTauriDesktop()) {
+        setCustomPathOpen(true);
+      }
+      setDropdownOpen(true);
     }
   }, [onSelectCwd, closeDropdown]);
 
-  // Show at most MAX_VISIBLE_PROJECTS entries (like the worktree switcher);
-  // extras are dropped. Keep the selected project visible even when it falls
-  // outside the cap so the checkmark row never disappears.
-  let visibleProjects = recentProjects.slice(0, MAX_VISIBLE_PROJECTS);
-  if (selectedProject && recentProjects.includes(selectedProject) && !visibleProjects.includes(selectedProject)) {
-    visibleProjects = [...visibleProjects.slice(0, MAX_VISIBLE_PROJECTS - 1), selectedProject];
-  }
+  const trimmedFilter = projectFilter.trim();
+  const showProjectFilter = shouldShowProjectFilter(recentProjects);
+  const visibleProjects = selectVisibleProjects(recentProjects, selectedProject, projectFilter);
 
   const isInline = variant === "inline";
 
@@ -237,6 +265,35 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
       </button>
 
       <AnimatedDropdown className="native-popover" open={dropdownOpen} style={panelStyle}>
+        {showProjectFilter && (
+          <div style={{ padding: "6px 8px", borderBottom: "1px solid var(--border)" }}>
+            <input
+              value={projectFilter}
+              onChange={(e) => setProjectFilter(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  e.stopPropagation();
+                  if (projectFilter) setProjectFilter("");
+                  else closeDropdown();
+                }
+              }}
+              placeholder="Filter projects…"
+              aria-label="Filter projects"
+              autoFocus
+              style={{
+                width: "100%",
+                fontSize: 11,
+                fontFamily: "var(--font-mono)",
+                padding: "5px 8px",
+                background: "var(--bg-panel)",
+                border: "1px solid var(--border)",
+                borderRadius: 6,
+                color: "var(--text)",
+                outline: "none",
+              }}
+            />
+          </div>
+        )}
         <div style={{ maxHeight: "min(50vh, 380px)", overflowY: "auto" }}>
           {visibleProjects.map((project, index) => (
             <button
@@ -275,6 +332,9 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
               <PathLabel text={displayCwd(project, homeDir)} style={{ flex: 1 }} />
             </button>
           ))}
+          {visibleProjects.length === 0 && trimmedFilter && (
+            <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--text-dim)" }}>No matching projects</div>
+          )}
         </div>
 
         {/* Default cwd shortcut */}
@@ -290,7 +350,7 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
               padding: "8px 10px",
               background: "none",
               border: "none",
-              borderTop: visibleProjects.length > 0 ? "1px solid var(--border)" : "none",
+              borderTop: visibleProjects.length > 0 || trimmedFilter ? "1px solid var(--border)" : "none",
               color: "var(--text-muted)",
               cursor: "pointer",
               textAlign: "left",
@@ -332,9 +392,24 @@ export function ProjectPicker({ recentProjects, selectedCwd, selectedProject, ho
           </svg>
           <span>Open Folder…</span>
         </button>
+        {customPathError && isTauriDesktop() && (
+          <div
+            role="alert"
+            style={{
+              padding: "6px 10px 8px",
+              borderTop: "1px solid var(--border)",
+              color: "var(--danger)",
+              fontSize: 11,
+              lineHeight: 1.35,
+              overflowWrap: "anywhere",
+            }}
+          >
+            {customPathError}
+          </div>
+        )}
       </AnimatedDropdown>
 
-      {customPathOpen && (
+      {customPathOpen && !isTauriDesktop() && (
         <DirectoryPicker
           busy={customPathValidating}
           error={customPathError}

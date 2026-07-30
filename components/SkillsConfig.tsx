@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalDismiss } from "@/hooks/useModalDismiss";
+import { handleExternalLinkClick } from "@/lib/desktop-native";
 import type {
   SkillInfo as Skill,
   SkillInstallScope,
@@ -179,6 +180,7 @@ function SkillDetail({
             target="_blank"
             rel="noreferrer"
             title={skill.install.skillsShUrl}
+            onClick={(event) => handleExternalLinkClick(event, skill.install?.skillsShUrl)}
             style={{
               display: "flex",
               alignItems: "center",
@@ -616,6 +618,7 @@ function AddSkillPanel({
                         href={r.url}
                         target="_blank"
                         rel="noreferrer"
+                        onClick={(event) => handleExternalLinkClick(event, r.url)}
                         style={{
                           fontSize: 12,
                           color: "var(--accent)",
@@ -674,6 +677,7 @@ function AddSkillPanel({
               href="https://skills.sh"
               target="_blank"
               rel="noreferrer"
+              onClick={(event) => handleExternalLinkClick(event, "https://skills.sh")}
               style={{ color: "var(--accent)", textDecoration: "none" }}
             >
               skills.sh

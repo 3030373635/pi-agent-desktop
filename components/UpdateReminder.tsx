@@ -3,11 +3,12 @@
 import { useEffect, useState } from "react";
 import type { AppUpdateInfo, AppUpdatesResponse } from "@/lib/app-update-types";
 import { PRODUCT_NAME } from "@/lib/branding";
+import { APP_PREF_KEYS, getPrefJson, setPrefJson } from "@/lib/app-prefs";
+import { handleExternalLinkClick } from "@/lib/desktop-native";
 import { useI18n } from "@/hooks/useI18n";
 
 const RETRY_AFTER_ERROR_MS = 6 * 60 * 60 * 1000;
 const MAX_TIMER_MS = 2_147_000_000;
-const SNOOZE_STORAGE_KEY = "pi-web:update-snooze";
 const SNOOZE_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
 
 interface SnoozeRecord {
@@ -25,23 +26,13 @@ function updatesSignature(updates: AppUpdateInfo[]): string {
 
 function loadSnooze(): SnoozeRecord | null {
   if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(SNOOZE_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<SnoozeRecord>;
-    if (typeof parsed.until !== "number" || typeof parsed.signature !== "string") return null;
-    return { until: parsed.until, signature: parsed.signature };
-  } catch {
-    return null;
-  }
+  const parsed = getPrefJson<Partial<SnoozeRecord>>(APP_PREF_KEYS.updateSnooze);
+  if (!parsed || typeof parsed.until !== "number" || typeof parsed.signature !== "string") return null;
+  return { until: parsed.until, signature: parsed.signature };
 }
 
 function saveSnooze(record: SnoozeRecord): void {
-  try {
-    window.localStorage.setItem(SNOOZE_STORAGE_KEY, JSON.stringify(record));
-  } catch {
-    // ignore storage quota / privacy-mode errors
-  }
+  setPrefJson(APP_PREF_KEYS.updateSnooze, record);
 }
 
 function isSnoozed(updates: AppUpdateInfo[]): boolean {
@@ -177,6 +168,7 @@ export function UpdateReminder({ onOpenSettings }: { onOpenSettings: () => void 
               href={update.releaseUrl}
               target="_blank"
               rel="noreferrer"
+              onClick={(event) => handleExternalLinkClick(event, update.releaseUrl)}
               style={{
                 flexShrink: 0,
                 color: "var(--accent)",

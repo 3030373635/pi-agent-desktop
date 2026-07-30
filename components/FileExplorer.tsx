@@ -10,6 +10,12 @@ import {
   joinFilePath,
   normalizeFilePathSlashes,
 } from "@/lib/file-paths";
+import {
+  importLocalFiles,
+  isTauriDesktop,
+  saveLocalFileAs,
+  selectFilesNative,
+} from "@/lib/desktop-native";
 import type { GitFileStatus, GitFileStatusKind, GitStatusResponse } from "@/lib/git-types";
 import { useI18n } from "@/hooks/useI18n";
 type Translate = ReturnType<typeof useI18n>["t"];
@@ -70,9 +76,16 @@ interface UploadSummary {
 }
 
 interface PendingConflict {
-  files: File[];
+  files?: File[];
+  sourcePaths?: string[];
   conflicts: string[];
   nonReplaceable: string[];
+}
+
+function fileNameFromPath(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, "/");
+  const parts = normalized.split("/");
+  return parts[parts.length - 1] || filePath;
 }
 
 async function fetchEntries(dirPath: string): Promise<FileNode[]> {
@@ -214,6 +227,7 @@ function TreeNode({
   cwd,
   onOpenFile,
   onAtMention,
+  onDownloadFile,
   expandedPaths,
   onToggleExpanded,
   refreshToken,
@@ -229,6 +243,7 @@ function TreeNode({
   cwd: string;
   onOpenFile: (filePath: string, fileName: string, options?: OpenFileOptions) => void;
   onAtMention?: (relativePath: string, isDir: boolean) => void;
+  onDownloadFile: (filePath: string) => void;
   expandedPaths: Set<string>;
   onToggleExpanded: (fullPath: string, open: boolean) => void;
   refreshToken: string;
@@ -372,10 +387,12 @@ function TreeNode({
           </button>
         )}
         {hovered && !node.isDir && (
-          <a
-            href={`/api/files/${encodeFilePathForApi(node.fullPath)}?type=download`}
-            download
-            onClick={(e) => e.stopPropagation()}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDownloadFile(node.fullPath);
+            }}
             title={t("files.download")}
             aria-label={t("files.downloadName", { name: node.name })}
             className="file-tree-action file-tree-download"
@@ -385,7 +402,7 @@ function TreeNode({
               <polyline points="7 10 12 15 17 10" />
               <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
-          </a>
+          </button>
         )}
       </div>
       {node.isDir && open && (
@@ -424,6 +441,7 @@ function TreeNode({
               cwd={cwd}
               onOpenFile={onOpenFile}
               onAtMention={onAtMention}
+              onDownloadFile={onDownloadFile}
               expandedPaths={expandedPaths}
               onToggleExpanded={onToggleExpanded}
               refreshToken={refreshToken}
@@ -609,6 +627,53 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
     }
   }, [applyUploadResult, cwd]);
 
+  const performImport = useCallback(async (
+    sourcePaths: string[],
+    strategy: UploadConflictStrategy,
+  ) => {
+    setPendingConflict(null);
+    setUploadError(null);
+    setUploadProgress(0);
+    setUploadPhase("uploading");
+
+    try {
+      const { status, data } = await importLocalFiles({
+        destDirectory: cwd,
+        sourcePaths,
+        conflict: strategy,
+        encodeDestPath: encodeFilePathForApi,
+      });
+      if (status === 409 && data.conflicts?.length) {
+        setPendingConflict({
+          sourcePaths,
+          conflicts: data.conflicts,
+          nonReplaceable: data.nonReplaceable ?? [],
+        });
+        return;
+      }
+      if (status < 200 || status >= 300) {
+        throw new Error(data.error ?? `Import failed (HTTP ${status})`);
+      }
+      setUploadProgress(100);
+      applyUploadResult(data);
+    } catch (uploadFailure) {
+      setUploadError(uploadFailure instanceof Error ? uploadFailure.message : String(uploadFailure));
+    } finally {
+      setUploadPhase("idle");
+    }
+  }, [applyUploadResult, cwd]);
+
+  const resolvePendingConflict = useCallback((strategy: UploadConflictStrategy) => {
+    if (!pendingConflict) return;
+    if (pendingConflict.sourcePaths?.length) {
+      void performImport(pendingConflict.sourcePaths, strategy);
+      return;
+    }
+    if (pendingConflict.files?.length) {
+      void performUpload(pendingConflict.files, strategy);
+    }
+  }, [pendingConflict, performImport, performUpload]);
+
   const prepareUpload = useCallback(async (files: File[]) => {
     if (files.length === 0 || uploadBusy) return;
     setUploadSummary(null);
@@ -647,17 +712,83 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
     }
   }, [cwd, performUpload, uploadBusy]);
 
+  const prepareImport = useCallback(async (sourcePaths: string[]) => {
+    if (sourcePaths.length === 0 || uploadBusy) return;
+    setUploadSummary(null);
+    setHighlightedPaths(new Set());
+    setPendingConflict(null);
+    setUploadError(null);
+    setUploadProgress(0);
+    setUploadPhase("checking");
+
+    try {
+      const res = await fetch(
+        `/api/files/${encodeFilePathForApi(cwd)}?type=upload-check`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fileNames: sourcePaths.map(fileNameFromPath) }),
+        },
+      );
+      const data = await res.json().catch(() => ({})) as UploadResponse;
+      if (!res.ok) throw new Error(data.error ?? `Upload check failed (HTTP ${res.status})`);
+
+      if (data.conflicts?.length) {
+        setPendingConflict({
+          sourcePaths,
+          conflicts: data.conflicts,
+          nonReplaceable: data.nonReplaceable ?? [],
+        });
+        return;
+      }
+
+      await performImport(sourcePaths, "error");
+    } catch (uploadFailure) {
+      setUploadError(uploadFailure instanceof Error ? uploadFailure.message : String(uploadFailure));
+    } finally {
+      setUploadPhase("idle");
+    }
+  }, [cwd, performImport, uploadBusy]);
+
   const handleUploadInput = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
     event.target.value = "";
     void prepareUpload(files);
   }, [prepareUpload]);
 
+  const handleDownloadFile = useCallback(async (filePath: string) => {
+    try {
+      await saveLocalFileAs(
+        filePath,
+        getFileName(filePath),
+        `/api/files/${encodeFilePathForApi(filePath)}?type=download`,
+      );
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : String(error));
+    }
+  }, []);
+
   useImperativeHandle(ref, () => ({
     openUploadPicker() {
-      if (!uploadBusy) uploadInputRef.current?.click();
+      if (uploadBusy) return;
+      if (!isTauriDesktop()) {
+        uploadInputRef.current?.click();
+        return;
+      }
+      void (async () => {
+        try {
+          const paths = await selectFilesNative({
+            multiple: true,
+            defaultPath: cwd,
+            title: "Select files to upload",
+          });
+          if (paths.length > 0) await prepareImport(paths);
+        } catch (error) {
+          setUploadError(error instanceof Error ? error.message : String(error));
+        }
+      })();
     },
-  }), [uploadBusy]);
+  }), [cwd, prepareImport, uploadBusy]);
 
   useEffect(() => {
     onUploadBusyChange?.(uploadBusy);
@@ -727,7 +858,9 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
   // on the server. Trailing-edge throttle (leading + trailing) keeps the UI
   // live without hammering the disk.
   useEffect(() => {
-    const source = new EventSource(`/api/files/${encodeFilePathForApi(cwd)}?type=watch-dir`);
+    let source: EventSource | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let closed = false;
     const makeThrottle = (fn: () => void, intervalMs: number) => {
       let lastRun = 0;
       let timer: ReturnType<typeof setTimeout> | null = null;
@@ -751,10 +884,32 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
       treeThrottle.invoke();
       gitThrottle.invoke();
     };
-    source.addEventListener("change", onChange);
+    const connect = () => {
+      if (closed) return;
+      source?.removeEventListener("change", onChange);
+      source?.close();
+      source = new EventSource(`/api/files/${encodeFilePathForApi(cwd)}?type=watch-dir`);
+      source.addEventListener("change", onChange);
+      source.onerror = () => {
+        if (source?.readyState === EventSource.CLOSED) {
+          if (reconnectTimer) clearTimeout(reconnectTimer);
+          reconnectTimer = setTimeout(connect, 1_500);
+        }
+      };
+    };
+    connect();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") connect();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", connect);
     return () => {
-      source.removeEventListener("change", onChange);
-      source.close();
+      closed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", connect);
+      source?.removeEventListener("change", onChange);
+      source?.close();
       treeThrottle.cancel();
       gitThrottle.cancel();
     };
@@ -857,10 +1012,10 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
               </div>
             )}
             <div style={{ display: "flex", gap: 5, marginTop: 7 }}>
-              <button type="button" onClick={() => void performUpload(pendingConflict.files, "overwrite")} style={{ height: 22, padding: "0 7px", border: "1px solid var(--danger)", borderRadius: 4, background: "transparent", color: "var(--danger)", cursor: "pointer", fontSize: 10 }}>
+              <button type="button" onClick={() => resolvePendingConflict("overwrite")} style={{ height: 22, padding: "0 7px", border: "1px solid var(--danger)", borderRadius: 4, background: "transparent", color: "var(--danger)", cursor: "pointer", fontSize: 10 }}>
                 {t("files.replace")}
               </button>
-              <button type="button" onClick={() => void performUpload(pendingConflict.files, "skip")} style={{ height: 22, padding: "0 7px", border: "1px solid var(--border)", borderRadius: 4, background: "var(--bg-panel)", color: "var(--text)", cursor: "pointer", fontSize: 10 }}>
+              <button type="button" onClick={() => resolvePendingConflict("skip")} style={{ height: 22, padding: "0 7px", border: "1px solid var(--border)", borderRadius: 4, background: "var(--bg-panel)", color: "var(--text)", cursor: "pointer", fontSize: 10 }}>
                 {t("files.skipExisting")}
               </button>
               <button type="button" onClick={() => setPendingConflict(null)} style={{ height: 22, padding: "0 7px", border: "none", borderRadius: 4, background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontSize: 10 }}>
@@ -991,6 +1146,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
                 cwd={cwd}
                 onOpenFile={onOpenFile}
                 onAtMention={onAtMention}
+                onDownloadFile={(filePath) => { void handleDownloadFile(filePath); }}
                 expandedPaths={expandedPaths}
                 onToggleExpanded={handleToggleExpanded}
                 refreshToken={refreshToken}
