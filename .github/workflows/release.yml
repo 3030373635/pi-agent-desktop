@@ -89,7 +89,34 @@ jobs:
         with:
           tagName: v__VERSION__
           releaseName: pi-agent-desktop v__VERSION__
-          releaseBody: A signed Pi Agent desktop release containing the latest verified pi-agent-desktop, pi, and pi-web components.
+          releaseBody: |
+            ## Pi Agent Desktop 0.2.4
+
+            This update makes Pi Agent feel more at home on your desktop and more dependable from one task to the next.
+
+            ### What's new
+
+            - **A more native desktop workflow** — Use system file, folder, and save dialogs; open links in your default browser; reveal local files; and keep Pi Agent close at hand from the system tray.
+            - **Pick up where you left off** — Your last task, working folder, open files, and theme return when you reopen the app.
+            - **Helpful, quieter notifications** — Get a completion notification when Pi Agent finishes in the background, without extra noise while you're already looking at the app.
+            - **Faster project navigation** — Search across the full project list instead of being limited to the first few entries.
+            - **More reliable task switching** — Moving between tasks now clears the previous view immediately and prevents delayed updates from appearing in the wrong conversation.
+            - **Safer local file actions** — Desktop file selection and saving now include stronger checks and clearer feedback when an attachment cannot be added.
+
+            ---
+
+            ## Pi Agent Desktop 0.2.4
+
+            这次更新让 Pi Agent 更像一款真正融入桌面的应用，也让你在不同任务之间切换时更加安心、顺畅。
+
+            ### 本次更新
+
+            - **更自然的桌面操作体验** —— 使用系统原生的文件、文件夹和保存窗口；通过默认浏览器打开链接；在文件管理器中定位本地文件；还可以从系统托盘快速回到 Pi Agent。
+            - **重新打开即可继续工作** —— 上次使用的任务、工作目录、已打开文件和主题会在启动后自动恢复。
+            - **恰到好处的完成提醒** —— Pi Agent 在后台完成任务时会发送通知；当你正在查看应用时则不会重复打扰。
+            - **查找项目更轻松** —— 现在可以搜索完整的项目列表，不再只能看到前几项。
+            - **任务切换更可靠** —— 切换任务时会立即清理上一任务的界面，延迟到达的内容也不会再出现在错误的对话中。
+            - **本地文件操作更安心** —— 文件选择和保存增加了更严格的保护，附件无法添加时也会给出更清晰的提示。
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
