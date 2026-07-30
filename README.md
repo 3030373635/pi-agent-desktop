@@ -2,6 +2,8 @@
 
 `pi-agent-desktop` 是一个面向 macOS 和 Windows 的本地 AI Agent 桌面应用。它将 [pi](https://github.com/earendil-works/pi) 的 Agent 能力封装成一个可独立安装的 App。
 
+[中文文档](./README.zh-CN.md) | [日本語](./README.ja.md) | [Русский](./README.ru.md)
+
 ## 主要功能
 
 - 按项目浏览和继续历史 Pi 会话，无需查找终端历史或 `.jsonl` 文件。

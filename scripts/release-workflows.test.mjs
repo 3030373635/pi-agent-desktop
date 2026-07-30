@@ -62,7 +62,7 @@ test("npm test covers every test directory, recursively", async () => {
   // The globs must recurse too: a flat components/*.test.mjs skips the
   // fork-owned tests under components/desktop/.
   const pkg = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
-  for (const dir of ["lib", "scripts", "components"]) {
+  for (const dir of ["lib", "scripts", "components", "hooks"]) {
     assert.match(
       pkg.scripts.test,
       new RegExp(`${dir}/\\*\\*/\\*\\.test\\.mjs`),
@@ -78,11 +78,11 @@ test("no test file is left out of npm test", async () => {
     .split("\n")
     .filter(Boolean);
 
-  const covered = tracked.filter((file) => /^(lib|scripts|components)\//.test(file));
+  const covered = tracked.filter((file) => /^(lib|scripts|components|hooks)\//.test(file));
   assert.deepEqual(
     tracked.filter((file) => !covered.includes(file)),
     [],
-    "a .test.mjs file lives outside lib/, scripts/ and components/ — extend npm test",
+    "a .test.mjs file lives outside lib/, scripts/, components/ and hooks/ — extend npm test",
   );
 });
 

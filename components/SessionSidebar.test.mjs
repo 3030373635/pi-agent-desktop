@@ -20,3 +20,10 @@ test("does not register row-level session deletion shortcuts", () => {
   assert.doesNotMatch(sessionItemSource, /onKeyDown=\{handleKeyDown\}/);
   assert.doesNotMatch(sessionItemSource, /tabIndex=\{0\}/);
 });
+
+test("streams running sessions and reconnects after visibility or network changes", () => {
+  assert.match(source, /new EventSource\("\/api\/agent\/running\/events"\)/);
+  assert.match(source, /document\.addEventListener\("visibilitychange", onVisible\)/);
+  assert.match(source, /window\.addEventListener\("online", connect\)/);
+  assert.match(source, /source\?\.close\(\)/);
+});

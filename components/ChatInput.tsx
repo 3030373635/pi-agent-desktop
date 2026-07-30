@@ -47,6 +47,8 @@ interface Props {
   modelNames?: Record<string, string>;
   modelList?: { id: string; name: string; provider: string }[];
   modelError?: string | null;
+  /** Diagnostics from resolving `enabledModels`, e.g. a pattern that matched nothing. */
+  modelScopeWarnings?: string[];
   onModelChange?: (provider: string, modelId: string) => void;
   onCompact?: () => void;
   onAbortCompaction?: () => void;
@@ -224,7 +226,8 @@ function QueuedMessageRow({ kind, label, text }: { kind: "steer" | "follow-up"; 
   );
 }
 
-function ErrorBanner({ title, detail }: { title: string; detail: string }) {
+function ModelNoticeBanner({ tone, title, body }: { tone: "error" | "warning"; title: string; body: string }) {
+  const color = tone === "error" ? "239,68,68" : "234,179,8";
   return (
     <div
       role="alert"
@@ -236,10 +239,10 @@ function ErrorBanner({ title, detail }: { title: string; detail: string }) {
         marginBottom: 8,
         padding: "7px 10px",
         overflowY: "auto",
-        border: "1px solid rgba(239,68,68,0.3)",
+        border: `1px solid rgba(${color},0.3)`,
         borderRadius: 6,
-        background: "rgba(239,68,68,0.07)",
-        color: "#ef4444",
+        background: `rgba(${color},0.07)`,
+        color: `rgb(${color})`,
         fontSize: 11,
         lineHeight: 1.45,
       }}
@@ -262,7 +265,7 @@ function ErrorBanner({ title, detail }: { title: string; detail: string }) {
       </svg>
       <div style={{ minWidth: 0 }}>
         <div style={{ fontWeight: 600 }}>{title}</div>
-        <div style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{detail}</div>
+        <div style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{body}</div>
       </div>
     </div>
   );
@@ -271,11 +274,23 @@ function ErrorBanner({ title, detail }: { title: string; detail: string }) {
 export function ModelErrorBanner({ error }: { error?: string | null }) {
   const { t } = useI18n();
   if (!error) return null;
-  return <ErrorBanner title={t("chat.modelError")} detail={error} />;
+  return <ModelNoticeBanner tone="error" title={t("chat.modelError")} body={error} />;
+}
+
+/** Surfaces `enabledModels` patterns that matched nothing, so a typo is visible (#307). */
+export function ModelScopeWarningBanner({ warnings }: { warnings?: string[] }) {
+  if (!warnings || warnings.length === 0) return null;
+  return (
+    <ModelNoticeBanner
+      tone="warning"
+      title={warnings.length > 1 ? "Model scope warnings" : "Model scope warning"}
+      body={warnings.join("\n")}
+    />
+  );
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
-  onSend, onAbort, onSteer, onFollowUp, isStreaming, model, isAutoModelSelection, modelNames, modelList, modelError, onModelChange,
+  onSend, onAbort, onSteer, onFollowUp, isStreaming, model, isAutoModelSelection, modelNames, modelList, modelError, modelScopeWarnings, onModelChange,
   onCompact, onAbortCompaction, isCompacting, compactError, compactResult, toolPreset, onToolPresetChange,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   retryInfo, queuedMessages, inputHistory = [], onRecallQueue,
@@ -1132,7 +1147,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       />
       <div className="chat-composer-wrap" style={{ maxWidth: 820, margin: "0 auto" }}>
         <ModelErrorBanner error={modelError} />
-        {attachError && <ErrorBanner title={t("chat.attachmentError")} detail={attachError} />}
+        {attachError && <ModelNoticeBanner tone="error" title={t("chat.attachmentError")} body={attachError} />}
+        <ModelScopeWarningBanner warnings={modelScopeWarnings} />
         {/* Queued steering / follow-up messages (delivered by pi on upcoming turns) */}
         {((queuedMessages?.steering.length ?? 0) + (queuedMessages?.followUp.length ?? 0)) > 0 && (
           <div style={{

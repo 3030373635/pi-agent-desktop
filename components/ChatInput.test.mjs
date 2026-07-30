@@ -8,7 +8,7 @@ const jiti = createJiti(import.meta.url, {
   jsx: { runtime: "automatic" },
   tsconfigPaths: true,
 });
-const { ChatInput, ModelErrorBanner, filterModelOptions } = await jiti.import("./ChatInput.tsx");
+const { ChatInput, ModelErrorBanner, ModelScopeWarningBanner, filterModelOptions } = await jiti.import("./ChatInput.tsx");
 const { I18nProvider } = await jiti.import("../hooks/useI18n.tsx");
 
 /** The banner reads its title through useI18n, so it needs the provider. */
@@ -30,6 +30,18 @@ test("renders the upstream model error", () => {
 
 test("does not render an empty model error", () => {
   assert.equal(renderWithI18n(React.createElement(ModelErrorBanner, { error: null })), "");
+});
+
+test("renders enabledModels scope warnings", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(ModelScopeWarningBanner, {
+      warnings: ['No models match pattern "ghost-gateway/*"'],
+    }),
+  );
+
+  assert.match(html, /Model scope warning/);
+  assert.match(html, /ghost-gateway/);
+  assert.equal(renderToStaticMarkup(React.createElement(ModelScopeWarningBanner, { warnings: [] })), "");
 });
 
 test("keeps the model selector visible when a model error leaves no options", () => {

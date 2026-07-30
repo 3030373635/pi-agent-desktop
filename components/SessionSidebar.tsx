@@ -224,7 +224,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(() => new Set());
   const [unreadSessionIds, setUnreadSessionIds] = useState<Set<string>>(() => loadUnreadSessionIds());
   const previousRunningSessionIdsRef = useRef<Set<string>>(new Set());
-  // Once the SSE stream has delivered a frame it is the source of truth for
+  // Once polling has delivered a snapshot it is the source of truth for
   // running state; late /api/sessions responses must not overwrite it.
   const sseAuthoritativeRef = useRef(false);
   const fileExplorerRef = useRef<FileExplorerHandle>(null);
@@ -250,8 +250,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json() as { sessions: SessionInfo[]; runningSessionIds?: string[] };
       setAllSessions(data.sessions);
-      // Treat the fetched running set as an initial fallback only. Once SSE is
-      // live it owns this state, so a slow fetch can't revive a stale snapshot.
+      // Treat the fetched running set as an initial fallback only. Once the
+      // live SSE stream is connected, a slow session-list fetch cannot overwrite it.
       if (!sseAuthoritativeRef.current) {
         setRunningSessionIds(new Set(data.runningSessionIds ?? []));
       }
