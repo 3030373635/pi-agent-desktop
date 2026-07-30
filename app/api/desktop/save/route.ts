@@ -6,11 +6,17 @@ import {
   isExistingFilePathAllowed,
   isWindowsAbsolutePath,
 } from "@/lib/file-access";
-import { isApiRequestAllowed } from "@/lib/request-security";
+import {
+  parseJsonWithinLimit,
+  readRequestBytesWithinLimit,
+  RequestBodyTooLargeError,
+} from "@/lib/bounded-form-data";
+import { isDesktopApiRequestAllowed } from "@/lib/desktop-api-auth";
+import { MAX_DESKTOP_SAVE_BYTES } from "@/lib/desktop-api";
 
 export const runtime = "nodejs";
 
-const MAX_SAVE_BYTES = 100 * 1024 * 1024;
+const MAX_SAVE_JSON_BYTES = 16 * 1024;
 
 function resolveAbsolutePath(candidate: string): string | null {
   const trimmed = candidate.trim();
@@ -41,15 +47,15 @@ function assertWritableDest(destPath: string): string | null {
 }
 
 export async function POST(request: NextRequest) {
-  if (!isApiRequestAllowed(request)) {
-    return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
+  if (!isDesktopApiRequestAllowed(request)) {
+    return NextResponse.json({ error: "Desktop authorization required" }, { status: 403 });
   }
 
   try {
     const contentType = request.headers.get("content-type") ?? "";
 
     if (contentType.includes("application/json")) {
-      const body = await request.json().catch(() => null) as {
+      const body = await parseJsonWithinLimit(request, MAX_SAVE_JSON_BYTES) as {
         sourcePath?: unknown;
         destPath?: unknown;
       } | null;
@@ -72,7 +78,7 @@ export async function POST(request: NextRequest) {
       if (!sourceStat.isFile() || sourceStat.isSymbolicLink()) {
         return NextResponse.json({ error: "Source must be a regular file" }, { status: 400 });
       }
-      if (sourceStat.size > MAX_SAVE_BYTES) {
+      if (sourceStat.size > MAX_DESKTOP_SAVE_BYTES) {
         return NextResponse.json({ error: "File is too large to save" }, { status: 413 });
       }
 
@@ -100,14 +106,13 @@ export async function POST(request: NextRequest) {
     const destError = assertWritableDest(destPath);
     if (destError) return NextResponse.json({ error: destError }, { status: 400 });
 
-    const bytes = Buffer.from(await request.arrayBuffer());
-    if (bytes.byteLength > MAX_SAVE_BYTES) {
-      return NextResponse.json({ error: "File is too large to save" }, { status: 413 });
-    }
-
+    const bytes = await readRequestBytesWithinLimit(request, MAX_DESKTOP_SAVE_BYTES);
     fs.writeFileSync(destPath, bytes);
     return NextResponse.json({ ok: true, destPath });
   } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return NextResponse.json({ error: "File is too large to save" }, { status: 413 });
+    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : String(error) },
       { status: 500 },

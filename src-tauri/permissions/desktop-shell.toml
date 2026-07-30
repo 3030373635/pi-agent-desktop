@@ -32,3 +32,8 @@ commands.allow = ["show_main_window_cmd"]
 identifier = "allow-set-ui-theme"
 description = "Allows the UI to persist light/dark theme for the next cold start."
 commands.allow = ["set_ui_theme"]
+
+[[permission]]
+identifier = "allow-get-desktop-api-token"
+description = "Allows the trusted desktop WebView to authorize native-dialog filesystem requests."
+commands.allow = ["get_desktop_api_token"]

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { SessionSidebar } from "./SessionSidebar";
 import { ChatWindow } from "./ChatWindow";
+import { clearDraft } from "@/lib/draft-store";
 import { TabBar, type Tab } from "./TabBar";
 
 // Heavy, rarely-used surfaces are code-split out of the main bundle. The
@@ -51,9 +52,12 @@ const TOP_BAR_ICON_BUTTON_SIZE = 36;
 export function AppShell() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [persistedWorkspace] = useState(() => getPrefJson<PersistedWorkspace>(APP_PREF_KEYS.workspace));
+  const [desktopMode] = useState(() => isTauriDesktop());
+  const [persistedWorkspace] = useState(() => (
+    desktopMode ? getPrefJson<PersistedWorkspace>(APP_PREF_KEYS.workspace) : null
+  ));
   const [initialNavigation] = useState(() => resolveInitialNavigation(searchParams, persistedWorkspace));
-  const [workspaceHydrated, setWorkspaceHydrated] = useState(false);
+  const [workspaceHydrated, setWorkspaceHydrated] = useState(() => !desktopMode);
   const { isDark, toggleTheme } = useTheme();
   const { locale, t: translate } = useI18n();
   const isMobile = useIsMobile();
@@ -218,12 +222,12 @@ export function AppShell() {
     if (sw >= SIDEBAR_MIN && sw <= SIDEBAR_MAX) setSidebarWidth(sw);
     const rw = Number(getPref(APP_PREF_KEYS.rightPanelWidth));
     if (rw >= RIGHT_PANEL_MIN) setRightPanelWidth(rw);
-    if (isTauriDesktop()) {
+    if (desktopMode) {
       void setCloseQuitsNative(getPrefBool(APP_PREF_KEYS.closeQuits, false));
     }
-  }, []);
+  }, [desktopMode]);
 
-  const { state: connectionState, retry: retryConnection } = useDesktopConnection();
+  const { state: connectionState, retry: retryConnection } = useDesktopConnection(desktopMode);
 
   const beginColumnResize = useCallback((which: "sidebar" | "rightPanel", e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -366,7 +370,14 @@ export function AppShell() {
     setSelectedSession(session);
     // Do not bump sessionKey here — ChatWindow stays mounted and swaps
     // session data in place so the fixed input dock does not flash.
+    setBranchTree([]);
+    setBranchActiveLeafId(null);
+    branchLeafChangeFnRef.current = null;
     setSystemPrompt(null);
+    setSessionStats(null);
+    setContextUsage(null);
+    setActiveTopPanel(null);
+    setTopMoreOpen(false);
     setInitialSessionRestored(true);
     // On mobile, collapse the overlay drawer so the chat is revealed after pick.
     if (isMobile && !isRestore) setSidebarOpen(false);
@@ -383,11 +394,20 @@ export function AppShell() {
   }, [router, isMobile]);
 
   const handleNewSession = useCallback((_sessionId: string, cwd: string) => {
+    // "New task" is an explicit reset. A cwd-based blank-task draft would
+    // otherwise be reloaded immediately when the composer remounts.
+    clearDraft(`new:${cwd}`);
     setSelectedSession(null);
     setNewSessionCwd(cwd);
+    // A second click in the same cwd must still create a clean composer. The
+    // cwd-derived session identity alone cannot distinguish those blank tasks.
+    setSessionKey((key) => key + 1);
     setBranchTree([]);
     setBranchActiveLeafId(null);
+    branchLeafChangeFnRef.current = null;
     setSystemPrompt(null);
+    setSessionStats(null);
+    setContextUsage(null);
     setActiveTopPanel(null);
     if (isMobile) setSidebarOpen(false);
     router.replace("/", { scroll: false });
@@ -573,7 +593,7 @@ export function AppShell() {
 
   // Reopen the last file tabs after the cold-start session/cwd restore settles.
   useEffect(() => {
-    if (!initialSessionRestored || workspaceHydrated) return;
+    if (!desktopMode || !initialSessionRestored || workspaceHydrated) return;
 
     const cwd = selectedSession?.cwd ?? newSessionCwd ?? activeCwd;
     const canMatch = workspaceFileTabsMatchContext(
@@ -606,6 +626,7 @@ export function AppShell() {
     setWorkspaceHydrated(true);
   }, [
     initialSessionRestored,
+    desktopMode,
     workspaceHydrated,
     persistedWorkspace,
     selectedSession?.id,
@@ -617,7 +638,7 @@ export function AppShell() {
 
   // Persist workspace so the next desktop cold start can restore chat + files.
   useEffect(() => {
-    if (!workspaceHydrated) return;
+    if (!desktopMode || !workspaceHydrated) return;
     setPrefJson(APP_PREF_KEYS.workspace, {
       sessionId: selectedSession?.id ?? null,
       cwd: selectedSession?.cwd ?? newSessionCwd ?? activeCwd,
@@ -632,6 +653,7 @@ export function AppShell() {
     } satisfies PersistedWorkspace);
   }, [
     workspaceHydrated,
+    desktopMode,
     selectedSession?.id,
     selectedSession?.cwd,
     newSessionCwd,

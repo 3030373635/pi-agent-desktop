@@ -18,6 +18,7 @@
     "allow-set-close-quits",
     "allow-quit-app",
     "allow-show-main-window-cmd",
-    "allow-set-ui-theme"
+    "allow-set-ui-theme",
+    "allow-get-desktop-api-token"
   ]
 }

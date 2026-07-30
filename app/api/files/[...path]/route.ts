@@ -26,7 +26,12 @@ import {
   parseUploadConflictStrategy,
   validateUploadFileNames,
 } from "@/lib/file-upload";
-import { parseFormDataWithinLimit, RequestBodyTooLargeError } from "@/lib/bounded-form-data";
+import {
+  parseFormDataWithinLimit,
+  parseJsonWithinLimit,
+  RequestBodyTooLargeError,
+} from "@/lib/bounded-form-data";
+import { isDesktopApiRequestAllowed } from "@/lib/desktop-api-auth";
 
 const IGNORED_NAMES = new Set([
   "node_modules", ".git", ".next", "dist", "build", "__pycache__",
@@ -43,6 +48,8 @@ const MAX_UPLOAD_FILE_BYTES = 25 * 1024 * 1024;
 const MAX_UPLOAD_TOTAL_BYTES = 100 * 1024 * 1024;
 // Multipart boundaries and headers are not file bytes, but must be bounded too.
 const MAX_UPLOAD_REQUEST_BYTES = MAX_UPLOAD_TOTAL_BYTES + 1024 * 1024;
+const MAX_IMPORT_JSON_BYTES = 256 * 1024;
+const MAX_IMPORT_FILES = 100;
 
 const EXT_TO_LANGUAGE: Record<string, string> = {
   ts: "typescript", tsx: "typescript", js: "javascript", jsx: "javascript",
@@ -151,17 +158,23 @@ export async function POST(
     }
 
     if (type === "import") {
+      if (!isDesktopApiRequestAllowed(request)) {
+        return NextResponse.json({ error: "Desktop authorization required" }, { status: 403 });
+      }
       const strategy = parseUploadConflictStrategy(request.nextUrl.searchParams.get("conflict"));
       if (!strategy) {
         return NextResponse.json({ error: "Invalid conflict strategy" }, { status: 400 });
       }
 
-      const body = await request.json().catch(() => null) as { sourcePaths?: unknown } | null;
+      const body = await parseJsonWithinLimit(request, MAX_IMPORT_JSON_BYTES) as { sourcePaths?: unknown } | null;
       if (!Array.isArray(body?.sourcePaths) || !body.sourcePaths.every((item) => typeof item === "string")) {
         return NextResponse.json({ error: "sourcePaths must be an array of strings" }, { status: 400 });
       }
       if (body.sourcePaths.length === 0) {
         return NextResponse.json({ error: "No files selected" }, { status: 400 });
+      }
+      if (body.sourcePaths.length > MAX_IMPORT_FILES) {
+        return NextResponse.json({ error: `Select at most ${MAX_IMPORT_FILES} files` }, { status: 400 });
       }
 
       const sources: Array<{ sourcePath: string; fileName: string; size: number }> = [];
@@ -335,6 +348,9 @@ export async function POST(
       { status: errors.length > 0 ? 207 : 200 },
     );
   } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return NextResponse.json({ error: "Import request is too large" }, { status: 413 });
+    }
     return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
 }

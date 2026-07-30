@@ -11,16 +11,17 @@ const OFFLINE_THRESHOLD = 2;
  * Lightweight local-server health probe. Used to surface a reconnect banner
  * when the packaged Next server or SSE streams drop.
  */
-export function useDesktopConnection(): {
+export function useDesktopConnection(enabled = true): {
   state: DesktopConnectionState;
   retry: () => void;
 } {
-  const [state, setState] = useState<DesktopConnectionState>("checking");
+  const [state, setState] = useState<DesktopConnectionState>(enabled ? "checking" : "online");
   const failuresRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stoppedRef = useRef(false);
 
   const probe = useCallback(async () => {
+    if (!enabled) return;
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 4_000);
     try {
@@ -44,25 +45,30 @@ export function useDesktopConnection(): {
     } finally {
       window.clearTimeout(timeout);
     }
-  }, []);
+  }, [enabled]);
 
   // A probe that is still in flight at unmount resolves after cleanup ran, so
   // it would queue a timer nobody owns and keep pinging forever.
   const schedule = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    if (stoppedRef.current) return;
+    if (!enabled || stoppedRef.current) return;
     timerRef.current = setTimeout(() => {
       void probe().finally(() => schedule());
     }, PING_INTERVAL_MS);
-  }, [probe]);
+  }, [enabled, probe]);
 
   const retry = useCallback(() => {
+    if (!enabled) return;
     setState("checking");
     failuresRef.current = 0;
     void probe();
-  }, [probe]);
+  }, [enabled, probe]);
 
   useEffect(() => {
+    if (!enabled) {
+      stoppedRef.current = true;
+      return;
+    }
     stoppedRef.current = false;
     void probe().finally(() => schedule());
 
@@ -80,7 +86,7 @@ export function useDesktopConnection(): {
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("online", onOnline);
     };
-  }, [probe, retry, schedule]);
+  }, [enabled, probe, retry, schedule]);
 
-  return { state, retry };
+  return { state: enabled ? state : "online", retry };
 }

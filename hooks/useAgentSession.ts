@@ -424,11 +424,18 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const sessionIdRef = useRef<string | null>(session?.id ?? null);
+  // Async reads that write session-scoped UI state need their own monotonic
+  // request ids. Checking only the session id is not enough when the user
+  // switches A → B → A before the first A request settles.
+  const contextLoadIdRef = useRef(0);
+  const toolsLoadIdRef = useRef(0);
   const agentRunningRef = useRef(false);
   const bashRunningRef = useRef(false);
   const bashRecoveryIdRef = useRef(0);
   const handleAgentEventRef = useRef<((event: AgentEvent) => void) | null>(null);
   const initialScrollDoneRef = useRef(false);
+  const scrollPositionsRef = useRef(new Map<string, number>());
+  const pendingInitialScrollTopRef = useRef<number | null>(null);
   const lastUserMsgRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollToUserRef = useRef(false);
   const completionScrollAllowedRef = useRef(true);
@@ -464,6 +471,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       // loadSession/SSE handlers for the previous id become no-ops.
       if (session?.id) sessionIdRef.current = session.id;
       else if (isNew) sessionIdRef.current = null;
+      contextLoadIdRef.current += 1;
+      toolsLoadIdRef.current += 1;
       agentRunningRef.current = false;
       bashRunningRef.current = false;
       initialScrollDoneRef.current = false;
@@ -620,29 +629,44 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [loadSession]);
 
   const loadContext = useCallback(async (sid: string, leafId: string | null) => {
+    const requestId = ++contextLoadIdRef.current;
+    const isCurrent = () => (
+      sessionIdRef.current === sid
+      && contextLoadIdRef.current === requestId
+    );
     try {
       const params = new URLSearchParams({ deferThinking: "1", deferMedia: "1" });
       if (leafId) params.set("leafId", leafId);
       const url = `/api/sessions/${encodeURIComponent(sid)}/context?${params}`;
       const res = await fetch(url);
+      if (!isCurrent()) return false;
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json() as { context: { messages: AgentMessage[]; entryIds: string[] } };
+      if (!isCurrent()) return false;
       setMessages(d.context.messages);
       setEntryIds(d.context.entryIds ?? []);
+      return true;
     } catch (e) {
-      console.error("Failed to load context:", e);
+      if (isCurrent()) console.error("Failed to load context:", e);
+      return false;
     }
   }, []);
 
   const loadTools = useCallback(async (sid: string) => {
+    const requestId = ++toolsLoadIdRef.current;
+    const isCurrent = () => (
+      sessionIdRef.current === sid
+      && toolsLoadIdRef.current === requestId
+    );
     try {
       const tools = await sendAgentCommand<ToolEntry[]>(sid, { type: "get_tools" });
-      if (tools) {
+      if (tools && isCurrent()) {
         const { getPresetFromTools } = await import("@/lib/tool-presets");
+        if (!isCurrent()) return;
         setToolPresetState(getPresetFromTools(tools));
       }
     } catch (e) {
-      console.error("Failed to load tools:", e);
+      if (isCurrent()) console.error("Failed to load tools:", e);
     }
   }, [setToolPresetState]);
 
@@ -1334,11 +1358,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   const handleLeafChange = useCallback(async (leafId: string | null) => {
     if (bashRunningRef.current) return;
-    setActiveLeafId(leafId);
     const sid = sessionIdRef.current;
     if (!sid) return;
-    await loadContext(sid, leafId);
-    if (leafId) {
+    setActiveLeafId(leafId);
+    const loaded = await loadContext(sid, leafId);
+    if (loaded && leafId && sessionIdRef.current === sid) {
       sendAgentCommand(sid, { type: "navigate_tree", targetId: leafId }).catch(() => {});
     }
   }, [loadContext]);
@@ -1638,6 +1662,25 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   useLayoutEffect(() => {
     if (!sessionIdentity) return;
 
+    const positions = scrollPositionsRef.current;
+    const container = scrollContainerRef.current;
+    pendingInitialScrollTopRef.current = positions.get(sessionIdentity) ?? null;
+
+    return () => {
+      if (!container) return;
+      // Refresh insertion order so the small in-memory cache behaves as LRU.
+      positions.delete(sessionIdentity);
+      positions.set(sessionIdentity, container.scrollTop);
+      if (positions.size > 50) {
+        const oldest = positions.keys().next().value;
+        if (oldest !== undefined) positions.delete(oldest);
+      }
+    };
+  }, [sessionIdentity]);
+
+  useLayoutEffect(() => {
+    if (!sessionIdentity) return;
+
     const isExisting = !sessionIdentity.startsWith("new:");
     if (
       isExisting
@@ -1743,7 +1786,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         scrollUserMsgToTop();
       } else if (!initialScrollDoneRef.current) {
         initialScrollDoneRef.current = true;
-        scrollToBottom("instant");
+        const savedScrollTop = pendingInitialScrollTopRef.current;
+        pendingInitialScrollTopRef.current = null;
+        if (savedScrollTop == null) {
+          scrollToBottom("instant");
+        } else {
+          ignoreProgrammaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_IGNORE_MS;
+          const container = scrollContainerRef.current;
+          if (container) container.scrollTop = savedScrollTop;
+        }
       } else if (!agentRunningRef.current && completionScrollAllowedRef.current) {
         scrollToBottom("smooth");
       }

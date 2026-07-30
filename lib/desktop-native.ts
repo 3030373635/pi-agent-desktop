@@ -1,4 +1,8 @@
 import { isTauriDesktop } from "@/lib/desktop-updater";
+import {
+  DESKTOP_API_TOKEN_HEADER,
+  MAX_DESKTOP_SAVE_BYTES,
+} from "@/lib/desktop-api";
 
 export type DesktopDialogFilter = {
   name: string;
@@ -21,6 +25,73 @@ export type SelectSavePathOptions = {
 function asPathArray(selection: string | string[] | null): string[] {
   if (selection == null) return [];
   return Array.isArray(selection) ? selection.filter((path) => typeof path === "string") : [selection];
+}
+
+let desktopApiTokenPromise: Promise<string> | null = null;
+
+async function getDesktopApiToken(): Promise<string> {
+  if (!isTauriDesktop()) {
+    throw new Error("Desktop filesystem authorization is only available in the desktop app.");
+  }
+  if (!desktopApiTokenPromise) {
+    desktopApiTokenPromise = import("@tauri-apps/api/core")
+      .then(({ invoke }) => invoke<string>("get_desktop_api_token"))
+      .then((token) => {
+        if (typeof token !== "string" || token.length < 32) {
+          throw new Error("Desktop filesystem authorization is unavailable.");
+        }
+        return token;
+      })
+      .catch((error) => {
+        desktopApiTokenPromise = null;
+        throw error;
+      });
+  }
+  return desktopApiTokenPromise;
+}
+
+async function desktopApiHeaders(initial?: HeadersInit): Promise<Headers> {
+  const headers = new Headers(initial);
+  headers.set(DESKTOP_API_TOKEN_HEADER, await getDesktopApiToken());
+  return headers;
+}
+
+async function readResponseBytesWithinLimit(
+  response: Response,
+  maxBytes: number,
+): Promise<Uint8Array> {
+  const declared = response.headers.get("content-length");
+  if (declared && /^\d+$/.test(declared) && Number(declared) > maxBytes) {
+    throw new Error(`File is larger than ${maxBytes / (1024 * 1024)}MB`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) return new Uint8Array();
+
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (size + value.byteLength > maxBytes) {
+        await reader.cancel().catch(() => {});
+        throw new Error(`File is larger than ${maxBytes / (1024 * 1024)}MB`);
+      }
+      chunks.push(value);
+      size += value.byteLength;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
 }
 
 /** Native folder-selection dialog (desktop shell only). Resolves null when cancelled. */
@@ -129,15 +200,19 @@ export async function downloadUrlAsFile(url: string, defaultFileName: string): P
     const text = await response.text().catch(() => "");
     throw new Error(text || `Download failed (HTTP ${response.status})`);
   }
-  const bytes = new Uint8Array(await response.arrayBuffer());
+  const bytes = await readResponseBytesWithinLimit(response, MAX_DESKTOP_SAVE_BYTES);
+  const body = bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength,
+  ) as ArrayBuffer;
 
   const saveResponse = await fetch("/api/desktop/save", {
     method: "POST",
-    headers: {
+    headers: await desktopApiHeaders({
       "Content-Type": "application/octet-stream",
       "X-Pi-Dest-Path": encodeURIComponent(destPath),
-    },
-    body: bytes,
+    }),
+    body,
   });
   if (!saveResponse.ok) {
     const data = await saveResponse.json().catch(() => ({})) as { error?: string };
@@ -165,7 +240,7 @@ export async function saveLocalFileAs(
 
   const response = await fetch("/api/desktop/save", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: await desktopApiHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ sourcePath, destPath }),
   });
   if (!response.ok) {
@@ -187,7 +262,7 @@ export async function readDesktopImageAttachments(paths: string[]): Promise<Desk
   if (paths.length === 0) return [];
   const response = await fetch("/api/desktop/read-images", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: await desktopApiHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ paths }),
   });
   const data = await response.json().catch(() => ({})) as {
@@ -220,7 +295,7 @@ export async function importLocalFiles(options: {
     `/api/files/${options.encodeDestPath(options.destDirectory)}?type=import&conflict=${options.conflict}`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: await desktopApiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ sourcePaths: options.sourcePaths }),
     },
   );

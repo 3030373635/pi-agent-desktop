@@ -23,6 +23,7 @@ use tauri::{
 };
 
 const WINDOW_LABEL: &str = "main";
+const DESKTOP_API_TOKEN_ENV: &str = "PI_DESKTOP_API_TOKEN";
 #[cfg(not(feature = "custom-protocol"))]
 const DEV_SERVER_URL: &str = "http://127.0.0.1:30141";
 /// Preferred localhost port for the packaged Next server. Keeping this stable
@@ -43,6 +44,26 @@ struct DesktopServer {
 
 /// When true, closing the main window quits the app; otherwise it hides to tray.
 struct CloseQuits(Mutex<bool>);
+
+struct DesktopApiToken(String);
+
+fn load_or_generate_desktop_api_token() -> Result<String, String> {
+    if let Ok(token) = env::var(DESKTOP_API_TOKEN_ENV) {
+        let token = token.trim();
+        if token.len() >= 32 {
+            return Ok(token.to_string());
+        }
+    }
+
+    let mut bytes = [0_u8; 32];
+    getrandom::fill(&mut bytes).map_err(|error| error.to_string())?;
+    Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
+}
+
+#[tauri::command]
+fn get_desktop_api_token(token: tauri::State<'_, DesktopApiToken>) -> String {
+    token.0.clone()
+}
 
 fn show_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(WINDOW_LABEL) {
@@ -550,6 +571,7 @@ fn wait_for_server(child: &mut Child, address: SocketAddr, log_path: &Path) -> i
 #[cfg(feature = "custom-protocol")]
 fn start_packaged_server(
     app: &tauri::AppHandle,
+    desktop_api_token: &str,
 ) -> Result<(Url, DesktopServer), Box<dyn std::error::Error>> {
     let resource_dir = app.path().resource_dir()?;
     let node_path = bundled_node_path(&resource_dir);
@@ -593,6 +615,7 @@ fn start_packaged_server(
         .env("NODE_ENV", "production")
         .env("NEXT_TELEMETRY_DISABLED", "1")
         .env("PI_WEB_PARENT_PID", std::process::id().to_string())
+        .env(DESKTOP_API_TOKEN_ENV, desktop_api_token)
         .stdin(Stdio::null())
         .stdout(Stdio::from(stdout))
         .stderr(Stdio::from(stderr));
@@ -628,13 +651,19 @@ fn start_development_server(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let desktop_api_token = load_or_generate_desktop_api_token()
+        .expect("failed to create desktop API authorization token");
+    #[cfg(feature = "custom-protocol")]
+    let server_api_token = desktop_api_token.clone();
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_process::init())
         .manage(CloseQuits(Mutex::new(false)))
+        .manage(DesktopApiToken(desktop_api_token))
         .invoke_handler(tauri::generate_handler![
+            get_desktop_api_token,
             open_external_url,
             open_path,
             reveal_item_in_dir,
@@ -643,7 +672,7 @@ pub fn run() {
             show_main_window_cmd,
             set_ui_theme
         ])
-        .setup(|app| {
+        .setup(move |app| {
             // The updater public key is embedded at compile time by the release
             // workflow. Local development builds intentionally omit it, which
             // keeps unsigned builds from accepting production updates.
@@ -659,7 +688,7 @@ pub fn run() {
             }
 
             #[cfg(feature = "custom-protocol")]
-            let (url, server) = start_packaged_server(app.handle())?;
+            let (url, server) = start_packaged_server(app.handle(), &server_api_token)?;
             #[cfg(not(feature = "custom-protocol"))]
             let (url, server) = start_development_server(app.handle())?;
 

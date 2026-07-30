@@ -4,13 +4,18 @@ import path from "path";
 import { isWindowsAbsolutePath } from "@/lib/file-access";
 import { getImageMime } from "@/lib/file-types";
 import { MAX_ATTACHED_IMAGE_BYTES, MAX_ATTACHED_IMAGES } from "@/lib/image-attachments";
-import { isApiRequestAllowed } from "@/lib/request-security";
+import { parseJsonWithinLimit, RequestBodyTooLargeError } from "@/lib/bounded-form-data";
+import { isDesktopApiRequestAllowed } from "@/lib/desktop-api-auth";
 
 export const runtime = "nodejs";
 
 // Must match the composer's cap, otherwise a selection the UI considers valid
 // is rejected here after the user already picked the files.
 const MAX_FILES = MAX_ATTACHED_IMAGES;
+const MAX_PATHS_JSON_BYTES = 64 * 1024;
+// Base64 expands by roughly one third and the renderer creates preview copies.
+// Keep one native selection comfortably below the Node/WebView heap ceiling.
+const MAX_SELECTION_BYTES = 50 * 1024 * 1024;
 
 function resolveAbsolutePath(candidate: string): string | null {
   const trimmed = candidate.trim();
@@ -22,12 +27,12 @@ function resolveAbsolutePath(candidate: string): string | null {
 }
 
 export async function POST(request: NextRequest) {
-  if (!isApiRequestAllowed(request)) {
-    return NextResponse.json({ error: "Untrusted API request" }, { status: 403 });
+  if (!isDesktopApiRequestAllowed(request)) {
+    return NextResponse.json({ error: "Desktop authorization required" }, { status: 403 });
   }
 
   try {
-    const body = await request.json().catch(() => null) as { paths?: unknown } | null;
+    const body = await parseJsonWithinLimit(request, MAX_PATHS_JSON_BYTES) as { paths?: unknown } | null;
     if (!Array.isArray(body?.paths) || !body.paths.every((item) => typeof item === "string")) {
       return NextResponse.json({ error: "paths must be an array of strings" }, { status: 400 });
     }
@@ -39,6 +44,7 @@ export async function POST(request: NextRequest) {
     }
 
     const files: Array<{ name: string; mimeType: string; data: string }> = [];
+    let totalBytes = 0;
     for (const rawPath of body.paths) {
       const filePath = resolveAbsolutePath(rawPath);
       if (!filePath) {
@@ -60,6 +66,13 @@ export async function POST(request: NextRequest) {
           { status: 413 },
         );
       }
+      totalBytes += stat.size;
+      if (totalBytes > MAX_SELECTION_BYTES) {
+        return NextResponse.json(
+          { error: `Selected images must total ${MAX_SELECTION_BYTES / (1024 * 1024)}MB or less` },
+          { status: 413 },
+        );
+      }
 
       const mimeType = getImageMime(filePath);
       if (!mimeType) {
@@ -76,6 +89,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ files });
   } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return NextResponse.json({ error: "Image selection is too large" }, { status: 413 });
+    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : String(error) },
       { status: 500 },
