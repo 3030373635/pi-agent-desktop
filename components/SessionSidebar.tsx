@@ -202,6 +202,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   useEffect(() => {
     if (isTauriDesktop()) setDesktopPlatform(getDesktopPlatform());
   }, []);
+  const [wtFilter, setWtFilter] = useState("");
   // Worktree switcher state
   const [worktreeState, setWorktreeState] = useState<WorktreeState | null>(null);
   const [wtDropdownOpen, setWtDropdownOpen] = useState(false);
@@ -568,6 +569,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         setWtNewBranch("");
         setWtError(null);
         setWtConfirmRemove(null);
+        setWtFilter("");
       }
     };
     document.addEventListener("mousedown", handler);
@@ -701,6 +703,11 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           if (!worktreeState) return null;
           const currentWt = worktreeState.worktrees.find((w) => w.path === selectedCwd)
             ?? worktreeState.worktrees.find((w) => w.isMain);
+          const showWtFilter = worktreeState.worktrees.length >= 8;
+          const visibleWorktrees = showWtFilter && wtFilter.trim()
+            ? worktreeState.worktrees.filter((w) =>
+                (w.branch ?? displayCwd(w.path, homeDir)).toLowerCase().includes(wtFilter.trim().toLowerCase()))
+            : worktreeState.worktrees;
           return (
             <div ref={wtDropdownRef} style={{ position: "relative" }}>
               <button
@@ -748,16 +755,36 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                   overflow: "hidden",
                 }}
               >
+                  {showWtFilter && (
+                    <div style={{ padding: "6px 8px", borderBottom: "1px solid var(--border)" }}>
+                      <input
+                        value={wtFilter}
+                        onChange={(e) => setWtFilter(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Escape") {
+                            setWtFilter("");
+                            setWtDropdownOpen(false);
+                          }
+                        }}
+                        placeholder={t("sidebar.filterWorktrees")}
+                        autoFocus
+                        style={{
+                          width: "100%",
+                          fontSize: 11,
+                          fontFamily: "var(--font-mono)",
+                          padding: "5px 8px",
+                          border: "1px solid var(--border)",
+                          borderRadius: 5,
+                          outline: "none",
+                          background: "var(--bg)",
+                          color: "var(--text)",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                    </div>
+                  )}
                   <div style={{ maxHeight: "min(40vh, 300px)", overflowY: "auto" }}>
-                    {(() => {
-                      // Match ProjectPicker: show at most 7 entries, keeping the
-                      // current worktree visible even when it falls outside the cap.
-                      let shown = worktreeState.worktrees.slice(0, 7);
-                      if (currentWt && !shown.includes(currentWt)) {
-                        shown = [...shown.slice(0, 6), currentWt];
-                      }
-                      return shown;
-                    })().map((wt) => {
+                    {visibleWorktrees.map((wt) => {
                       const isCurrent = wt.path === selectedCwd || (wt.isMain && !worktreeState.worktrees.some((w) => w.path === selectedCwd));
                       if (wtConfirmRemove?.path === wt.path) {
                         const isForce = wtConfirmRemove.force;
@@ -793,6 +820,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                               setSelectedCwd(wt.path);
                               setWtDropdownOpen(false);
                               setWtError(null);
+                              setWtFilter("");
                             }}
                             title={wt.path}
                             style={{
@@ -866,6 +894,9 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                         </div>
                       );
                     })}
+                    {showWtFilter && visibleWorktrees.length === 0 && wtFilter.trim() && (
+                      <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--text-dim)" }}>{t("sidebar.noMatchingWorktrees")}</div>
+                    )}
                   </div>
 
                   {!wtNewOpen ? (

@@ -376,6 +376,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     return history.reverse();
   }, [messages]);
   const messageRefs = useMessageRefs(visibleMessages.length);
+  const revealHistoryForMinimap = useCallback(() => {
+    setVisibleCount((current) => Math.max(current, messages.length * 2));
+  }, [messages.length]);
 
   const isEmptyNew = isNew && !loading && !error && messages.length === 0 && !streamState.isStreaming && !sessionBusy;
   const messageCwd = session?.cwd ?? newSessionCwd ?? undefined;
@@ -815,6 +818,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           streamingMessage={streamState.streamingMessage}
           scrollContainer={scrollContainerRef}
           messageRefs={messageRefs}
+          onRevealHistory={revealHistoryForMinimap}
         />
       )}
       </div>
