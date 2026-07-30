@@ -2,28 +2,6 @@
 
 `pi-agent-desktop` 是一个面向 macOS 和 Windows 的本地 AI Agent 桌面应用。它将 [pi](https://github.com/earendil-works/pi) 的 Agent 能力、[pi-web](https://github.com/agegr/pi-web) 的 Web 界面与本仓库的桌面封装、品牌和升级逻辑组合为一个可独立安装的 App，产品界面统一使用 **Pi Agent** 名称。
 
-![Pi Agent 浅色模式界面](./docs/screenshots/pi-agent-light@2x.png)
-
-![Pi Agent 深色模式界面](./docs/screenshots/pi-agent-dark@2x.png)
-
-<p align="center">
-  <a href="https://github.com/abcwyc/pi-agent-desktop/releases"><strong>⬇️ 下载 Pi Agent（macOS / Windows）</strong></a>
-</p>
-
-项目仓库：[abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop)
-
-## 项目组成
-
-Pi Agent 由三个开源项目共同组成：
-
-| 组件 | 仓库 | 在 App 中的职责 |
-| --- | --- | --- |
-| `pi-agent-desktop` | [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop) | macOS/Windows 桌面封装、Pi Agent 品牌、设置界面、版本管理和整包升级 |
-| `pi` | [earendil-works/pi](https://github.com/earendil-works/pi) | AgentSession、模型调用、工具执行、会话与配置能力 |
-| `pi-web` | [agegr/pi-web](https://github.com/agegr/pi-web) | Web UI、会话浏览、聊天交互、模型、Skills、Plugins 和文件预览 |
-
-每次发布所包含的精确版本记录在 [`src-tauri/resources/component-versions.json`](./src-tauri/resources/component-versions.json) 中，也可以在 App 的设置弹窗中查看当前打包版本和对应的 GitHub Release 版本。
-
 ## 主要功能
 
 - 按项目浏览和继续历史 Pi 会话，无需查找终端历史或 `.jsonl` 文件。
@@ -35,6 +13,14 @@ Pi Agent 由三个开源项目共同组成：
 - 支持深色模式、会话自动命名、完成提示音和运行状态恢复。
 - 每周检查三个组成项目的稳定 GitHub Release，并在发现更新时提醒用户。
 - 通过一个升级按钮安装完整、签名的 Pi Agent 新版本并自动重启。
+
+![Pi Agent 浅色模式界面](./docs/screenshots/pi-agent-light@2x.png)
+
+![Pi Agent 深色模式界面](./docs/screenshots/pi-agent-dark@2x.png)
+
+**[⬇️ 下载 Pi Agent（macOS / Windows）](https://github.com/abcwyc/pi-agent-desktop/releases)**
+
+项目仓库：[abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop)
 
 ## 安装与使用
 
