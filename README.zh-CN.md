@@ -1,163 +1,210 @@
-# Pi Web
+# Pi Agent
 
-[English](./README.md) | [日本語](./README.ja.md) | [Русский](./README.ru.md)
+[English](./README.md) | **简体中文**
 
-[pi 编程智能体](https://github.com/earendil-works/pi) 的本地网页界面。它会读取本机的 pi 会话文件，在浏览器里提供会话管理、实时对话、模型配置、技能管理和项目文件预览。
+`pi-agent-desktop` 是一个面向 macOS 和 Windows 的本地 AI Agent 桌面应用。它将 [pi](https://github.com/earendil-works/pi) 的 Agent 能力封装成一个可独立安装的 App。
 
-中文微信群：请查看 [GitHub Discussions 帖子](https://github.com/agegr/pi-web/discussions/271)。
+## 主要功能
 
-## 快速开始
+- 按项目浏览和继续历史 Pi 会话，无需查找终端历史或 `.jsonl` 文件。
+- 在桌面窗口中与 Agent 实时对话，查看思考、工具调用、上下文用量、成本和压缩状态。
+- 从历史消息继续分支，或将会话 Fork 为独立会话。
+- 管理模型、OAuth/API Key、自定义模型配置、Skills 和 Plugins。
+- 在侧边栏切换 Git worktree，并浏览项目文件。
+- 预览源码、Diff、Markdown、图片、音频、PDF 和 DOCX 等文件。
+- 支持深色模式、会话自动命名、完成提示音和运行状态恢复。
+- 每周检查三个组成项目的稳定 GitHub Release，并在发现更新时提醒用户。
+- 通过一个升级按钮安装完整、签名的 Pi Agent 新版本并自动重启。
 
-Pi Web 要求 Node.js 22.19.0 或更高版本。可通过 `node --version` 检查当前版本。
+![Pi Agent 浅色模式界面](./docs/screenshots/pi-agent-light@2x.png)
 
-**无需安装，直接运行：**
+![Pi Agent 深色模式界面](./docs/screenshots/pi-agent-dark@2x.png)
 
-```bash
-npx @agegr/pi-web@latest
+**[⬇️ 下载 Pi Agent（macOS / Windows）](https://github.com/abcwyc/pi-agent-desktop/releases)**
+
+项目仓库：[abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop)
+
+## 安装与使用
+
+### 安装桌面 App
+
+发布版本可从 [GitHub Releases](https://github.com/abcwyc/pi-agent-desktop/releases) 下载：
+
+- Apple Silicon Mac：下载 `aarch64.dmg`，打开后将 App 拖入 `Applications`。正式 Release 不构建 Intel Mac 版本。
+- Windows x64：下载名称以 `x64-setup.exe` 结尾的安装程序并运行。安装器会在需要时安装 Microsoft WebView2。
+
+正式 Release 支持运行 macOS 11 或更高版本的 Apple Silicon Mac，以及 Windows 10/11 x64。桌面包内包含运行 Pi Agent 所需的 Next.js 服务、Node.js runtime 和当前版本的 Pi SDK，打开 App 时会自动启动本地服务，不需要用户另开终端、安装 Node.js 或单独启动 Web Server。
+
+> 安装 Pi Agent 后，可以直接使用 App 中的 Pi Agent 功能；但它不会在系统全局安装 `pi` 命令。如果还需要在终端中使用 Pi CLI，请按照 [pi 项目](https://github.com/earendil-works/pi) 的说明单独安装。
+
+首次启用签名自动升级前，旧的无 updater 版本需要手动安装一次新的签名 App。此后即可在设置中完成升级。
+
+### 使用现有 Pi 数据
+
+Pi Agent 默认读取 Pi 的本地数据目录：
+
+```text
+~/.pi/agent/
 ```
 
-**或全局安装后使用：**
+其中会话通常保存在：
 
-```bash
-npm install -g @agegr/pi-web
-pi-web
+```text
+~/.pi/agent/sessions/<encoded-cwd>/<timestamp>_<uuid>.jsonl
 ```
 
-启动后打开 [http://127.0.0.1:30141](http://127.0.0.1:30141)。命令行版本会在服务就绪后尝试自动打开浏览器。Pi Web 默认仅监听 `127.0.0.1`。
+如果电脑上已经使用过 Pi，安装 App 后可以继续浏览原有会话、模型和认证配置。可以通过 `PI_CODING_AGENT_DIR` 指向其他 Pi Agent 数据目录。
 
-**可选参数：**
+模型密钥和会话数据保留在用户电脑上；文件浏览 API 仅允许访问当前会话、所选项目和显式授权的工作目录。
 
-```bash
-pi-web --port 8080              # 自定义端口
-pi-web --hostname 0.0.0.0       # 在可信网络中开放访问
-pi-web -p 8080 -H 0.0.0.0       # 组合使用
-pi-web --no-open                # 不自动打开浏览器
+## 版本检查与升级
 
-PORT=8080 pi-web                # 也支持环境变量
-PI_WEB_HOSTNAME=0.0.0.0 pi-web  # 显式开放网络访问
-PI_WEB_ALLOWED_HOSTS=pi-web.internal pi-web  # 允许指定的代理或自定义主机名
-PI_WEB_PASSWORD='足够长的随机密码' pi-web  # 启用 Basic Auth（用户名固定为 pi）
-PI_WEB_NO_OPEN=1 pi-web         # 适用于后台服务或开机自启
-```
+Pi Agent 最多每七天检查一次以下仓库的最新稳定 Release：
 
-设置 `PI_WEB_PASSWORD` 后，网页和所有 API 端点都会启用 HTTP Basic Auth，用户名固定为 `pi`。未设置或设置为空值时不启用认证。
+- `abcwyc/pi-agent-desktop`
+- `earendil-works/pi`
+- `agegr/pi-web`
 
-Pi Web 可以调用高权限智能体。Basic Auth 不会加密传输中的密码，因此不要把明文 HTTP 暴露到互联网。远程访问时应使用可信反向代理提供 HTTPS，或通过可信 VPN 访问。
-API 请求仅接受 loopback 名称、IP 字面量、当前监听主机名，以及 `PI_WEB_ALLOWED_HOSTS` 中以逗号分隔的精确主机名。可信反向代理使用不同的外部主机名时，请配置该变量。
+版本与升级规则如下：
+
+1. `pi-agent-desktop` 一旦存在 Release，就以最新稳定 Release 作为可升级版本来源。
+2. 三个组件中任意一个版本落后，设置中的统一升级按钮都会启用。
+3. 如果多个组件需要更新，发布自动化按 `pi → pi-web → pi-agent-desktop` 的顺序同步和验证。
+4. 用户侧不会修改已安装 App 内的单个 JavaScript 包，而是下载一个同时包含三个最新版组件的完整签名 App。
+5. 安装完成后 App 自动重启，使三个组件一次性进入同一个经过验证的发布状态。
+
+这种方式可以保持桌面安装包的组件一致性，也能避免独立替换 `pi` 或 `pi-web` 导致运行时不兼容。
+
+如果上游新版已经被检测到，但包含该版本的签名 `pi-agent-desktop` Release 尚未发布，设置页会提示暂时没有可安装的签名整包；App 不会退回到下载未签名文件或局部覆盖依赖。
+
+更完整的同步、签名和 Release 配置见 [桌面升级与发布说明](./docs/desktop-updates.md)。
 
 ## HTTP 代理
 
-Pi Web 的服务端模型请求和 API 请求会读取标准的 `HTTP_PROXY`、`HTTPS_PROXY` 和 `NO_PROXY` 环境变量。
-
-macOS 或 Linux：
+Pi Agent 的服务端模型和 API 请求支持标准的 `HTTP_PROXY`、`HTTPS_PROXY` 和 `NO_PROXY` 环境变量。例如从终端启动开发服务时：
 
 ```bash
 HTTP_PROXY=http://127.0.0.1:7890 \
 HTTPS_PROXY=http://127.0.0.1:7890 \
 NO_PROXY=localhost,127.0.0.1 \
-npx @agegr/pi-web@latest
+npm run dev
 ```
 
-Windows PowerShell：
+## 本地开发
 
-```powershell
-$env:HTTP_PROXY = "http://127.0.0.1:7890"
-$env:HTTPS_PROXY = "http://127.0.0.1:7890"
-$env:NO_PROXY = "localhost,127.0.0.1"
-npx @agegr/pi-web@latest
-```
+### 环境要求
 
-## 功能介绍
+- macOS 11+（Apple Silicon）或 Windows 10/11 x64
+- Node.js 22（推荐）
+- npm
+- Rust 1.85+
+- macOS：Xcode Command Line Tools
+- Windows：Microsoft C++ Build Tools 与 WebView2
 
-- **把历史工作接回来**：打开网页就能按项目找到以前的 pi 对话，不必在终端里翻文件或记住会话路径。
-- **放心试不同方向**：可以从某条历史消息重新开始，也可以复制出一条独立的新路线，探索方案时不怕弄乱原来的对话。
-- **跨分支工作**：在侧边栏切换 Git worktree，让新会话和 Explorer 跟随你选择的 checkout。
-- **边聊边看项目文件**：左侧浏览项目文件，右侧打开源码、文档、图片、音频和 PDF；文件变化会自动刷新，适合边让 agent 改边检查结果。
-- **随时掌握会话状态**：在顶部就能看到上下文占用、花费、压缩结果和系统提示，长会话不再像黑箱。
-- **少离开当前界面**：模型、登录/API key、模型测试和技能开关都能在网页里处理，配置 agent 时不用在多个工具之间来回切换。
-- **上游更新提醒**：每周检查一次 Pi 与 Pi Web 的官方 Release，有新版本时显示非阻塞提醒。
-
-## 注意事项
-
-- **数据目录**：默认读取 `~/.pi/agent/sessions` 下的会话文件。可通过环境变量 `PI_CODING_AGENT_DIR` 指定其他 pi agent 目录。
-- **会话文件**：路径形如 `~/.pi/agent/sessions/<编码后的工作目录>/<时间戳>_<uuid>.jsonl`。
-- **模型配置**：Models 面板读写 pi agent 目录下的 `models.json`，模型列表和默认模型由 pi 的配置解析得到。
-- **文件访问**：文件浏览和预览面向当前选择的项目目录，以及会话中已出现过的工作目录。
-- **Git worktree**：什么时候显示切换器、新建目录在哪里、删除会影响什么，见 [Pi Web 里的 Worktree](./docs/worktrees.zh-CN.md)。
-- **Fork 与会话内分支不同**：Fork 会创建新的 `.jsonl` 文件；“Edit from here” 是同一会话文件里的分支。
-
-## 开发
+### 启动 Web 开发服务器
 
 ```bash
 npm install
 npm run dev
 ```
 
-本地开发端口为 [http://127.0.0.1:30141](http://127.0.0.1:30141)。
+开发服务器运行在 [http://localhost:30141](http://localhost:30141)。
 
-常用检查：
+日常开发期间不要运行 `next build` 或 `npm run build`。这些命令会写入 `.next/`，可能干扰正在运行的开发服务器；正式构建由桌面准备脚本或 CI 完成。
+
+### 启动桌面开发模式
 
 ```bash
+npm run desktop:dev
+```
+
+该命令会启动现有 Next.js 开发服务器，并使用 Tauri 原生窗口打开页面，不生成安装包。
+
+### 常用检查
+
+```bash
+# Node 测试（与 CI 同步门禁完全一致，含 components/ 测试）
+npm test
+
+# TypeScript
 node_modules/.bin/tsc --noEmit
+
+# ESLint 与品牌保护测试
 npm run lint
+
+# 与 pi-web 上游的偏离度：区分「样式类」与「结构类」改动
+npm run drift
+
+# Rust/Tauri
+cargo fmt --check --manifest-path src-tauri/Cargo.toml
+cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+
+# 检查打包组件是否与最新稳定 Release 一致
+npm run release:verify
 ```
 
-开发时不要运行 `next build` / `npm run build`，它会写入 `.next/`，容易影响正在运行的 dev server。发布流程再执行构建。
+`release:verify` 会访问 GitHub，并要求内置的 `pi`、`pi-web` 精确匹配各自最新稳定 Release，同时检查组件清单是否与实际依赖一致。
 
-## macOS App
-
-项目已包含基于 Tauri 的 macOS 桌面壳。它会把本地 Next.js 服务和 Node runtime 一起打进 App，无需用户手动启动 Web 服务。
+## 桌面打包
 
 ```bash
-npm run desktop:dev     # 桌面窗口开发模式
-npm run desktop:build   # 生成 .app 与 .dmg
+npm run desktop:build
 ```
 
-完整说明见 [macOS App 构建文档](./docs/desktop.zh-CN.md)。
+桌面构建流程会：
+
+1. 在隔离目录中生成 Next.js standalone 服务。
+2. 打包当前架构的 Node.js runtime。
+3. 将服务和运行时作为 Tauri Resources 放入 App。
+4. 在 Apple Silicon Mac 上生成 `.app`、`.dmg` 和 updater 产物；在 Windows x64 上生成 NSIS `-setup.exe` 和 updater 产物。
+
+本地构建默认不注册生产 updater，不能接受正式更新。正式 Release 必须通过 GitHub Actions 注入 updater 公钥，并使用对应私钥签名。
+
+## 上游同步与 Release
+
+仓库包含两条串联的自动化工作流：
+
+- [`component-updates.yml`](./.github/workflows/component-updates.yml)：每天检查 `pi` 和 `pi-web` 的稳定 Release。发现新版后，**先**把上游改动集与 [`scripts/fork-ownership.json`](./scripts/fork-ownership.json) 记录的「本仓库改过的上游文件」求交集，再合并 Tag、更新依赖和组件清单，并运行完整门禁（`npm test`、`tsc`、`lint`、真实 standalone 构建）。
+  - 交集为空 → 直接提交 `main` 并触发发布；
+  - 命中高/中风险文件 → 推送 `sync/pi-web-<tag>` 分支并开 PR，附上边界报告，**不**触发发布。合并该 PR 才会发版。
+- [`release.yml`](./.github/workflows/release.yml)：收到组件同步工作流的显式触发后，串行构建 Apple Silicon (`aarch64`) DMG 和 Windows x64 NSIS `-setup.exe`，不构建 Intel Mac 版本。Release 在两个平台的 updater 签名文件、`latest.json` 和组件清单全部上传完成前保持草稿状态 —— `manifest` job 依赖**整个**构建矩阵，任一平台失败就不会转正。构建失败会创建/更新 `release-failure` Issue。
+
+上游同步使用 Git 合并，因此本仓库维护的 Pi Agent 品牌、设置入口和升级逻辑会作为本地修改保留。合并冲突会让工作流停止——这是安全的失败方式。真正危险的是**无冲突但语义错误**的合并：上游改了本仓库也改过的区域，Git 干净地合上了，测试也全绿。上面的边界求交就是为此设置的，规则见 [维护边界说明](./docs/ownership-boundaries.md)。
+
+同步失败会自动创建/更新 `component-sync-failure` Issue，不会静默积压。
+
+正式发布前需要配置：
+
+- Tauri updater 公私钥；
+- 面向外部用户分发时所需的 Apple Developer ID 签名和公证；
+- 面向 Windows 外部用户分发时建议配置 Authenticode 代码签名证书；未签名的 `.exe` 可能触发 SmartScreen 提示。
 
 ## 项目结构
 
-```
+```text
 app/
-  api/
-    agent/          # 创建/驱动 AgentSession，提供 SSE 事件流
-    auth/           # OAuth 和 API key 管理
-    cwd/browse/     # 服务端目录浏览
-    cwd/validate/   # 自定义工作目录校验
-    default-cwd/    # 获取 pi 默认工作目录
-    files/          # 文件列表、读取、预览、watch
-    home/           # 当前用户 home 目录
-    models/         # 可用模型、默认模型、thinking levels
-    models-config/  # 读写 models.json、测试模型
-    sessions/       # 会话读取、重命名、删除、上下文、HTML 导出
-    skills/         # skills 列表、搜索、安装、启停
-components/
-  AppShell.tsx        # 主布局、URL 状态、顶部面板、文件标签
-  SessionSidebar.tsx  # 项目选择、会话树、Explorer
-  DirectoryPicker.tsx # 支持浏览和路径输入的工作目录选择器
-  ChatWindow.tsx      # 消息区、SSE、拖拽图片、minimap
-  ChatInput.tsx       # 输入栏、模型/工具/thinking/compact/slash controls
-  MessageView.tsx     # 消息、thinking、tool call/result 渲染
-  ModelsConfig.tsx    # 模型和认证配置面板
-  SkillsConfig.tsx    # 技能管理面板
-  FileExplorer.tsx    # 文件树
-  FileViewer.tsx      # 源码、diff、图片、音频、PDF、DOCX 预览
-lib/
-  directory-browser.ts # 目录规范化和安全枚举工具
-  http-dispatcher.ts  # 服务端 fetch 的 HTTP(S) 代理配置
-  rpc-manager.ts      # AgentSessionWrapper 生命周期和全局 registry
-  session-reader.ts   # 解析 .jsonl 会话文件和分支上下文
-  normalize.ts        # 规范化 toolCall 字段名
-  file-access.ts      # 文件读取安全边界
-  file-paths.ts       # 文件路径编码/相对路径工具
-  markdown.ts         # Markdown/Mermaid/KaTeX 插件配置
-  pi-types.ts         # pi 相关类型
-hooks/
-  useAgentSession.ts  # 会话加载、发送命令、SSE 状态机
-  useAudio.ts         # 完成提示音
-  useDragDrop.ts      # 图片拖拽
-  useTheme.ts         # 主题切换
-bin/
-  pi-web.js           # npm CLI 入口
-instrumentation.ts    # 初始化服务端 HTTP dispatcher
+  api/                  Next.js API：Agent、会话、模型、文件和更新检查
+components/             页面、聊天、侧边栏、设置和版本提醒
+hooks/                  会话流、音频、拖放、主题等客户端状态
+lib/                    AgentSession、HTTP 代理、会话读取、文件安全和升级逻辑
+scripts/                桌面打包、组件版本同步和 Release 校验脚本
+src-tauri/
+  capabilities/         Tauri 权限配置
+  resources/            桌面资源与组件版本清单
+  src/                   桌面窗口、本地服务和 updater 注册
+.github/workflows/      每日组件同步与桌面 Release 自动化
+instrumentation.ts     Next.js 服务端 HTTP 代理初始化
 ```
+
+## 相关文档
+
+- [维护边界说明](./docs/ownership-boundaries.md) — 与 `pi-web` 上游的分工、改共享文件的规则、自动同步的判定逻辑
+- [桌面升级与发布说明](./docs/desktop-updates.md)
+- [Git Worktree 使用说明](./docs/worktrees.zh-CN.md)
+- [Pi Session 与项目架构说明](./AGENTS.md)
+
+## 署名与许可证
+
+Pi Agent 的桌面集成由 `pi-agent-desktop` 提供，核心能力和 Web 界面分别来自 [earendil-works/pi](https://github.com/earendil-works/pi) 与 [agegr/pi-web](https://github.com/agegr/pi-web)。感谢这些项目及其贡献者。
+
+本仓库根目录代码遵循 [`LICENSE`](./LICENSE) 中的 MIT License。三个组成项目的代码和依赖同时受各自仓库许可证约束；复制、修改或重新分发时请保留相应版权与许可声明。

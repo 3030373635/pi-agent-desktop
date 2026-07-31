@@ -181,14 +181,14 @@
     },
     "README.md": {
       "risk": "low",
-      "drift": 266,
-      "reason": "Fork-specific product docs. Conflicts here are noisy but harmless — resolve by keeping the fork version.",
+      "drift": 264,
+      "reason": "Fork-specific product docs, English and the language switcher's default entry point. Conflicts here are noisy but harmless — resolve by keeping the fork version.",
       "disposition": "accepted"
     },
     "README.zh-CN.md": {
       "risk": "low",
-      "drift": 200,
-      "reason": "Fork-specific product docs. Same handling as README.md.",
+      "drift": 264,
+      "reason": "Fork-specific product docs, Simplified Chinese translation of README.md. Same handling as README.md. Upstream's other translations (ja, ru) are deleted in this fork on purpose — if a sync resurrects them, delete them again rather than translating Pi Agent docs into a language nobody here maintains.",
       "disposition": "accepted"
     },
     "lib/file-access.ts": {
@@ -260,6 +260,7 @@
     "2026-07-26 — lib/file-access.ts and app/api/default-cwd/route.ts: a literal homedir() in readdirSync/join arguments made @vercel/nft glob the whole user profile at build time, which is why the Windows release leg never succeeded. Routed both through defaultCwdBase(); accepted as new drift in two upstream files.",
     "2026-07-26 — lib/user-home.ts added; five upstream files now call userHome() instead of homedir(). A literal homedir() reaching an fs call made @vercel/nft glob the entire user profile at build time. lib/directory-browser.ts (added upstream in v0.8.1) was the source of the fatal <home>/**/* walk, which is why Windows releases started failing exactly when v0.8.1 merged.",
     "2026-07-28 — merged pi-web v0.8.2 (i18n, explorer quick changes viewer, project trust / restricted mode, Shift+Delete). Fork markup kept, upstream i18n strings adopted inside it. The upstream CWD picker and PiWebTitle scramble blocks that merged back into SessionSidebar.tsx were dropped again; the collapsible-explorer chevron stayed out (fork's explorer is always open) while the changes-viewer toggle was kept. Numbers refreshed against the v0.8.2 baseline.",
-    "2026-07-28 — lib/i18n/registry.ts (new upstream file in v0.8.2): added .ts extensions to its two relative imports so its test loads under Node type stripping; accepted as new low drift."
+    "2026-07-28 — lib/i18n/registry.ts (new upstream file in v0.8.2): added .ts extensions to its two relative imports so its test loads under Node type stripping; accepted as new low drift.",
+    "2026-07-31 — READMEs reduced to English (README.md, the default) plus Simplified Chinese (README.zh-CN.md), matching the two locales the UI actually ships in lib/i18n. README.ja.md and README.ru.md were still upstream pi-web docs describing an npx web server, so they were deleted rather than kept as stale descriptions of a product this fork no longer is. A sync that restores them should delete them again."
   ]
 }

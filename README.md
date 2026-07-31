@@ -1,87 +1,87 @@
 # Pi Agent
 
-`pi-agent-desktop` 是一个面向 macOS 和 Windows 的本地 AI Agent 桌面应用。它将 [pi](https://github.com/earendil-works/pi) 的 Agent 能力封装成一个可独立安装的 App。
+**English** | [简体中文](./README.zh-CN.md)
 
-[中文文档](./README.zh-CN.md) | [日本語](./README.ja.md) | [Русский](./README.ru.md)
+`pi-agent-desktop` is a local AI agent desktop app for macOS and Windows. It packages the agent capabilities of [pi](https://github.com/earendil-works/pi) into a standalone, installable application.
 
-## 主要功能
+## Features
 
-- 按项目浏览和继续历史 Pi 会话，无需查找终端历史或 `.jsonl` 文件。
-- 在桌面窗口中与 Agent 实时对话，查看思考、工具调用、上下文用量、成本和压缩状态。
-- 从历史消息继续分支，或将会话 Fork 为独立会话。
-- 管理模型、OAuth/API Key、自定义模型配置、Skills 和 Plugins。
-- 在侧边栏切换 Git worktree，并浏览项目文件。
-- 预览源码、Diff、Markdown、图片、音频、PDF 和 DOCX 等文件。
-- 支持深色模式、会话自动命名、完成提示音和运行状态恢复。
-- 每周检查三个组成项目的稳定 GitHub Release，并在发现更新时提醒用户。
-- 通过一个升级按钮安装完整、签名的 Pi Agent 新版本并自动重启。
+- Browse and resume past Pi sessions by project, without digging through terminal history or `.jsonl` files.
+- Talk to the agent in real time inside a desktop window, with thinking, tool calls, context usage, cost, and compaction state all visible.
+- Continue from any earlier message as a branch, or fork the conversation into an independent session.
+- Manage models, OAuth/API keys, custom model configuration, skills, and plugins.
+- Switch Git worktrees from the sidebar and browse project files.
+- Preview source code, diffs, Markdown, images, audio, PDF, and DOCX files.
+- Dark mode, automatic session naming, a completion sound, and restored run state.
+- A weekly check of the stable GitHub releases of the three component projects, with an in-app notice when an update exists.
+- One upgrade button installs a complete, signed new build of Pi Agent and restarts automatically.
 
-![Pi Agent 浅色模式界面](./docs/screenshots/pi-agent-light@2x.png)
+![Pi Agent light mode](./docs/screenshots/pi-agent-light@2x.png)
 
-![Pi Agent 深色模式界面](./docs/screenshots/pi-agent-dark@2x.png)
+![Pi Agent dark mode](./docs/screenshots/pi-agent-dark@2x.png)
 
-**[⬇️ 下载 Pi Agent（macOS / Windows）](https://github.com/abcwyc/pi-agent-desktop/releases)**
+**[⬇️ Download Pi Agent (macOS / Windows)](https://github.com/abcwyc/pi-agent-desktop/releases)**
 
-项目仓库：[abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop)
+Repository: [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop)
 
-## 安装与使用
+## Installation And Usage
 
-### 安装桌面 App
+### Install The Desktop App
 
-发布版本可从 [GitHub Releases](https://github.com/abcwyc/pi-agent-desktop/releases) 下载：
+Builds are available from [GitHub Releases](https://github.com/abcwyc/pi-agent-desktop/releases):
 
-- Apple Silicon Mac：下载 `aarch64.dmg`，打开后将 App 拖入 `Applications`。正式 Release 不构建 Intel Mac 版本。
-- Windows x64：下载名称以 `x64-setup.exe` 结尾的安装程序并运行。安装器会在需要时安装 Microsoft WebView2。
+- Apple Silicon Mac: download the `aarch64.dmg`, open it, and drag the app into `Applications`. Official releases do not build for Intel Macs.
+- Windows x64: download the installer whose name ends in `x64-setup.exe` and run it. The installer pulls in Microsoft WebView2 when it is missing.
 
-正式 Release 支持运行 macOS 11 或更高版本的 Apple Silicon Mac，以及 Windows 10/11 x64。桌面包内包含运行 Pi Agent 所需的 Next.js 服务、Node.js runtime 和当前版本的 Pi SDK，打开 App 时会自动启动本地服务，不需要用户另开终端、安装 Node.js 或单独启动 Web Server。
+Official releases support Apple Silicon Macs running macOS 11 or later, and Windows 10/11 x64. The desktop package bundles the Next.js server, the Node.js runtime, and the current Pi SDK, so the local server starts with the app — no separate terminal, Node.js installation, or manually started web server is required.
 
-> 安装 Pi Agent 后，可以直接使用 App 中的 Pi Agent 功能；但它不会在系统全局安装 `pi` 命令。如果还需要在终端中使用 Pi CLI，请按照 [pi 项目](https://github.com/earendil-works/pi) 的说明单独安装。
+> Installing Pi Agent gives you the agent inside the app, but it does not install a global `pi` command. If you also want the Pi CLI in your terminal, install it separately by following the [pi project](https://github.com/earendil-works/pi) instructions.
 
-首次启用签名自动升级前，旧的无 updater 版本需要手动安装一次新的签名 App。此后即可在设置中完成升级。
+Before signed auto-updates can be used for the first time, an older build without the updater has to be replaced by manually installing a signed one. Upgrades then happen from Settings.
 
-### 使用现有 Pi 数据
+### Use Existing Pi Data
 
-Pi Agent 默认读取 Pi 的本地数据目录：
+Pi Agent reads Pi's local data directory by default:
 
 ```text
 ~/.pi/agent/
 ```
 
-其中会话通常保存在：
+Sessions normally live under:
 
 ```text
 ~/.pi/agent/sessions/<encoded-cwd>/<timestamp>_<uuid>.jsonl
 ```
 
-如果电脑上已经使用过 Pi，安装 App 后可以继续浏览原有会话、模型和认证配置。可以通过 `PI_CODING_AGENT_DIR` 指向其他 Pi Agent 数据目录。
+If you have used Pi on this machine before, the app picks up your existing sessions, models, and authentication after installation. Set `PI_CODING_AGENT_DIR` to point at a different Pi agent data directory.
 
-模型密钥和会话数据保留在用户电脑上；文件浏览 API 仅允许访问当前会话、所选项目和显式授权的工作目录。
+Model keys and session data stay on your machine. The file-browsing API only allows access to the current session, the selected project, and explicitly authorized working directories.
 
-## 版本检查与升级
+## Update Checks And Upgrades
 
-Pi Agent 最多每七天检查一次以下仓库的最新稳定 Release：
+Pi Agent checks the latest stable release of these repositories at most once every seven days:
 
 - `abcwyc/pi-agent-desktop`
 - `earendil-works/pi`
 - `agegr/pi-web`
 
-版本与升级规则如下：
+The versioning and upgrade rules are:
 
-1. `pi-agent-desktop` 一旦存在 Release，就以最新稳定 Release 作为可升级版本来源。
-2. 三个组件中任意一个版本落后，设置中的统一升级按钮都会启用。
-3. 如果多个组件需要更新，发布自动化按 `pi → pi-web → pi-agent-desktop` 的顺序同步和验证。
-4. 用户侧不会修改已安装 App 内的单个 JavaScript 包，而是下载一个同时包含三个最新版组件的完整签名 App。
-5. 安装完成后 App 自动重启，使三个组件一次性进入同一个经过验证的发布状态。
+1. Once `pi-agent-desktop` has a release, its latest stable release is the source of upgradable versions.
+2. If any of the three components is behind, the single upgrade button in Settings becomes enabled.
+3. When several components need updating, the release automation syncs and verifies them in the order `pi → pi-web → pi-agent-desktop`.
+4. Nothing patches an individual JavaScript package inside an installed app. The app downloads one complete signed build containing all three components at their latest versions.
+5. The app restarts after installation, so all three components land in the same verified release state at once.
 
-这种方式可以保持桌面安装包的组件一致性，也能避免独立替换 `pi` 或 `pi-web` 导致运行时不兼容。
+This keeps the components in a desktop install consistent, and avoids the runtime incompatibilities that come from swapping `pi` or `pi-web` on their own.
 
-如果上游新版已经被检测到，但包含该版本的签名 `pi-agent-desktop` Release 尚未发布，设置页会提示暂时没有可安装的签名整包；App 不会退回到下载未签名文件或局部覆盖依赖。
+If a new upstream version has been detected but the signed `pi-agent-desktop` release containing it is not published yet, Settings says that no signed complete build is installable for now. The app never falls back to downloading unsigned files or partially overwriting dependencies.
 
-更完整的同步、签名和 Release 配置见 [桌面升级与发布说明](./docs/desktop-updates.md)。
+The full sync, signing, and release configuration is described in [Desktop updates and releases](./docs/desktop-updates.md).
 
-## HTTP 代理
+## HTTP Proxy
 
-Pi Agent 的服务端模型和 API 请求支持标准的 `HTTP_PROXY`、`HTTPS_PROXY` 和 `NO_PROXY` 环境变量。例如从终端启动开发服务时：
+Server-side model and API requests honor the standard `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` environment variables. For example, when starting the dev server from a terminal:
 
 ```bash
 HTTP_PROXY=http://127.0.0.1:7890 \
@@ -90,121 +90,121 @@ NO_PROXY=localhost,127.0.0.1 \
 npm run dev
 ```
 
-## 本地开发
+## Local Development
 
-### 环境要求
+### Requirements
 
-- macOS 11+（Apple Silicon）或 Windows 10/11 x64
-- Node.js 22（推荐）
+- macOS 11+ (Apple Silicon) or Windows 10/11 x64
+- Node.js 22 (recommended)
 - npm
 - Rust 1.85+
-- macOS：Xcode Command Line Tools
-- Windows：Microsoft C++ Build Tools 与 WebView2
+- macOS: Xcode Command Line Tools
+- Windows: Microsoft C++ Build Tools and WebView2
 
-### 启动 Web 开发服务器
+### Start The Web Dev Server
 
 ```bash
 npm install
 npm run dev
 ```
 
-开发服务器运行在 [http://localhost:30141](http://localhost:30141)。
+The dev server runs at [http://localhost:30141](http://localhost:30141).
 
-日常开发期间不要运行 `next build` 或 `npm run build`。这些命令会写入 `.next/`，可能干扰正在运行的开发服务器；正式构建由桌面准备脚本或 CI 完成。
+Do not run `next build` or `npm run build` during normal development. They write into `.next/` and can disrupt a running dev server; production builds are done by the desktop preparation script or by CI.
 
-### 启动桌面开发模式
+### Start Desktop Dev Mode
 
 ```bash
 npm run desktop:dev
 ```
 
-该命令会启动现有 Next.js 开发服务器，并使用 Tauri 原生窗口打开页面，不生成安装包。
+This starts the existing Next.js dev server and opens it in a native Tauri window, without producing an installer.
 
-### 常用检查
+### Common Checks
 
 ```bash
-# Node 测试（与 CI 同步门禁完全一致，含 components/ 测试）
+# Node tests (identical to the CI sync gate, including components/ tests)
 npm test
 
 # TypeScript
 node_modules/.bin/tsc --noEmit
 
-# ESLint 与品牌保护测试
+# ESLint and the branding protection test
 npm run lint
 
-# 与 pi-web 上游的偏离度：区分「样式类」与「结构类」改动
+# Divergence from pi-web upstream, split into "styling" and "structural" changes
 npm run drift
 
 # Rust/Tauri
 cargo fmt --check --manifest-path src-tauri/Cargo.toml
 cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
 
-# 检查打包组件是否与最新稳定 Release 一致
+# Verify the bundled components match the latest stable releases
 npm run release:verify
 ```
 
-`release:verify` 会访问 GitHub，并要求内置的 `pi`、`pi-web` 精确匹配各自最新稳定 Release，同时检查组件清单是否与实际依赖一致。
+`release:verify` reaches GitHub and requires the bundled `pi` and `pi-web` to match their latest stable releases exactly, while also checking the component manifest against the actual dependencies.
 
-## 桌面打包
+## Desktop Packaging
 
 ```bash
 npm run desktop:build
 ```
 
-桌面构建流程会：
+The desktop build:
 
-1. 在隔离目录中生成 Next.js standalone 服务。
-2. 打包当前架构的 Node.js runtime。
-3. 将服务和运行时作为 Tauri Resources 放入 App。
-4. 在 Apple Silicon Mac 上生成 `.app`、`.dmg` 和 updater 产物；在 Windows x64 上生成 NSIS `-setup.exe` 和 updater 产物。
+1. Generates the Next.js standalone server in an isolated directory.
+2. Bundles the Node.js runtime for the current architecture.
+3. Places the server and runtime into the app as Tauri resources.
+4. Produces `.app`, `.dmg`, and updater artifacts on Apple Silicon Macs, and an NSIS `-setup.exe` plus updater artifacts on Windows x64.
 
-本地构建默认不注册生产 updater，不能接受正式更新。正式 Release 必须通过 GitHub Actions 注入 updater 公钥，并使用对应私钥签名。
+Local builds do not register the production updater and cannot accept official updates. Official releases must inject the updater public key through GitHub Actions and sign with the matching private key.
 
-## 上游同步与 Release
+## Upstream Sync And Releases
 
-仓库包含两条串联的自动化工作流：
+The repository contains two chained automation workflows:
 
-- [`component-updates.yml`](./.github/workflows/component-updates.yml)：每天检查 `pi` 和 `pi-web` 的稳定 Release。发现新版后，**先**把上游改动集与 [`scripts/fork-ownership.json`](./scripts/fork-ownership.json) 记录的「本仓库改过的上游文件」求交集，再合并 Tag、更新依赖和组件清单，并运行完整门禁（`npm test`、`tsc`、`lint`、真实 standalone 构建）。
-  - 交集为空 → 直接提交 `main` 并触发发布；
-  - 命中高/中风险文件 → 推送 `sync/pi-web-<tag>` 分支并开 PR，附上边界报告，**不**触发发布。合并该 PR 才会发版。
-- [`release.yml`](./.github/workflows/release.yml)：收到组件同步工作流的显式触发后，串行构建 Apple Silicon (`aarch64`) DMG 和 Windows x64 NSIS `-setup.exe`，不构建 Intel Mac 版本。Release 在两个平台的 updater 签名文件、`latest.json` 和组件清单全部上传完成前保持草稿状态 —— `manifest` job 依赖**整个**构建矩阵，任一平台失败就不会转正。构建失败会创建/更新 `release-failure` Issue。
+- [`component-updates.yml`](./.github/workflows/component-updates.yml): checks the stable releases of `pi` and `pi-web` daily. When a new version appears, it **first** intersects the incoming upstream changeset with the "upstream files this fork has modified" recorded in [`scripts/fork-ownership.json`](./scripts/fork-ownership.json), then merges the tag, updates dependencies and the component manifest, and runs the full gate (`npm test`, `tsc`, `lint`, a real standalone build).
+  - Empty intersection → commits to `main` and triggers a release.
+  - High or medium risk files hit → pushes a `sync/pi-web-<tag>` branch and opens a PR with the boundary report, and does **not** trigger a release. Merging that PR is what ships a version.
+- [`release.yml`](./.github/workflows/release.yml): after an explicit trigger from the component sync workflow, serially builds the Apple Silicon (`aarch64`) DMG and the Windows x64 NSIS `-setup.exe`. No Intel Mac build is produced. The release stays a draft until the updater signature files, `latest.json`, and the component manifest for both platforms are uploaded — the `manifest` job depends on the **entire** build matrix, so a failure on either platform keeps it from being published. Build failures create or update a `release-failure` issue.
 
-上游同步使用 Git 合并，因此本仓库维护的 Pi Agent 品牌、设置入口和升级逻辑会作为本地修改保留。合并冲突会让工作流停止——这是安全的失败方式。真正危险的是**无冲突但语义错误**的合并：上游改了本仓库也改过的区域，Git 干净地合上了，测试也全绿。上面的边界求交就是为此设置的，规则见 [维护边界说明](./docs/ownership-boundaries.md)。
+Upstream sync uses a Git merge, so this fork's Pi Agent branding, settings entry points, and upgrade logic survive as local modifications. Merge conflicts stop the workflow, which is the safe failure mode. The genuinely dangerous case is a **conflict-free but semantically wrong** merge: upstream changed a region this fork also changed, Git merged it cleanly, and the tests still pass. The boundary intersection above exists for exactly that case; the rules are in [Ownership boundaries](./docs/ownership-boundaries.md).
 
-同步失败会自动创建/更新 `component-sync-failure` Issue，不会静默积压。
+A failed sync creates or updates a `component-sync-failure` issue, so nothing piles up silently.
 
-正式发布前需要配置：
+An official release additionally requires:
 
-- Tauri updater 公私钥；
-- 面向外部用户分发时所需的 Apple Developer ID 签名和公证；
-- 面向 Windows 外部用户分发时建议配置 Authenticode 代码签名证书；未签名的 `.exe` 可能触发 SmartScreen 提示。
+- Tauri updater key pair.
+- Apple Developer ID signing and notarization for distribution to external users.
+- Authenticode code signing is recommended for Windows distribution to external users; an unsigned `.exe` can trigger SmartScreen warnings.
 
-## 项目结构
+## Project Structure
 
 ```text
 app/
-  api/                  Next.js API：Agent、会话、模型、文件和更新检查
-components/             页面、聊天、侧边栏、设置和版本提醒
-hooks/                  会话流、音频、拖放、主题等客户端状态
-lib/                    AgentSession、HTTP 代理、会话读取、文件安全和升级逻辑
-scripts/                桌面打包、组件版本同步和 Release 校验脚本
+  api/                  Next.js APIs: agent, sessions, models, files, update checks
+components/             Pages, chat, sidebar, settings, and version notices
+hooks/                  Client state: session streams, audio, drag and drop, theme
+lib/                    AgentSession, HTTP proxy, session reading, file security, upgrade logic
+scripts/                Desktop packaging, component version sync, release verification
 src-tauri/
-  capabilities/         Tauri 权限配置
-  resources/            桌面资源与组件版本清单
-  src/                   桌面窗口、本地服务和 updater 注册
-.github/workflows/      每日组件同步与桌面 Release 自动化
-instrumentation.ts     Next.js 服务端 HTTP 代理初始化
+  capabilities/         Tauri permission configuration
+  resources/            Desktop resources and the component version manifest
+  src/                  Desktop window, local server, and updater registration
+.github/workflows/      Daily component sync and desktop release automation
+instrumentation.ts     Next.js server-side HTTP proxy initialization
 ```
 
-## 相关文档
+## Related Documents
 
-- [维护边界说明](./docs/ownership-boundaries.md) — 与 `pi-web` 上游的分工、改共享文件的规则、自动同步的判定逻辑
-- [桌面升级与发布说明](./docs/desktop-updates.md)
-- [Git Worktree 使用说明](./docs/worktrees.zh-CN.md)
-- [Pi Session 与项目架构说明](./AGENTS.md)
+- [Ownership boundaries](./docs/ownership-boundaries.md) — the split with `pi-web` upstream, the rules for editing shared files, and how the automated sync decides
+- [Desktop updates and releases](./docs/desktop-updates.md)
+- [Git worktrees](./docs/worktrees.md)
+- [Pi session and project architecture](./AGENTS.md)
 
-## 署名与许可证
+## Credits And License
 
-Pi Agent 的桌面集成由 `pi-agent-desktop` 提供，核心能力和 Web 界面分别来自 [earendil-works/pi](https://github.com/earendil-works/pi) 与 [agegr/pi-web](https://github.com/agegr/pi-web)。感谢这些项目及其贡献者。
+The desktop integration of Pi Agent is provided by `pi-agent-desktop`; the core capabilities and the web interface come from [earendil-works/pi](https://github.com/earendil-works/pi) and [agegr/pi-web](https://github.com/agegr/pi-web) respectively. Thanks to those projects and their contributors.
 
-本仓库根目录代码遵循 [`LICENSE`](./LICENSE) 中的 MIT License。三个组成项目的代码和依赖同时受各自仓库许可证约束；复制、修改或重新分发时请保留相应版权与许可声明。
+Code in the root of this repository is under the MIT License in [`LICENSE`](./LICENSE). The code and dependencies of the three component projects remain subject to the licenses of their own repositories; keep the corresponding copyright and license notices when copying, modifying, or redistributing.
