@@ -90,33 +90,41 @@ jobs:
           tagName: v__VERSION__
           releaseName: pi-agent-desktop v__VERSION__
           releaseBody: |
-            ## Pi Agent Desktop 0.2.4
+            ## Pi Agent Desktop 0.2.5
 
-            This update makes Pi Agent feel more at home on your desktop and more dependable from one task to the next.
+            A maintenance release. There are no new features — it fixes the two ways the session list and the session view could leave you looking at the wrong thing, or at nothing at all.
 
-            ### What's new
+            ### What's fixed
 
-            - **A more native desktop workflow** — Use system file, folder, and save dialogs; open links in your default browser; reveal local files; and keep Pi Agent close at hand from the system tray.
-            - **Pick up where you left off** — Your last task, working folder, open files, and theme return when you reopen the app.
-            - **Helpful, quieter notifications** — Get a completion notification when Pi Agent finishes in the background, without extra noise while you're already looking at the app.
-            - **Faster project navigation** — Search across the full project list instead of being limited to the first few entries.
-            - **More reliable task switching** — Moving between tasks now clears the previous view immediately and prevents delayed updates from appearing in the wrong conversation.
-            - **Safer local file actions** — Desktop file selection and saving now include stronger checks and clearer feedback when an attachment cannot be added.
+            - **A session you just started is visible right away** — Pi does not write a new session to disk until the assistant has replied, so the run you were actively watching was missing from the sidebar until the turn finished. The list now also includes sessions that exist only in memory, and renaming or deleting one of those works too.
+            - **No more being stuck on "loading session"** — Two separate causes. After a new session was assigned its real id, an internal flag was never cleared, so every later switch short-circuited its load. And the load request itself had no deadline, so a request that hung after a cold start left the message area empty for good. It now times out and retries once.
+            - **Switching sessions no longer nudges the messages sideways** — The scroll minimap only appeared after it had measured the message list, arriving a beat late and taking width away from the centred column. Its space is now reserved from the first frame.
+
+            ### Also in this release
+
+            - The English sidebar says **Sessions** and **New Session**, matching the wording the rest of the app, the session files, and the pi command line already use. The Simplified Chinese text is unchanged.
+            - The README is now maintained in English and Simplified Chinese only — the two languages the app itself ships.
+
+            Bundled components: pi 0.83.0, pi-web 0.8.5.
 
             ---
 
-            ## Pi Agent Desktop 0.2.4
+            ## Pi Agent Desktop 0.2.5
 
-            这次更新让 Pi Agent 更像一款真正融入桌面的应用，也让你在不同任务之间切换时更加安心、顺畅。
+            这是一个维护版本，没有新功能，修复的是会话列表和会话界面可能让你看到错误内容、甚至什么都看不到的两类问题。
 
-            ### 本次更新
+            ### 本次修复
 
-            - **更自然的桌面操作体验** —— 使用系统原生的文件、文件夹和保存窗口；通过默认浏览器打开链接；在文件管理器中定位本地文件；还可以从系统托盘快速回到 Pi Agent。
-            - **重新打开即可继续工作** —— 上次使用的任务、工作目录、已打开文件和主题会在启动后自动恢复。
-            - **恰到好处的完成提醒** —— Pi Agent 在后台完成任务时会发送通知；当你正在查看应用时则不会重复打扰。
-            - **查找项目更轻松** —— 现在可以搜索完整的项目列表，不再只能看到前几项。
-            - **任务切换更可靠** —— 切换任务时会立即清理上一任务的界面，延迟到达的内容也不会再出现在错误的对话中。
-            - **本地文件操作更安心** —— 文件选择和保存增加了更严格的保护，附件无法添加时也会给出更清晰的提示。
+            - **刚创建的会话立即可见** —— Pi 要等到模型回复之后才会把新会话写入磁盘，因此你正在看的这一轮任务，在结束之前不会出现在侧边栏里。现在列表会一并包含只存在于内存中的会话，对这类会话重命名和删除也能正常工作。
+            - **不再卡在「正在加载会话」** —— 这里有两个独立原因。新会话拿到真实 id 之后，一个内部标记没有被清除，导致之后每次切换会话都会跳过加载；同时加载请求本身没有超时，冷启动后一旦请求挂住，消息区就会一直空着。现在请求会超时并自动重试一次。
+            - **切换会话时消息不再左右跳动** —— 滚动缩略图要先测量消息列表才会出现，总是晚半拍，并且会从居中的消息列里挤走宽度。现在它的位置从第一帧就预留好。
+
+            ### 其他改动
+
+            - 英文界面的侧边栏改为 **Sessions** 和 **New Session**，与应用其他位置、会话文件以及 pi 命令行一直在用的说法保持一致。简体中文文案没有变化。
+            - README 现在只维护英文和简体中文两个版本 —— 也就是应用本身支持的两种语言。
+
+            内置组件版本：pi 0.83.0、pi-web 0.8.5。
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
