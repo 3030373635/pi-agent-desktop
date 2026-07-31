@@ -477,6 +477,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       // loadSession/SSE handlers for the previous id become no-ops.
       if (session?.id) sessionIdRef.current = session.id;
       else if (isNew) sessionIdRef.current = null;
+      // The load effect skips reloading when this ref is still set and the id
+      // already matches — which the assignment above always makes true. Clear
+      // it here or every switch after a promotion returns early and leaves
+      // "loading session" on screen forever.
+      newSessionPromotedRef.current = false;
       contextLoadIdRef.current += 1;
       toolsLoadIdRef.current += 1;
       agentRunningRef.current = false;
