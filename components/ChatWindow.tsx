@@ -7,7 +7,7 @@ import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { countToolCallBlocks, getDisplayableAssistantBlocks, splitFinalAssistantBlocks } from "@/lib/message-display";
 import { MessageView } from "./MessageView";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
-import { ChatMinimap, useMessageRefs } from "./ChatMinimap";
+import { ChatMinimap, MINIMAP_WIDTH, useMessageRefs } from "./ChatMinimap";
 import { useI18n } from "@/hooks/useI18n";
 import { useAgentSession, type AgentPhase, type NoticeItem } from "@/hooks/useAgentSession";
 import { useAudio } from "@/hooks/useAudio";
@@ -684,7 +684,12 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       )}
 
       {isEmptyNew ? (
-        <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-4 py-8">
+        <div
+          className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-4 py-8"
+          // Reserve the same gutter the minimap column occupies, so switching
+          // between the empty state and a session keeps the centre line fixed.
+          style={isMobile ? undefined : { paddingRight: `calc(1rem + ${MINIMAP_WIDTH}px)` }}
+        >
           <div className="chat-empty-state w-full max-w-[820px]">
             <div
               className="chat-empty-brand mb-3"

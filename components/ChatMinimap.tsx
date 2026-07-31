@@ -15,7 +15,7 @@ interface Props {
   onRevealHistory: () => void;
 }
 
-const MINIMAP_WIDTH = 36;
+export const MINIMAP_WIDTH = 36;
 const MAX_NODE_GAP = 50;
 const MINIMAP_PADDING = 12;
 const PREVIEW_HIDE_DELAY = 250;
@@ -582,13 +582,13 @@ export function ChatMinimap({
     previewBox.scrollTop = Math.max(0, targetTop);
   }, [allNodes, minimapHovered, nearestNodeIndex]);
 
-  if (!visible) return null;
-
   const lastNodeTop = positionedNodes.length > 0
     ? positionedNodes[positionedNodes.length - 1].topRatio * minimapHeight
     : MINIMAP_PADDING;
   const railHeight = Math.max(1, lastNodeTop - MINIMAP_PADDING);
 
+  // The column keeps its width even before measurement finishes: mounting it
+  // late would shrink the centred message column and shift the whole chat.
   return (
     <div
       ref={containerRef}
@@ -601,12 +601,16 @@ export function ChatMinimap({
       }}
       style={{
         width: MINIMAP_WIDTH,
+        boxSizing: "border-box",
         flexShrink: 0,
         position: "relative",
-        cursor: "pointer",
+        cursor: visible ? "pointer" : "default",
+        pointerEvents: visible ? "auto" : "none",
         userSelect: "none",
-        borderLeft: "1px solid var(--border)",
-        background: "var(--bg-panel)",
+        borderLeft: `1px solid ${visible ? "var(--border)" : "transparent"}`,
+        background: visible ? "var(--bg-panel)" : "transparent",
+        opacity: visible ? 1 : 0,
+        transition: "opacity 0.12s ease-out",
         overflow: "visible",
       }}
     >
