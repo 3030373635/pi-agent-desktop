@@ -361,6 +361,21 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     previousRunningSessionIdsRef.current = runningSessionIds;
   }, [runningSessionIds, selectedSessionId, loadSessions, allSessions]);
 
+  // A session that just started running has no row yet: pi had not flushed it
+  // to disk when the list was last fetched. /api/sessions merges live runs, so
+  // one refetch per unknown id is enough to make it appear mid-stream instead
+  // of only when the turn ends.
+  const refetchedRunningIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const known = new Set(allSessions.map((s) => s.id));
+    const missing = [...runningSessionIds].filter(
+      (id) => !known.has(id) && !refetchedRunningIdsRef.current.has(id),
+    );
+    if (missing.length === 0) return;
+    missing.forEach((id) => refetchedRunningIdsRef.current.add(id));
+    void loadSessions(false);
+  }, [runningSessionIds, allSessions, loadSessions]);
+
   useEffect(() => {
     if (!selectedSessionId) return;
     setUnreadSessionIds((prev) => {

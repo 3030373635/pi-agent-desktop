@@ -136,6 +136,12 @@ hooks/
 ### Session files can be fully rewritten
 `parentSession` in the header is **display metadata only** — has zero effect on chat content. Safe to `writeFileSync` the entire file (pi does this itself during migrations). Used when cascade-reparenting children on delete.
 
+### A new session has no file until pi flushes it
+Pi delays the first flush of a new session until an assistant message exists, so a run that just started is invisible to the disk scan behind `/api/sessions`. The sidebar list is derived purely from `.jsonl` files, so without help the session the user is actively watching cannot be found in the list until the turn ends.
+- `AgentSessionWrapper.getLiveSnapshot()` builds a `SessionInfo`-shaped row from the in-memory `sessionManager`; `/api/sessions` merges those for ids the scan did not return. The snapshot returns `null` until a user message exists, otherwise an untouched "new chat" runtime renders a row that later vanishes.
+- `SessionManager.open()` on a missing file returns an **empty history rather than throwing**, so a read path that opens the file blindly silently shows an empty chat. Session reads go through `openSessionManagerForRead()`, which falls back to the live runtime's manager. Rename and delete of an unflushed session likewise go through the runtime — there is no file to append to or unlink.
+- The sidebar refetches the list once per running id it has no row for, because a session can start running between list fetches.
+
 ### ToolCall field normalization
 Pi stores toolCall blocks as `{type:"toolCall", id, name, arguments}` but `ToolCallContent` uses `{toolCallId, toolName, input}`. `normalizeToolCalls()` in `lib/normalize.ts` handles this — called in both `session-reader.ts` (file load) and `ChatWindow.handleAgentEvent()` (streaming).
 
@@ -159,6 +165,9 @@ Newer pi emits `compaction_start` / `compaction_end`; older versions emitted `au
 - `useAgentSession` treats per-session SSE as primary for chat events, opens it before each prompt, and closes it only after `prompt_done` plus server-idle settlement. Do not close on the first `agent_end`: retries, compaction, and extension-queued messages can continue the same logical prompt.
 - While a run is active, `useAgentSession` periodically calls `GET /api/agent/[id]` and also reconciles on `visibilitychange`/`online`. This fixes missed terminal events from background tabs or half-open connections.
 - Prompt runs use a monotonic run id; late SSE or slow reconciliation responses from an old run must be ignored so they cannot resurrect stale streaming bubbles.
+
+### The session load must have a deadline
+Switching chats does **not** remount `ChatWindow` — `AppShell.handleSelectSession` deliberately keeps `sessionKey` stable so the input dock does not flash. That makes the single `GET /api/sessions/[id]` in `loadSession()` the only thing that ever clears `loading`, and the retry button only appears once the load *fails*. A bare `fetch` there is a hang away from leaving "loading session" on screen permanently, which is exactly what desktop users hit on the first switches after a cold start. It goes through `fetchWithRetry()` (`lib/fetch-timeout.ts`): a hung first attempt is abandoned, then retried once with a longer deadline — the server finishes its cold-start work regardless of the client giving up, so the retry usually lands warm.
 
 ### Worktrees and project grouping
 - `lib/worktree.ts` resolves linked worktree top-levels back to the main repo `projectRoot`; `listAllSessions()` attaches that to each `SessionInfo` so all worktrees for one repo are grouped together in the sidebar.

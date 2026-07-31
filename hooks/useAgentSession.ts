@@ -11,6 +11,7 @@ import type {
 } from "@/lib/types";
 import { normalizeToolCalls } from "@/lib/normalize";
 import { sendAgentCommand } from "@/lib/agent-client";
+import { fetchWithRetry } from "@/lib/fetch-timeout";
 import { getToolNamesForPreset, type ToolEntry } from "@/lib/tool-presets";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 
@@ -567,7 +568,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     try {
       if (showLoading) setLoading(true);
       const params = new URLSearchParams({ deferThinking: "1", deferMedia: "1" });
-      const res = await fetch(`/api/sessions/${encodeURIComponent(sid)}?${params}`);
+      // This request owns the "loading session" state, so it must not be able
+      // to hang: nothing else clears that state, and the retry affordance only
+      // appears once the load actually fails.
+      const res = await fetchWithRetry(`/api/sessions/${encodeURIComponent(sid)}?${params}`, {
+        shouldRetry: isCurrent,
+      });
       if (!isCurrent()) return null;
       if (res.status === 404) {
         if (showLoading) {

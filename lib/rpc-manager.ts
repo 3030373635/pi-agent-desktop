@@ -7,6 +7,7 @@ import { resolve } from "path";
 import { validateAgentImages } from "./image-attachments";
 import { invalidateModelsCache } from "./models-cache";
 import { resolveVisibleModels, selectInitialModelScope } from "./model-scope";
+import { extractTextContent } from "./session-scan";
 import { cacheSessionPath, invalidateSessionListCache } from "./session-reader";
 import { getProjectTrustStatus, projectTrustReloadOptions } from "./project-trust";
 import type { SlashCommandInfo } from "@earendil-works/pi-coding-agent";
@@ -68,6 +69,23 @@ export interface RpcSessionStartOptions {
   toolNames?: string[];
   initialModel?: { provider: string; modelId: string };
   thinkingLevel?: ThinkingLevel;
+}
+
+/**
+ * Session-list view of a session that only exists in memory so far. Pi delays
+ * the first flush of a new session until an assistant message exists, so a
+ * freshly started run has no .jsonl for the disk scan to find.
+ */
+export interface LiveSessionSnapshot {
+  id: string;
+  path: string;
+  cwd: string;
+  name?: string;
+  created: string;
+  modified: string;
+  messageCount: number;
+  firstMessage: string;
+  parentSessionPath?: string;
 }
 
 const CODING_TOOL_NAMES = ["read", "bash", "edit", "write", "grep", "find", "ls"];
@@ -154,6 +172,54 @@ export class AgentSessionWrapper {
 
   isRunning(): boolean {
     return this._alive && (this.promptRunning || this.inner.isStreaming || this.inner.isCompacting || this.inner.isBashRunning);
+  }
+
+  /**
+   * Session-list row built from the in-memory session, for sessions the disk
+   * scan cannot see yet. Returns null until a user message exists so an
+   * untouched "new chat" runtime never renders a row that later disappears.
+   */
+  getLiveSnapshot(): LiveSessionSnapshot | null {
+    if (!this._alive) return null;
+
+    const manager = this.inner.sessionManager;
+    const header = manager.getHeader() as Record<string, unknown> | null;
+    if (!header || typeof header.id !== "string") return null;
+
+    let messageCount = 0;
+    let firstMessage = "";
+    let lastActivityTime = 0;
+    for (const raw of manager.getEntries()) {
+      const entry = raw as unknown as Record<string, unknown>;
+      if (entry.type !== "message") continue;
+      messageCount++;
+
+      const message = entry.message as Record<string, unknown> | undefined;
+      if (!message || (message.role !== "user" && message.role !== "assistant")) continue;
+
+      const activityTime = typeof message.timestamp === "number"
+        ? message.timestamp
+        : typeof entry.timestamp === "string"
+          ? new Date(entry.timestamp).getTime()
+          : NaN;
+      if (!Number.isNaN(activityTime)) lastActivityTime = Math.max(lastActivityTime, activityTime);
+
+      if (!firstMessage && message.role === "user") firstMessage = extractTextContent(message.content);
+    }
+    if (!firstMessage) return null;
+
+    const created = typeof header.timestamp === "string" ? header.timestamp : new Date().toISOString();
+    return {
+      id: header.id,
+      path: manager.getSessionFile() ?? "",
+      cwd: manager.getCwd(),
+      ...(manager.getSessionName() ? { name: manager.getSessionName() } : {}),
+      created,
+      modified: lastActivityTime > 0 ? new Date(lastActivityTime).toISOString() : created,
+      messageCount,
+      firstMessage,
+      ...(typeof header.parentSession === "string" ? { parentSessionPath: header.parentSession } : {}),
+    };
   }
 
   private lastNotifiedRunning: boolean | null = null;
@@ -1062,6 +1128,22 @@ export function destroyRpcSessionsForCwd(cwd: string): number {
   );
   for (const session of sessions) session.destroy();
   return sessions.length;
+}
+
+/**
+ * Rows for live sessions the caller does not already know about from disk.
+ * Callers pass the ids they scanned so an already-flushed session is never
+ * walked twice (the disk row wins) — a live session can hold thousands of
+ * entries and this runs on every session-list request.
+ */
+export function getLiveSessionSnapshots(knownSessionIds: ReadonlySet<string>): LiveSessionSnapshot[] {
+  const snapshots: LiveSessionSnapshot[] = [];
+  for (const [sessionId, session] of getRegistry()) {
+    if (knownSessionIds.has(session.sessionId || sessionId)) continue;
+    const snapshot = session.getLiveSnapshot();
+    if (snapshot && !knownSessionIds.has(snapshot.id)) snapshots.push(snapshot);
+  }
+  return snapshots;
 }
 
 export function getRunningRpcSessionIds(): string[] {

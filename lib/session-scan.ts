@@ -58,7 +58,7 @@ function parseSessionEntryLine(line: string): Record<string, unknown> | null {
   }
 }
 
-function extractTextContent(content: unknown): string {
+export function extractTextContent(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
   return content

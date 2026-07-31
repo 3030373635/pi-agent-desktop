@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "fs";
+import { existsSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import {
@@ -12,6 +12,7 @@ import {
   readSessionHeader,
 } from "@/lib/session-reader";
 import { sessionPathKey } from "@/lib/session-path";
+import { openSessionManagerForRead } from "@/lib/session-manager-access";
 import { getRpcSession } from "@/lib/rpc-manager";
 
 // BranchNavigator still traverses recursively, so keep the response tree shallow.
@@ -125,7 +126,11 @@ export async function GET(
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
-    const sm = SessionManager.open(filePath);
+    const sm = openSessionManagerForRead(id, filePath);
+    if (!sm) {
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
+
     const entries = sm.getEntries() as never;
     const leafId = sm.getLeafId();
     const tree = projectTreeForResponse(sm.getTree());
@@ -186,6 +191,18 @@ export async function PATCH(
     if (!filePath) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
+
+    // Not flushed yet: appending to the file would strand the name in a stub
+    // the live runtime is about to write over. Let the runtime record it.
+    if (!existsSync(filePath)) {
+      const live = getRpcSession(id);
+      if (!live?.isAlive()) {
+        return NextResponse.json({ error: "Session not found" }, { status: 404 });
+      }
+      await live.send({ type: "set_session_name", name: name.trim() });
+      return NextResponse.json({ ok: true });
+    }
+
     const sm = SessionManager.open(filePath);
     sm.appendSessionInfo(name.trim());
     invalidateSessionListCache();
@@ -205,6 +222,20 @@ export async function DELETE(
     const filePath = await resolveSessionPath(id);
     if (!filePath) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
+
+    // Not flushed yet: the session only exists in memory, so discarding the
+    // runtime is the whole deletion — there is no file to unlink and no child
+    // session that could reference it.
+    if (!existsSync(filePath)) {
+      const live = getRpcSession(id);
+      if (!live?.isAlive()) {
+        return NextResponse.json({ error: "Session not found" }, { status: 404 });
+      }
+      live.destroy();
+      invalidateSessionPathCache(id);
+      invalidateSessionListCache();
+      return NextResponse.json({ ok: true });
     }
 
     // Read only the bounded header before deleting.
