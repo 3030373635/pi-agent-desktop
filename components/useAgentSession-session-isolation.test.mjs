@@ -39,8 +39,12 @@ test("a stale branch load cannot navigate the newly active session", async () =>
 
 test("returning to a session restores its last scroll position", async () => {
   const source = await readFile(sourceUrl, "utf8");
-  assert.match(source, /const positions = scrollPositionsRef\.current/);
-  assert.match(source, /positions\.get\(sessionIdentity\)/);
-  assert.match(source, /positions\.set\(sessionIdentity, container\.scrollTop\)/);
+  // The save must happen inside the render-phase reset block: by the time an
+  // effect cleanup runs for a session switch, the message list has already
+  // been emptied in the same commit and the browser has clamped scrollTop to
+  // 0, so a cleanup-time read records 0 for every switch (#scroll-restore).
+  const resetBlock = functionSlice(source, "if (sessionIdentity !== appliedIdentity)", "const currentModel =");
+  assert.match(resetBlock, /rememberScrollPosition\(previousIdentity, scrollContainerRef\.current\)/);
+  assert.match(source, /pendingInitialScrollTopRef\.current = sessionScrollTops\.get\(sessionIdentity\) \?\? null/);
   assert.match(source, /container\.scrollTop = savedScrollTop/);
 });

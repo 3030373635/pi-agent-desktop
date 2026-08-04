@@ -13,6 +13,7 @@ import { normalizeToolCalls } from "@/lib/normalize";
 import { sendAgentCommand } from "@/lib/agent-client";
 import { fetchWithRetry } from "@/lib/fetch-timeout";
 import { getToolNamesForPreset, type ToolEntry } from "@/lib/tool-presets";
+import { rememberScrollPosition, sessionScrollTops } from "@/lib/scroll-memory";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 
 export interface SessionData {
@@ -438,7 +439,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const bashRecoveryIdRef = useRef(0);
   const handleAgentEventRef = useRef<((event: AgentEvent) => void) | null>(null);
   const initialScrollDoneRef = useRef(false);
-  const scrollPositionsRef = useRef(new Map<string, number>());
   const pendingInitialScrollTopRef = useRef<number | null>(null);
   const lastUserMsgRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollToUserRef = useRef(false);
@@ -473,6 +473,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setAppliedIdentity(sessionIdentity);
 
     if (!isPromotion) {
+      // Save the departing session's scroll position now, while the DOM still
+      // shows it. The resets below empty the message list in this same commit,
+      // and the browser clamps scrollTop to 0 before any effect cleanup runs —
+      // saving from a cleanup would record 0 for every switch.
+      if (previousIdentity && scrollContainerRef.current) {
+        rememberScrollPosition(previousIdentity, scrollContainerRef.current);
+      }
       // Point the active id at the new session immediately so in-flight
       // loadSession/SSE handlers for the previous id become no-ops.
       if (session?.id) sessionIdRef.current = session.id;
@@ -1728,22 +1735,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // paint. The new→created promotion path is a no-op: messages/SSE are live.
   useLayoutEffect(() => {
     if (!sessionIdentity) return;
-
-    const positions = scrollPositionsRef.current;
-    const container = scrollContainerRef.current;
-    pendingInitialScrollTopRef.current = positions.get(sessionIdentity) ?? null;
-
-    return () => {
-      if (!container) return;
-      // Refresh insertion order so the small in-memory cache behaves as LRU.
-      positions.delete(sessionIdentity);
-      positions.set(sessionIdentity, container.scrollTop);
-      if (positions.size > 50) {
-        const oldest = positions.keys().next().value;
-        if (oldest !== undefined) positions.delete(oldest);
-      }
-    };
+    pendingInitialScrollTopRef.current = sessionScrollTops.get(sessionIdentity) ?? null;
   }, [sessionIdentity]);
+
+  // ChatWindow can remount (new-chat sessionKey bump, plugin reload). The DOM
+  // is still intact when an unmount cleanup runs, so the position read here is
+  // real — and the cache is module-level, so it outlives this instance.
+  useEffect(() => () => {
+    const id = sessionIdRef.current;
+    const container = scrollContainerRef.current;
+    if (id && container) rememberScrollPosition(id, container);
+  }, []);
 
   useLayoutEffect(() => {
     if (!sessionIdentity) return;

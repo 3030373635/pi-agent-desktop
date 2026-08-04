@@ -22,6 +22,7 @@ import {
   restoreScrollTop,
   VISIBLE_PAGE_SIZE,
 } from "@/lib/chat-lazy-load";
+import { sessionVisibleCounts } from "@/lib/scroll-memory";
 
 interface Props {
   session: SessionInfo | null;
@@ -273,20 +274,41 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   // --- Lazy-load historical messages ---
   // Only render the last N messages initially. When the user scrolls to the
   // top, load another page while keeping the scroll position stable.
-  const [visibleCount, setVisibleCount] = useState(VISIBLE_PAGE_SIZE);
+  const lazyLoadSessionKey = session?.id ?? newSessionCwd ?? null;
+  const [visibleCount, setVisibleCount] = useState(
+    () => (lazyLoadSessionKey != null ? sessionVisibleCounts.get(lazyLoadSessionKey) : undefined) ?? VISIBLE_PAGE_SIZE,
+  );
   const sentinelRef = useRef<HTMLDivElement>(null);
   const prevScrollDistanceRef = useRef<number | null>(null);
 
   // Reset the lazy-load window when switching sessions, otherwise the page
   // count grown in a long session carries over and the next session mounts
-  // with far more messages rendered than intended.
-  const lazyLoadSessionKey = session?.id ?? newSessionCwd ?? null;
+  // with far more messages rendered than intended. The grown count is saved
+  // per session: the scrollTop remembered for a session is a pixel offset
+  // into the window that was rendered at the time, so restoring it against a
+  // freshly reset 1-page window would land on the wrong message.
   const prevLazyLoadKeyRef = useRef(lazyLoadSessionKey);
   useEffect(() => {
     if (prevLazyLoadKeyRef.current === lazyLoadSessionKey) return;
+    const prevKey = prevLazyLoadKeyRef.current;
     prevLazyLoadKeyRef.current = lazyLoadSessionKey;
-    setVisibleCount(VISIBLE_PAGE_SIZE);
-  }, [lazyLoadSessionKey]);
+    if (prevKey != null) {
+      if (visibleCount > VISIBLE_PAGE_SIZE) sessionVisibleCounts.set(prevKey, visibleCount);
+      else sessionVisibleCounts.delete(prevKey);
+    }
+    setVisibleCount((lazyLoadSessionKey != null ? sessionVisibleCounts.get(lazyLoadSessionKey) : undefined) ?? VISIBLE_PAGE_SIZE);
+  }, [lazyLoadSessionKey, visibleCount]);
+
+  // Save on unmount too (new-chat key bumps remount ChatWindow); the cache is
+  // module-level so it outlives this instance.
+  const visibleCountRef = useRef(visibleCount);
+  visibleCountRef.current = visibleCount;
+  useEffect(() => () => {
+    const key = prevLazyLoadKeyRef.current;
+    if (key != null && visibleCountRef.current > VISIBLE_PAGE_SIZE) {
+      sessionVisibleCounts.set(key, visibleCountRef.current);
+    }
+  }, []);
 
   // IntersectionObserver on the sentinel div at the top of the message list.
   // When it becomes visible, load the next page of older messages.
