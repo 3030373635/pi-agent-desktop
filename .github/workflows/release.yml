@@ -1,11 +1,6 @@
 name: Publish signed desktop release
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - src-tauri/pi-agent-desktop-package.json
   workflow_dispatch:
 
 permissions:
@@ -78,6 +73,10 @@ jobs:
       - name: Prepare packaged Next.js server
         run: npm run desktop:prepare
 
+      - name: Test desktop shell
+        if: runner.os == 'Windows'
+        run: cargo test --release --manifest-path src-tauri/Cargo.toml --lib --target ${{ matrix.target }}
+
       - name: Build, sign, and upload updater artifacts
         uses: tauri-apps/tauri-action@v1
         env:
@@ -90,41 +89,47 @@ jobs:
           tagName: v__VERSION__
           releaseName: pi-agent-desktop v__VERSION__
           releaseBody: |
-            ## Pi Agent Desktop 0.2.5
+            ## Pi Agent Desktop 0.2.6
 
-            A maintenance release. There are no new features — it fixes the two ways the session list and the session view could leave you looking at the wrong thing, or at nothing at all.
+            This release upgrades the bundled Pi runtime and improves streaming recovery, desktop updates, and platform compatibility.
 
-            ### What's fixed
+            ### Highlights
 
-            - **A session you just started is visible right away** — Pi does not write a new session to disk until the assistant has replied, so the run you were actively watching was missing from the sidebar until the turn finished. The list now also includes sessions that exist only in memory, and renaming or deleting one of those works too.
-            - **No more being stuck on "loading session"** — Two separate causes. After a new session was assigned its real id, an internal flag was never cleared, so every later switch short-circuited its load. And the load request itself had no deadline, so a request that hung after a cold start left the message area empty for good. It now times out and retries once.
-            - **Switching sessions no longer nudges the messages sideways** — The scroll minimap only appeared after it had measured the message list, arriving a beat late and taking width away from the centred column. Its space is now reserved from the first frame.
+            - **Pi 0.84 support** — The desktop app now bundles Pi 0.84 and handles its delta-only assistant-message events. Streaming text, thinking, and tool calls are assembled correctly without relying on cumulative snapshots.
+            - **More resilient live responses** — An in-progress assistant message is restored from the server after an SSE reconnect or page refresh. Event streams remain available through retries, compaction, and extension-queued work, reducing missing or duplicated streaming bubbles.
+            - **Clearer desktop updates** — Update reminders now use only the latest stable `pi-agent-desktop` release as their source of truth. Settings shows the installed and available app versions together, and the upgrade action appears only when the installed desktop app is older.
 
-            ### Also in this release
+            ### Fixes and improvements
 
-            - The English sidebar says **Sessions** and **New Session**, matching the wording the rest of the app, the session files, and the pi command line already use. The Simplified Chinese text is unchanged.
-            - The README is now maintained in English and Simplified Chinese only — the two languages the app itself ships.
+            - Added a Windows drive picker and normalized packaged resource paths before launching Node, including Windows installations under non-ASCII user paths.
+            - Improved iOS PWA viewport and software-keyboard behavior, and kept DOCX previews on the same origin for Safari compatibility.
+            - Preserved explicit model and thinking choices for new sessions, prevented API-key saves from hanging, and improved plugin package installation.
+            - Grouped dormant skills in the skills panel and slash-command palette, and added completion sounds for extension dialogs.
+            - Reduced per-message agent overhead and kept the chat minimap layout stable while switching sessions.
 
-            Bundled components: pi 0.83.0, pi-web 0.8.5.
+            Bundled components: pi 0.84.0, pi-web 0.8.6.
 
             ---
 
-            ## Pi Agent Desktop 0.2.5
+            ## Pi Agent Desktop 0.2.6
 
-            这是一个维护版本，没有新功能，修复的是会话列表和会话界面可能让你看到错误内容、甚至什么都看不到的两类问题。
+            本次发布升级了内置 Pi 运行时，并改进了流式回复恢复、桌面更新体验和跨平台兼容性。
 
-            ### 本次修复
+            ### 主要更新
 
-            - **刚创建的会话立即可见** —— Pi 要等到模型回复之后才会把新会话写入磁盘，因此你正在看的这一轮任务，在结束之前不会出现在侧边栏里。现在列表会一并包含只存在于内存中的会话，对这类会话重命名和删除也能正常工作。
-            - **不再卡在「正在加载会话」** —— 这里有两个独立原因。新会话拿到真实 id 之后，一个内部标记没有被清除，导致之后每次切换会话都会跳过加载；同时加载请求本身没有超时，冷启动后一旦请求挂住，消息区就会一直空着。现在请求会超时并自动重试一次。
-            - **切换会话时消息不再左右跳动** —— 滚动缩略图要先测量消息列表才会出现，总是晚半拍，并且会从居中的消息列里挤走宽度。现在它的位置从第一帧就预留好。
+            - **支持 Pi 0.84** —— 桌面应用现已内置 Pi 0.84，并适配其仅发送增量的助手消息事件。流式文本、思考内容和工具调用无需依赖累计快照即可正确组装。
+            - **实时回复更加可靠** —— SSE 重连或页面刷新后，会从服务端恢复尚未完成的助手消息。事件流在重试、上下文压缩和扩展排队任务期间继续保持，减少流式气泡缺失或重复的问题。
+            - **桌面更新提示更清晰** —— 更新检查现在仅以最新稳定版 `pi-agent-desktop` Release 为准。设置界面会同时显示已安装版本和可用版本，并且仅在当前桌面应用版本较旧时显示升级操作。
 
-            ### 其他改动
+            ### 修复与改进
 
-            - 英文界面的侧边栏改为 **Sessions** 和 **New Session**，与应用其他位置、会话文件以及 pi 命令行一直在用的说法保持一致。简体中文文案没有变化。
-            - README 现在只维护英文和简体中文两个版本 —— 也就是应用本身支持的两种语言。
+            - 新增 Windows 驱动器选择器，并在启动 Node 前规范化打包资源路径，兼容安装在非 ASCII 用户目录下的 Windows 环境。
+            - 改进 iOS PWA 的视口和软键盘行为，并让 DOCX 预览保持同源以兼容 Safari。
+            - 保留新会话显式选择的模型和思考级别，修复保存 API Key 后可能卡住的问题，并改进插件包安装流程。
+            - 在技能面板和斜杠命令列表中集中展示停用技能，并为扩展对话框加入完成提示音。
+            - 降低逐消息的代理运行开销，并在切换会话时保持聊天缩略图布局稳定。
 
-            内置组件版本：pi 0.83.0、pi-web 0.8.5。
+            内置组件版本：pi 0.84.0、pi-web 0.8.6。
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true

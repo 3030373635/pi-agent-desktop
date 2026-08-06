@@ -1,5 +1,3 @@
-import { VERSION as PI_VERSION } from "@earendil-works/pi-coding-agent";
-import appPackage from "../package.json";
 import type {
   AppComponentReleaseInfo,
   AppUpdateInfo,
@@ -38,18 +36,6 @@ export const APP_UPDATE_PROJECTS: readonly AppUpdateProject[] = [
     name: APP_DISTRIBUTION_NAME,
     repository: "abcwyc/pi-agent-desktop",
     currentVersion: APP_VERSION,
-  },
-  {
-    id: "pi",
-    name: "pi",
-    repository: "earendil-works/pi",
-    currentVersion: PI_VERSION,
-  },
-  {
-    id: "pi-web",
-    name: "pi-web",
-    repository: "agegr/pi-web",
-    currentVersion: appPackage.version,
   },
 ];
 

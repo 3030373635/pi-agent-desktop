@@ -20,7 +20,8 @@ import type {
 
 export const dynamic = "force-dynamic";
 
-const STATE_VERSION = 2;
+// Version 3 drops the former pi/pi-web checks and their cached notices.
+const STATE_VERSION = 3;
 const STATE_FILE = "pi-web-update-check.json";
 
 interface UpdateCheckState {

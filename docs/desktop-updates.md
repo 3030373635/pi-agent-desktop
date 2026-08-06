@@ -6,7 +6,7 @@
 2. `earendil-works/pi`
 3. `agegr/pi-web`
 
-The settings screen checks the three repositories' latest stable GitHub Releases once a week. If any bundled version is older, its single **Upgrade** button downloads the newest signed `pi-agent-desktop` release, installs the complete app, and restarts it. It never replaces JavaScript or dependencies inside an already installed signed app.
+The settings screen checks only the latest stable `abcwyc/pi-agent-desktop` GitHub Release, at most once a week. If the installed desktop app version is older, its single **Upgrade** button downloads that signed release, installs the complete app, and restarts it. It never replaces JavaScript or dependencies inside an already installed signed app.
 
 ## Automatic component sync
 

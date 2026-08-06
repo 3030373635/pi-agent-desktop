@@ -607,10 +607,15 @@ export function ChatMinimap({
         cursor: visible ? "pointer" : "default",
         pointerEvents: visible ? "auto" : "none",
         userSelect: "none",
-        borderLeft: `1px solid ${visible ? "var(--border)" : "transparent"}`,
-        background: visible ? "var(--bg-panel)" : "transparent",
+        borderLeft: "1px solid transparent",
+        background: visible ? "var(--bg)" : "transparent",
+        boxShadow: visible
+          ? `inset 12px 0 18px -18px ${minimapHovered
+            ? "color-mix(in srgb, var(--text-muted) 48%, transparent)"
+            : "color-mix(in srgb, var(--border) 42%, transparent)"}`
+          : "none",
         opacity: visible ? 1 : 0,
-        transition: "opacity 0.12s ease-out",
+        transition: "opacity 0.12s ease-out, box-shadow 0.16s ease-out",
         overflow: "visible",
       }}
     >
@@ -621,8 +626,11 @@ export function ChatMinimap({
           top: MINIMAP_PADDING,
           height: railHeight,
           width: 1,
-          background: "var(--border)",
+          background: minimapHovered
+            ? "color-mix(in srgb, var(--border) 78%, transparent)"
+            : "color-mix(in srgb, var(--border) 52%, transparent)",
           transform: "translateX(-50%)",
+          transition: "background 0.16s ease-out",
           zIndex: 0,
         }}
       />
@@ -655,9 +663,9 @@ export function ChatMinimap({
                 width: 8,
                 height: 8,
                 borderRadius: 2,
-                background: isActive ? "rgba(128,128,128,0.42)" : "rgba(128,128,128,0.16)",
-                border: `1.5px solid ${isActive ? "rgba(128,128,128,0.95)" : "rgba(128,128,128,0.58)"}`,
-                boxShadow: isActive ? "0 0 0 2px var(--bg-panel)" : "none",
+                background: isActive ? "rgba(128,128,128,0.42)" : "rgba(128,128,128,0.12)",
+                border: `1.5px solid ${isActive ? "rgba(128,128,128,0.88)" : minimapHovered ? "rgba(128,128,128,0.55)" : "rgba(128,128,128,0.42)"}`,
+                boxShadow: isActive ? "0 0 0 2px var(--bg)" : "none",
                 transition: "transform 0.1s, background 0.1s",
                 transform: isNearest ? "scale(1.25)" : "scale(1)",
               }}

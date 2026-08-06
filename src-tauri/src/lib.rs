@@ -507,6 +507,17 @@ fn bundled_node_path(resource_dir: &Path) -> PathBuf {
 }
 
 #[cfg(feature = "custom-protocol")]
+fn child_process_compatible_path(path: &Path) -> PathBuf {
+    // Tauri resolves its Windows resource directory from a canonicalized
+    // executable path. `std::fs::canonicalize` uses the verbatim `\\?\C:\...`
+    // form on Windows, but Node's entry-point resolver is not verbatim-path
+    // aware and reduces that argument to the bare drive (`C:`). Simplify the
+    // path before it crosses the process boundary. On non-Windows platforms
+    // this is intentionally a no-op.
+    dunce::simplified(path).to_path_buf()
+}
+
+#[cfg(feature = "custom-protocol")]
 fn server_process_path(node_path: &Path) -> Option<std::ffi::OsString> {
     let inherited = login_shell_path().unwrap_or_default();
     let mut paths = vec![node_path.parent()?.to_path_buf()];
@@ -573,7 +584,7 @@ fn start_packaged_server(
     app: &tauri::AppHandle,
     desktop_api_token: &str,
 ) -> Result<(Url, DesktopServer), Box<dyn std::error::Error>> {
-    let resource_dir = app.path().resource_dir()?;
+    let resource_dir = child_process_compatible_path(&app.path().resource_dir()?);
     let node_path = bundled_node_path(&resource_dir);
     if !node_path.is_file() {
         return Err(io::Error::new(
@@ -640,6 +651,34 @@ fn start_packaged_server(
 
     let url = format!("http://127.0.0.1:{port}").parse()?;
     Ok((url, DesktopServer::running(child)))
+}
+
+#[cfg(all(test, feature = "custom-protocol"))]
+mod tests {
+    use super::child_process_compatible_path;
+    use std::path::{Path, PathBuf};
+
+    #[cfg(windows)]
+    #[test]
+    fn simplifies_verbatim_windows_path_before_launching_node() {
+        let path = Path::new(
+            r"\\?\C:\Users\毕良霞\AppData\Local\Pi Agent\resources\server\desktop-server.cjs",
+        );
+
+        assert_eq!(
+            child_process_compatible_path(path),
+            PathBuf::from(
+                r"C:\Users\毕良霞\AppData\Local\Pi Agent\resources\server\desktop-server.cjs"
+            )
+        );
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn leaves_non_windows_path_unchanged() {
+        let path = Path::new("/Applications/Pi Agent.app/Contents/Resources/server");
+        assert_eq!(child_process_compatible_path(path), PathBuf::from(path));
+    }
 }
 
 #[cfg(not(feature = "custom-protocol"))]

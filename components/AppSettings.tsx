@@ -86,7 +86,7 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
       })
       .then((data) => {
         const list = Array.isArray(data.components) ? data.components : [];
-        setComponents(list.filter((component) => component.project !== "pi-web"));
+        setComponents(list);
         setLoadError(null);
       })
       .catch((error) => {
@@ -208,20 +208,52 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
               <br />
               {t("appSettings.taglineDetails")}
             </div>
-            <div style={{ marginTop: 7, display: "flex", alignItems: "center", gap: 10, fontFamily: "var(--font-mono)", fontSize: 11 }}>
+            <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
               <a
-                href={APP_REPOSITORY_URL}
+                href={appRelease?.releaseUrl ?? APP_REPOSITORY_URL}
                 target="_blank"
                 rel="noreferrer"
-                style={{ color: "var(--text-muted)", textDecoration: "none" }}
-                onClick={(event) => handleExternalLinkClick(event, APP_REPOSITORY_URL)}
+                aria-label={`${statusText} ${APP_REPOSITORY}, v${APP_VERSION_DISPLAY}${updateAvailable ? ` → ${latestReleaseText}` : ""}`}
+                title={statusText}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "6px 9px",
+                  border: `1px solid ${updateAvailable ? "var(--accent)" : "var(--border)"}`,
+                  borderRadius: 7,
+                  background: updateAvailable ? "color-mix(in srgb, var(--accent) 10%, transparent)" : "var(--bg)",
+                  color: updateAvailable ? "var(--accent)" : "var(--text-muted)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  fontWeight: updateAvailable ? 700 : 500,
+                  textDecoration: "none",
+                }}
+                onClick={(event) => handleExternalLinkClick(event, appRelease?.releaseUrl ?? APP_REPOSITORY_URL)}
               >
-                {APP_REPOSITORY}
-                <span aria-hidden="true" style={{ marginLeft: 4, color: "var(--text-dim)" }}>↗</span>
+                <span>{APP_REPOSITORY}</span>
+                <span aria-hidden="true">↗</span>
+                <span aria-hidden="true" style={{ opacity: 0.55 }}>·</span>
+                <span>v{APP_VERSION_DISPLAY}</span>
+                {updateAvailable && <span>→ {latestReleaseText}</span>}
               </a>
-              <span style={{ color: "var(--text-dim)" }}>·</span>
-              <span style={{ color: "var(--text-muted)" }}>v{APP_VERSION_DISPLAY}</span>
+              {(updateAvailable || upgradeProgress) && (
+                <button
+                  className="native-button native-button-primary"
+                  type="button"
+                  disabled={!canUpgrade}
+                  onClick={() => void handleUpgrade()}
+                  style={{ minWidth: 112 }}
+                >
+                  {upgradeLabel}
+                </button>
+              )}
             </div>
+            {upgradeError && (
+              <div className="native-inline-alert is-error" role="alert" style={{ marginTop: 9 }}>
+                {upgradeError}
+              </div>
+            )}
           </div>
           <button
             className="native-modal-close"
@@ -237,65 +269,6 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
         </header>
 
         <div style={{ overflowY: "auto", padding: "18px 22px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
-          <div className="native-settings-card" style={sectionCardStyle}>
-            <div style={sectionTitleStyle}>{t("appSettings.updatesSection")}</div>
-            <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 18px" }}>
-              <div>
-                <div style={{ color: "var(--text-dim)", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                  {t("appSettings.currentVersion")}
-                </div>
-                <div style={{ marginTop: 3, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 12 }}>
-                  v{APP_VERSION_DISPLAY}
-                </div>
-              </div>
-              <div>
-                <div style={{ color: "var(--text-dim)", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                  {t("appSettings.latestRelease")}
-                </div>
-                <div style={{ marginTop: 3, fontFamily: "var(--font-mono)", fontSize: 12, color: updateAvailable ? "var(--accent)" : "var(--text-muted)" }}>
-                  {latestReleaseText}
-                </div>
-              </div>
-            </div>
-            <div style={{ marginTop: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-              <span style={{ color: loadError ? "var(--text-dim)" : updateAvailable ? "var(--accent)" : "var(--text-muted)", fontSize: 11, lineHeight: 1.5 }}>
-                {statusText}
-              </span>
-              {(updateAvailable || upgradeProgress) && (
-                <button
-                  className="native-button native-button-primary"
-                  type="button"
-                  disabled={!canUpgrade}
-                  onClick={() => void handleUpgrade()}
-                  style={{ minWidth: 120 }}
-                >
-                  {upgradeLabel}
-                </button>
-              )}
-            </div>
-            {updateAvailable && (
-              <div style={{ marginTop: 8, color: "var(--text-dim)", fontSize: 10, lineHeight: 1.5 }}>
-                {t("appSettings.updateNote", { name: APP_DISTRIBUTION_NAME })}
-              </div>
-            )}
-            {upgradeError && (
-              <div className="native-inline-alert is-error" role="alert" style={{ marginTop: 10 }}>
-                {upgradeError}
-                {appRelease?.releaseUrl && (
-                  <a
-                    href={appRelease.releaseUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{ marginLeft: 6, color: "inherit", fontWeight: 650 }}
-                    onClick={(event) => handleExternalLinkClick(event, appRelease.releaseUrl)}
-                  >
-                    {t("appSettings.openRelease")}
-                  </a>
-                )}
-              </div>
-            )}
-          </div>
-
           <div className="native-settings-card" style={sectionCardStyle}>
             <div style={sectionTitleStyle}>{t("appSettings.languageSection")}</div>
             <div style={sectionHintStyle}>{t("appSettings.languageHint")}</div>
