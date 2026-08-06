@@ -1,6 +1,6 @@
 {
   "name": "@agegr/pi-web",
-  "version": "0.8.5",
+  "version": "0.8.6",
   "description": "Web UI for the pi coding agent",
   "homepage": "https://github.com/agegr/pi-web#readme",
   "repository": {
@@ -40,7 +40,7 @@
     "release:verify": "node scripts/verify-release-components.mjs",
     "drift": "node scripts/measure-fork-drift.mjs",
     "test:release-tools": "node --test scripts/*.test.mjs",
-    "test": "node --test 'lib/**/*.test.mjs' 'scripts/**/*.test.mjs' 'components/**/*.test.mjs' 'hooks/**/*.test.mjs'",
+    "test": "node --test 'app/**/*.test.mjs' 'lib/**/*.test.mjs' 'scripts/**/*.test.mjs' 'components/**/*.test.mjs' 'hooks/**/*.test.mjs'",
     "lint": "eslint . && npm run check:branding",
     "check:branding": "node --test lib/branding.test.mjs",
     "release": "npm version patch --no-git-tag-version && npm run build && npm publish --access public"

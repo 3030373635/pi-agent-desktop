@@ -40,7 +40,7 @@ interface Props {
   onOpenFile?: (filePath: string) => void;
 }
 
-function phaseLabel(phase: AgentPhase, t: (key: string, params?: Record<string, string | number>) => string): string {
+function phaseLabel(phase: AgentPhase, t: (key: string, params?: Record<string, string | number>) => string): string | null {
   if (phase?.kind === "running_tools") {
     const names = phase.tools.map((t) => t.name);
     if (names.length === 0) return t("chat.runningTool");
@@ -50,7 +50,7 @@ function phaseLabel(phase: AgentPhase, t: (key: string, params?: Record<string, 
   }
   if (phase?.kind === "waiting_model") return t("chat.waitingModel");
   if (phase?.kind === "running_command") return t("chat.runningCommand");
-  return t("chat.thinking");
+  return null;
 }
 
 const CHAT_COLUMN_PADDING = 16;
@@ -216,6 +216,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   playDoneSoundRef.current = playDoneSound;
   const soundEnabledRef = useRef(soundEnabled);
   soundEnabledRef.current = soundEnabled;
+  const soundedExtensionDialogIdRef = useRef<string | null>(null);
   const wrappedOnAgentEnd = useCallback(() => {
     if (soundEnabledRef.current) {
       playDoneSoundRef.current();
@@ -265,6 +266,12 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     if (sessionBusyRef.current) return;
     handleNavigate(entryId);
   }, [handleNavigate]);
+
+  useEffect(() => {
+    if (!extensionDialog || soundedExtensionDialogIdRef.current === extensionDialog.id) return;
+    soundedExtensionDialogIdRef.current = extensionDialog.id;
+    playDoneSoundRef.current();
+  }, [extensionDialog]);
 
   // Register the abort handler for the global Esc shortcut
   useEffect(() => {
@@ -650,8 +657,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
   return (
     <div
-      className="chat-window relative flex h-full flex-col overflow-hidden"
+      className="chat-window relative flex h-full min-w-0 flex-col overflow-hidden"
       data-session-busy={sessionBusy ? "true" : undefined}
+      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -737,7 +745,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       {/* Row: (messages + input) column on the left, full-height minimap on the right */}
       <div className="flex flex-1 overflow-hidden">
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-      <div className="relative flex flex-1 overflow-hidden">
+      <div className="relative flex min-w-0 flex-1 overflow-hidden">
         <div
           style={{
             position: "absolute",
@@ -753,9 +761,9 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
             <NoticeShelf notices={notices} floating align="right" />
           </div>
         </div>
-        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pt-4 [scrollbar-width:none]">
-          <div style={{ padding: `0 ${CHAT_COLUMN_PADDING}px` }}>
-            <div style={{ maxWidth: 820, margin: "0 auto" }}>
+        <div ref={scrollContainerRef} className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto pt-4 [scrollbar-width:none]">
+          <div style={{ minWidth: 0, padding: `0 ${CHAT_COLUMN_PADDING}px` }}>
+            <div style={{ width: "100%", minWidth: 0, maxWidth: 820, margin: "0 auto" }}>
               {loading || error ? (
                 <div className="flex min-h-[40vh] flex-col items-center justify-center gap-2 px-6 text-center">
                   {loading ? (
@@ -792,7 +800,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               <MessageView message={streamState.streamingMessage as AgentMessage} isStreaming modelNames={modelNames} cwd={messageCwd} onOpenFile={onOpenFile} />
             )}
 
-            {agentRunning && !streamState.streamingMessage && (
+            {agentRunning && !streamState.streamingMessage && agentPhase && (
               <div className="py-2 text-[13px] text-text-muted">
                 <span className="animate-[pulse_1.5s_infinite]">{phaseLabel(agentPhase, t)}</span>
               </div>

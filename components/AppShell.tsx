@@ -24,6 +24,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { APP_PREF_KEYS, getPrefBool, getPrefJson, setPrefJson } from "@/lib/app-prefs";
+import { useViewportHeight } from "@/hooks/useViewportHeight";
 import { useResizablePanel } from "@/hooks/useResizablePanel";
 import { copyText } from "@/lib/clipboard";
 import { useDesktopConnection } from "@/lib/desktop-connection";
@@ -73,6 +74,7 @@ export function AppShell() {
   const { isDark, toggleTheme } = useTheme();
   const { locale, t: translate } = useI18n();
   const isMobile = useIsMobile();
+  useViewportHeight();
   const [selectedSession, setSelectedSession] = useState<SessionInfo | null>(null);
   // When user clicks +, we only store the cwd — no fake session id
   const [newSessionCwd, setNewSessionCwd] = useState<string | null>(null);
@@ -924,7 +926,7 @@ export function AppShell() {
           pointer-events: none !important;
         }
         .sidebar-container.sidebar-mobile-pending.sidebar-open {
-          transform: translateX(-100%);
+          transform: translateX(calc(-100% - env(safe-area-inset-left)));
           box-shadow: none;
         }
       }
@@ -932,7 +934,14 @@ export function AppShell() {
     <div
       className="app-shell"
       style={{
-        display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden", background: "var(--bg)",
+        display: "flex",
+        flexDirection: "column",
+        width: "100%",
+        height: "var(--app-viewport-height, 100dvh)",
+        paddingLeft: "env(safe-area-inset-left)",
+        paddingRight: "env(safe-area-inset-right)",
+        overflow: "hidden",
+        background: "var(--bg)",
       } as React.CSSProperties}
     >
       {connectionState === "offline" && (
@@ -1000,6 +1009,8 @@ export function AppShell() {
           display: "flex",
           flexDirection: "column",
           flexShrink: 0,
+          paddingTop: "env(safe-area-inset-top)",
+          paddingBottom: "env(safe-area-inset-bottom)",
           zIndex: 200,
         } as React.CSSProperties}
       >
@@ -1022,7 +1033,7 @@ export function AppShell() {
           ref={topBarRef}
           className={`app-topbar${desktopChrome.isMacOS && (!sidebarOpen || isMobile) ? " app-topbar--mac-inset" : ""}`}
           {...desktopChrome.dragRegionProps}
-          style={{ display: "flex", alignItems: "center", flexShrink: 0, borderBottom: "1px solid var(--border)", height: 36, background: "var(--bg-panel)" }}
+          style={{ display: "flex", alignItems: "center", flexShrink: 0, borderBottom: "1px solid var(--border)", height: "calc(36px + env(safe-area-inset-top))", paddingTop: "env(safe-area-inset-top)", background: "var(--bg-panel)" }}
         >
           {/* Sidebar reopen — only while the sidebar (and its own toggle) is hidden */}
           {!sidebarOpen && (
@@ -1639,7 +1650,7 @@ export function AppShell() {
         } as React.CSSProperties}
       >
         {/* Right panel tab bar */}
-        <div className="right-panel-tab-strip">
+        <div className="right-panel-tab-strip" style={{ height: "calc(36px + env(safe-area-inset-top))", paddingTop: "env(safe-area-inset-top)" }}>
           <div style={{ flex: 1, overflow: "hidden" }}>
             <TabBar
               tabs={fileTabs}
@@ -1662,7 +1673,7 @@ export function AppShell() {
         </div>
 
         {/* File content */}
-        <div style={{ flex: 1, overflow: "hidden" }}>
+        <div style={{ flex: 1, overflow: "hidden", paddingBottom: "env(safe-area-inset-bottom)" }}>
           {activeFileTab?.filePath ? (
             <FileViewer
               filePath={activeFileTab.filePath}
