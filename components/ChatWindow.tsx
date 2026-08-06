@@ -1,7 +1,7 @@
 "use client";
 import { registerAbortHandler } from "@/hooks/useKeyboardShortcuts";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { AgentMessage, AssistantContentBlock, AssistantMessage, BashExecutionMessage, CustomMessage, ExtensionUiRequest, SessionInfo, SessionTreeNode, ToolResultMessage } from "@/lib/types";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import type { AgentMessage, AssistantContentBlock, AssistantMessage, BashExecutionMessage, CustomMessage, ExtensionUiRequest, SessionInfo, SessionTreeNode, ToolResultMessage, UserMessage } from "@/lib/types";
 import { normalizeCustomPanelLines, parseAnsiLine } from "@/lib/ansi";
 import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { countToolCallBlocks, getDisplayableAssistantBlocks, splitFinalAssistantBlocks } from "@/lib/message-display";
@@ -54,6 +54,7 @@ function phaseLabel(phase: AgentPhase, t: (key: string, params?: Record<string, 
 }
 
 const CHAT_COLUMN_PADDING = 16;
+const CHAT_INPUT_RIGHT_PADDING = CHAT_COLUMN_PADDING + MINIMAP_WIDTH;
 
 function hasFinalAssistantAnswer(message: AgentMessage): boolean {
   if (message.role !== "assistant") return false;
@@ -225,8 +226,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   }, [onAgentEnd]);
 
   // 稳定化 onEditContent 引用，配合 React.memo 防止历史消息重渲染
-  const handleEditContent = useCallback((content: string) => {
-    chatInputRef?.current?.insertIfEmpty(content);
+  const handleEditContent = useCallback((message: UserMessage) => {
+    chatInputRef?.current?.replaceMessage(message);
   }, [chatInputRef]);
 
   const {
@@ -240,12 +241,12 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     agentPhase,
     isNew,
     sessionIdRef, messagesEndRef, scrollContainerRef,
-    lastUserMsgRef,
+    lastUserMsgRef, promptAnchorActive,
     handleSend, handleAbort, handleFork, handleNavigate, handleModelChange,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
     handleRecallQueue,
     handleBuiltinSlashCommand, retryLoad,
-    handleToolPresetChange, handleThinkingLevelChange, loadSlashCommands,
+    handleToolPresetChange, handleThinkingLevelChange, loadSlashCommands, scrollToBottom, scrollUserMsgToTop,
   } = useAgentSession({
     session, newSessionCwd, onAgentEnd: wrappedOnAgentEnd, onSessionCreated, onSessionForked,
     modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsPanelOpen,
@@ -411,6 +412,123 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
   const isEmptyNew = isNew && !loading && !error && messages.length === 0 && !streamState.isStreaming && !sessionBusy;
   const messageCwd = session?.cwd ?? newSessionCwd ?? undefined;
+  const bottomComposerRef = useRef<HTMLDivElement | null>(null);
+  const [bottomComposerHeight, setBottomComposerHeight] = useState(0);
+  const bottomComposerHeightRef = useRef(0);
+  const bottomComposerScrollFrameRef = useRef<number | null>(null);
+  const [promptAnchorSpacerHeight, setPromptAnchorSpacerHeight] = useState(0);
+  const promptAnchorSpacerHeightRef = useRef(0);
+  const promptAnchorScrollPendingRef = useRef(false);
+
+  useLayoutEffect(() => {
+    const composer = bottomComposerRef.current;
+    if (!composer) {
+      bottomComposerHeightRef.current = 0;
+      setBottomComposerHeight(0);
+      return;
+    }
+
+    const updateBottomComposerHeight = () => {
+      const nextHeight = Math.ceil(composer.getBoundingClientRect().height);
+      if (bottomComposerHeightRef.current === nextHeight) return;
+
+      const previousHeight = bottomComposerHeightRef.current;
+      bottomComposerHeightRef.current = nextHeight;
+      setBottomComposerHeight(nextHeight);
+
+      if (bottomComposerScrollFrameRef.current !== null) {
+        cancelAnimationFrame(bottomComposerScrollFrameRef.current);
+      }
+      bottomComposerScrollFrameRef.current = requestAnimationFrame(() => {
+        bottomComposerScrollFrameRef.current = null;
+        const currentContainer = scrollContainerRef.current;
+        const distanceFromBottom = currentContainer
+          ? currentContainer.scrollHeight - currentContainer.clientHeight - currentContainer.scrollTop
+          : Number.POSITIVE_INFINITY;
+        // Preserve a tail-pinned view while avoiding a jump for history readers.
+        if (distanceFromBottom <= Math.abs(nextHeight - previousHeight) + 1) {
+          scrollToBottom("auto");
+        }
+      });
+    };
+    updateBottomComposerHeight();
+
+    const observer = typeof ResizeObserver === "undefined"
+      ? null
+      : new ResizeObserver(updateBottomComposerHeight);
+    observer?.observe(composer);
+    return () => {
+      observer?.disconnect();
+      if (bottomComposerScrollFrameRef.current !== null) {
+        cancelAnimationFrame(bottomComposerScrollFrameRef.current);
+        bottomComposerScrollFrameRef.current = null;
+      }
+    };
+  }, [error, isEmptyNew, loading, scrollContainerRef, scrollToBottom]);
+
+  useLayoutEffect(() => {
+    if (!agentRunning || !promptAnchorActive) {
+      promptAnchorScrollPendingRef.current = false;
+      if (promptAnchorSpacerHeightRef.current !== 0) {
+        promptAnchorSpacerHeightRef.current = 0;
+        setPromptAnchorSpacerHeight(0);
+      }
+      return;
+    }
+
+    const container = scrollContainerRef.current;
+    const userMessage = lastUserMsgRef.current;
+    if (!container || !userMessage) return;
+
+    const updatePromptAnchorSpacer = () => {
+      const userMessageTop = userMessage.getBoundingClientRect().top
+        - container.getBoundingClientRect().top
+        + container.scrollTop;
+      const targetTop = Math.max(0, userMessageTop - 16);
+      // Exclude the current spacer so each measurement converges instead of
+      // alternating between adding it and removing it.
+      const maxScrollTopWithoutAnchor = Math.max(
+        0,
+        container.scrollHeight - promptAnchorSpacerHeightRef.current - container.clientHeight,
+      );
+      const nextPromptAnchorSpacerHeight = Math.max(
+        0,
+        Math.ceil(targetTop - maxScrollTopWithoutAnchor),
+      );
+
+      if (nextPromptAnchorSpacerHeight !== promptAnchorSpacerHeightRef.current) {
+        const needsInitialScroll = promptAnchorSpacerHeightRef.current === 0
+          && nextPromptAnchorSpacerHeight > 0;
+        promptAnchorSpacerHeightRef.current = nextPromptAnchorSpacerHeight;
+        promptAnchorScrollPendingRef.current ||= needsInitialScroll;
+        setPromptAnchorSpacerHeight(nextPromptAnchorSpacerHeight);
+        return;
+      }
+
+      if (promptAnchorScrollPendingRef.current) {
+        promptAnchorScrollPendingRef.current = false;
+        scrollUserMsgToTop();
+      }
+    };
+
+    updatePromptAnchorSpacer();
+    const observer = typeof ResizeObserver === "undefined"
+      ? null
+      : new ResizeObserver(updatePromptAnchorSpacer);
+    observer?.observe(container);
+    observer?.observe(userMessage);
+    return () => observer?.disconnect();
+  }, [
+    agentRunning,
+    bottomComposerHeight,
+    lastUserMsgRef,
+    messages.length,
+    promptAnchorActive,
+    promptAnchorSpacerHeight,
+    scrollContainerRef,
+    scrollUserMsgToTop,
+    streamState.streamingMessage,
+  ]);
 
   // Group messages into turns (user prompt → collapsed process → final
   // answer) once per relevant change, not on every render. Streaming deltas
@@ -824,12 +942,12 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               />
             )}
 
-            {/* Spacer so the last user message can scroll near the top while the
-                agent works — capped at 40% of the viewport so the page below the
-                streaming answer doesn't feel like an endless blank. */}
-            {agentRunning && (
-              <div style={{ height: scrollContainerRef.current ? Math.round(scrollContainerRef.current.clientHeight * 0.4) : "40vh" }} />
+            {promptAnchorSpacerHeight > 0 && (
+              <div aria-hidden="true" style={{ height: promptAnchorSpacerHeight }} />
             )}
+
+            {/* Match the trailing space to the live bottom composer height. */}
+            <div aria-hidden="true" style={{ height: bottomComposerHeight }} />
 
             <div ref={messagesEndRef} />
                 </>
@@ -839,8 +957,13 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
         </div>
       </div>
 
-      <div className="relative">
-        <div style={{ padding: `0 ${CHAT_COLUMN_PADDING}px` }}>
+      <div ref={bottomComposerRef} className="relative">
+        <div
+          style={{
+            padding: `0 ${CHAT_COLUMN_PADDING}px`,
+            paddingRight: isMobile ? CHAT_COLUMN_PADDING : CHAT_INPUT_RIGHT_PADDING,
+          }}
+        >
           <div style={{ maxWidth: 820, margin: "0 auto" }}>
             <ExtensionWidgets widgets={belowEditorWidgets} />
           </div>

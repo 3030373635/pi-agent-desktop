@@ -106,8 +106,9 @@ jobs:
             - Preserved explicit model and thinking choices for new sessions, prevented API-key saves from hanging, and improved plugin package installation.
             - Grouped dormant skills in the skills panel and slash-command palette, and added completion sounds for extension dialogs.
             - Reduced per-message agent overhead and kept the chat minimap layout stable while switching sessions.
+            - Added Catppuccin file icons, collapsible slash-command expansions, smoother live-follow scrolling, improved display math handling, and image restoration when editing messages from pi-web 0.8.7.
 
-            Bundled components: pi 0.84.0, pi-web 0.8.6.
+            Bundled components: pi 0.84.0, pi-web 0.8.7.
 
             ---
 
@@ -128,8 +129,9 @@ jobs:
             - 保留新会话显式选择的模型和思考级别，修复保存 API Key 后可能卡住的问题，并改进插件包安装流程。
             - 在技能面板和斜杠命令列表中集中展示停用技能，并为扩展对话框加入完成提示音。
             - 降低逐消息的代理运行开销，并在切换会话时保持聊天缩略图布局稳定。
+            - 随 pi-web 0.8.7 加入 Catppuccin 文件图标、可折叠的斜杠命令展开内容、更平滑的实时跟随滚动、改进的公式显示，以及编辑消息时的图片恢复。
 
-            内置组件版本：pi 0.84.0、pi-web 0.8.6。
+            内置组件版本：pi 0.84.0、pi-web 0.8.7。
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
