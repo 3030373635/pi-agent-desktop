@@ -1,11 +1,6 @@
 name: Publish signed desktop release
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - src-tauri/pi-agent-desktop-package.json
   workflow_dispatch:
 
 permissions:
@@ -77,6 +72,10 @@ jobs:
 
       - name: Prepare packaged Next.js server
         run: npm run desktop:prepare
+
+      - name: Test desktop shell
+        if: runner.os == 'Windows'
+        run: cargo test --release --manifest-path src-tauri/Cargo.toml --lib --target ${{ matrix.target }}
 
       - name: Build, sign, and upload updater artifacts
         uses: tauri-apps/tauri-action@v1

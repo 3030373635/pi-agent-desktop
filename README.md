@@ -13,7 +13,7 @@
 - Switch Git worktrees from the sidebar and browse project files.
 - Preview source code, diffs, Markdown, images, audio, PDF, and DOCX files.
 - Dark mode, automatic session naming, a completion sound, and restored run state.
-- A weekly check of the stable GitHub releases of the three component projects, with an in-app notice when an update exists.
+- A weekly check of the latest stable `pi-agent-desktop` GitHub Release, with an in-app notice only when the installed app is older.
 - One upgrade button installs a complete, signed new build of Pi Agent and restarts automatically.
 
 ![Pi Agent light mode](./docs/screenshots/pi-agent-light@2x.png)
@@ -59,7 +59,7 @@ Model keys and session data stay on your machine. The file-browsing API only all
 
 ## Update Checks And Upgrades
 
-Pi Agent checks the latest stable release of these repositories at most once every seven days:
+Pi Agent checks the latest stable release of `abcwyc/pi-agent-desktop` at most once every seven days:
 
 - `abcwyc/pi-agent-desktop`
 - `earendil-works/pi`
@@ -67,8 +67,8 @@ Pi Agent checks the latest stable release of these repositories at most once eve
 
 The versioning and upgrade rules are:
 
-1. Once `pi-agent-desktop` has a release, its latest stable release is the source of upgradable versions.
-2. If any of the three components is behind, the single upgrade button in Settings becomes enabled.
+1. The latest stable `pi-agent-desktop` release is the only source used for update reminders.
+2. The upgrade button in Settings becomes enabled only when the installed desktop app version is older.
 3. When several components need updating, the release automation syncs and verifies them in the order `pi → pi-web → pi-agent-desktop`.
 4. Nothing patches an individual JavaScript package inside an installed app. The app downloads one complete signed build containing all three components at their latest versions.
 5. The app restarts after installation, so all three components land in the same verified release state at once.

@@ -11,9 +11,10 @@ const componentUpdates = await readFile(
   "utf8",
 );
 
-test("component updates run daily with the permissions the sync needs", () => {
-  assert.match(componentUpdates, /cron: "17 2 \* \* \*"/);
-  assert.match(componentUpdates, /actions: write/);
+test("component updates are manual-only with the permissions the sync needs", () => {
+  assert.match(componentUpdates, /on:\s*\n\s*workflow_dispatch:/);
+  assert.doesNotMatch(componentUpdates, /schedule:/);
+  assert.doesNotMatch(componentUpdates, /actions: write/);
   assert.match(componentUpdates, /contents: write/);
   assert.match(componentUpdates, /pull-requests: write/);
   assert.match(componentUpdates, /issues: write/);
@@ -30,7 +31,7 @@ test("the boundary is classified before the merge, not after", () => {
   assert.ok(classifyAt < mergeAt, "classification must run before the merge");
 });
 
-test("unattended publish is gated on the fork boundary", () => {
+test("a manually requested direct sync is gated on the fork boundary", () => {
   // A clean merge into a fork-modified file can be a silent semantic conflict,
   // so only a no-overlap sync may reach a signed release without review.
   assert.match(
@@ -40,13 +41,13 @@ test("unattended publish is gated on the fork boundary", () => {
   const reviewStep = componentUpdates.slice(componentUpdates.indexOf("Open a review PR"));
   assert.match(reviewStep, /steps\.boundary\.outputs\.review_required == 'true'/);
   assert.match(reviewStep, /gh pr create/);
-  assert.match(componentUpdates, /gh workflow run release\.yml .*--ref main/);
+  assert.doesNotMatch(componentUpdates, /gh workflow run release\.yml/);
 });
 
-test("the release dispatch is unreachable from the review path", () => {
-  // The PR path must not also fire the signed build; review has to mean review.
-  const reviewStep = componentUpdates.slice(componentUpdates.indexOf("Open a review PR"));
-  assert.doesNotMatch(reviewStep, /gh workflow run release\.yml/);
+test("the signed release workflow is manual-only", async () => {
+  const release = await readFile(join(root, ".github", "workflows", "release.yml"), "utf8");
+  assert.match(release, /on:\s*\n\s*workflow_dispatch:/);
+  assert.doesNotMatch(release, /\bpush:/);
 });
 
 test("the merge gate covers tests, types, lint and a real build", () => {

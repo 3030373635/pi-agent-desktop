@@ -113,7 +113,9 @@ class PlainTextTheme extends Theme {
   constructor() {
     super(
       { thinkingXhigh: "" } as ConstructorParameters<typeof Theme>[0],
-      {} as ConstructorParameters<typeof Theme>[1],
+      // Pi 0.84 derives scrollbarThumb from selectedBg during construction,
+      // even though this headless theme overrides every color operation.
+      { selectedBg: "" } as ConstructorParameters<typeof Theme>[1],
       "truecolor",
     );
   }
@@ -457,6 +459,7 @@ export class AgentSessionWrapper {
           sessionId: this.inner.sessionId,
           sessionFile: this.inner.sessionFile ?? "",
           isStreaming: this.inner.isStreaming,
+          streamingMessage: this.inner.agent.state?.streamingMessage,
           isPromptRunning: this.promptRunning,
           isBashRunning: this.inner.isBashRunning,
           isCompacting: this.inner.isCompacting,

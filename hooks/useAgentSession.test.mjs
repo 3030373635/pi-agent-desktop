@@ -4,6 +4,7 @@ import test from "node:test";
 
 const source = await readFile(new URL("./useAgentSession.ts", import.meta.url), "utf8");
 const chatWindowSource = await readFile(new URL("../components/ChatWindow.tsx", import.meta.url), "utf8");
+const rpcManagerSource = await readFile(new URL("../lib/rpc-manager.ts", import.meta.url), "utf8");
 
 test("keeps the session event stream open through the idle grace window", () => {
   const finishSource = source.slice(
@@ -72,4 +73,22 @@ test("plays the enabled sound once for each extension dialog", () => {
   );
   assert.match(chatWindowSource, /soundedExtensionDialogIdRef\.current = extensionDialog\.id/);
   assert.match(chatWindowSource, /playDoneSoundRef\.current\(\)/);
+});
+
+test("assembles Pi 0.84 deltas and reseeds the stream after reconnects", () => {
+  const updateSource = source.slice(
+    source.indexOf('case "message_update"'),
+    source.indexOf('case "message_end"'),
+  );
+  const reconcileSource = source.slice(
+    source.indexOf("const reconcileAgentState"),
+    source.indexOf("// Recovery net for missed SSE events"),
+  );
+
+  assert.match(updateSource, /applyAssistantMessageEvent\(/);
+  assert.match(updateSource, /streamingMessageRef\.current/);
+  assert.match(updateSource, /event\.assistantMessageEvent as ClientAssistantMessageEvent/);
+  assert.match(updateSource, /Compatibility with pre-0\.84 servers/);
+  assert.match(reconcileSource, /seedStreamingSnapshot\(state\.streamingMessage\)/);
+  assert.match(rpcManagerSource, /streamingMessage: this\.inner\.agent\.state\?\.streamingMessage/);
 });

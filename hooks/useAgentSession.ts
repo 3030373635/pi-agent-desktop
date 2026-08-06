@@ -14,6 +14,7 @@ import { sendAgentCommand } from "@/lib/agent-client";
 import { fetchWithRetry } from "@/lib/fetch-timeout";
 import { getToolNamesForPreset, type ToolEntry } from "@/lib/tool-presets";
 import { rememberScrollPosition, sessionScrollTops } from "@/lib/scroll-memory";
+import { applyAssistantMessageEvent, type ClientAssistantMessageEvent } from "@/lib/streaming-message";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 
 export interface SessionData {
@@ -76,6 +77,7 @@ type AgentStateResponse = {
   systemPrompt?: string;
   thinkingLevel?: string;
   isStreaming?: boolean;
+  streamingMessage?: AgentMessage;
   isPromptRunning?: boolean;
   isBashRunning?: boolean;
   isCompacting?: boolean;
@@ -356,6 +358,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [entryIds, setEntryIds] = useState<string[]>([]);
   const [streamState, rawStreamDispatch] = useReducer(streamReducer, { isStreaming: false, streamingMessage: null });
+  const streamingMessageRef = useRef<Partial<AgentMessage> | null>(null);
 
   // Streaming deltas can arrive many times per frame; each "update" dispatch
   // re-renders the streaming bubble and re-parses its markdown. Throttle
@@ -369,6 +372,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const dispatch = useCallback((action: StreamAction) => {
     if (action.type !== "update") {
       streamEpochRef.current += 1;
+      streamingMessageRef.current = null;
       pendingStreamUpdateRef.current = null;
       if (streamFlushTimerRef.current != null) {
         clearTimeout(streamFlushTimerRef.current);
@@ -398,6 +402,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       }, STREAM_UPDATE_THROTTLE_MS);
     }
   }, []);
+  const seedStreamingSnapshot = useCallback((message: unknown): boolean => {
+    if (!message || typeof message !== "object" || (message as { role?: unknown }).role !== "assistant") return false;
+    const normalized = normalizeToolCalls(message as AgentMessage);
+    streamingMessageRef.current = normalized;
+    dispatch({ type: "update", message: normalized });
+    return true;
+  }, [dispatch]);
   useEffect(() => () => {
     if (streamFlushTimerRef.current != null) clearTimeout(streamFlushTimerRef.current);
   }, []);
@@ -1043,6 +1054,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           agentRunningRef.current = true;
           setAgentRunning(true);
           setAgentPhase(state?.isStreaming ? { kind: "waiting_model" } : { kind: "running_command" });
+          if (state?.isStreaming) seedStreamingSnapshot(state.streamingMessage);
           return;
         }
 
@@ -1067,7 +1079,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     };
 
     eventStreamGraceTimerRef.current = setTimeout(() => void checkServerIdle(), EVENT_STREAM_IDLE_GRACE_MS);
-  }, [cancelEventStreamGrace, closeEvents]);
+  }, [cancelEventStreamGrace, closeEvents, seedStreamingSnapshot]);
 
   const finishPromptWithoutStream = useCallback(async (sid: string | null = sessionIdRef.current, runId = promptRunIdRef.current) => {
     // Bail out before loadSession too: a stale finish for a previous run
@@ -1167,6 +1179,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setQueuedMessages(normalizeQueuedMessages(state?.queuedMessages));
       const busy = data.running && state
         && (state.isStreaming || state.isPromptRunning || state.isCompacting);
+      if (state?.isStreaming) seedStreamingSnapshot(state.streamingMessage);
       if (busy || !agentRunningRef.current) return;
       if (state) {
         if (state.contextUsage !== undefined) setContextUsage(state.contextUsage ?? null);
@@ -1178,7 +1191,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } catch {
       // Network still down — the next poll / visibility / online tick retries.
     }
-  }, [finishPromptWithoutStream]);
+  }, [finishPromptWithoutStream, seedStreamingSnapshot]);
 
   // Recovery net for missed SSE events: while the agent is running, verify
   // against the server periodically and whenever the tab returns to the
@@ -1286,8 +1299,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           message: (event.error as string | undefined) ?? "Extension command failed",
         });
         break;
-      case "message_start":
-      case "message_update": {
+      case "message_start": {
         // Ignore streaming events arriving after this run already finished
         // (e.g. SSE data buffered while the tab was frozen, flushed after
         // reconcile) — they would resurrect a ghost streaming bubble.
@@ -1296,8 +1308,27 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         if (msg?.role === "user") {
           break;
         }
-        if (msg) {
-          dispatch({ type: "update", message: normalizeToolCalls(msg as AgentMessage) });
+        if (msg) seedStreamingSnapshot(msg);
+        setAgentPhase(null);
+        break;
+      }
+      case "message_update": {
+        if (!agentRunningRef.current) break;
+        // Pi 0.84's browser wire contract is delta-only. Keep a ref-backed
+        // authoritative snapshot so throttled React renders never drop deltas.
+        const cumulative = event.message as Partial<AgentMessage> | undefined;
+        if (cumulative?.role === "assistant") {
+          // Compatibility with pre-0.84 servers during a rolling upgrade.
+          seedStreamingSnapshot(cumulative);
+        } else if (event.assistantMessageEvent && typeof event.assistantMessageEvent === "object") {
+          const next = applyAssistantMessageEvent(
+            streamingMessageRef.current,
+            event.assistantMessageEvent as ClientAssistantMessageEvent,
+          );
+          if (next) {
+            streamingMessageRef.current = next;
+            dispatch({ type: "update", message: next });
+          }
         }
         setAgentPhase(null);
         break;
@@ -1386,7 +1417,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         handleExtensionUiRequest(event as ExtensionUiRequest);
         break;
     }
-  }, [addNotice, cancelEventStreamGrace, dispatch, handleExtensionUiRequest, loadSession, notifyPromptStage, onAgentEnd, scheduleEventStreamClose, settleUiStage]);
+  }, [addNotice, cancelEventStreamGrace, dispatch, handleExtensionUiRequest, loadSession, notifyPromptStage, onAgentEnd, scheduleEventStreamClose, seedStreamingSnapshot, settleUiStage]);
   handleAgentEventRef.current = handleAgentEvent;
 
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {
@@ -1947,7 +1978,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           agentRunningRef.current = true;
           setAgentRunning(true);
           setAgentPhase(agentState.state.isStreaming ? { kind: "waiting_model" } : { kind: "running_command" });
-          dispatch({ type: "start" });
+          if (!agentState.state.isStreaming || !seedStreamingSnapshot(agentState.state.streamingMessage)) {
+            dispatch({ type: "start" });
+          }
           void connectEvents(sid);
           if (!agentState.state.isStreaming && agentState.state.isPromptRunning) {
             void waitForPromptSettlement(sid);
@@ -1977,6 +2010,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     dispatch,
     loadSession,
     loadTools,
+    seedStreamingSnapshot,
     waitForBashSettlement,
     waitForPromptSettlement,
   ]);

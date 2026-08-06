@@ -74,6 +74,8 @@ interface ExtensionRunnerLike {
   setUIContext?(uiContext?: unknown, mode?: "tui" | "rpc" | "json" | "print"): void;
 }
 
+type StreamingAgentMessage = Extract<AgentSessionEvent, { type: "message_start" }>["message"];
+
 type DialogOptionsLike = {
   signal?: AbortSignal;
   timeout?: number;
@@ -128,7 +130,7 @@ export interface AgentSessionLike {
   };
   readonly sessionManager: SessionManager;
   readonly settingsManager: SettingsManager;
-  readonly agent: { state?: { systemPrompt?: string; thinkingLevel?: string } };
+  readonly agent: { state?: { systemPrompt?: string; thinkingLevel?: string; streamingMessage?: StreamingAgentMessage } };
   readonly extensionRunner: ExtensionRunnerLike;
   readonly promptTemplates: readonly PromptTemplateLike[];
   readonly resourceLoader: ResourceLoaderLike;

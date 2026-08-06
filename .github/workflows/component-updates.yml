@@ -1,12 +1,9 @@
 name: Update released components
 
 on:
-  schedule:
-    - cron: "17 2 * * *"
   workflow_dispatch:
 
 permissions:
-  actions: write
   contents: write
   pull-requests: write
   issues: write
@@ -125,19 +122,16 @@ jobs:
           git add --all
           git commit -m "chore: sync released pi components"
 
-      # Upstream did not touch anything this fork has modified, so the merge
-      # cannot have produced a silent semantic conflict. Ship it.
-      - name: Publish unattended
+      # Upstream did not touch anything this fork has modified, so a manually
+      # requested sync may update main without a review PR. Publishing a signed
+      # release remains a separate, manually dispatched action.
+      - name: Publish manually requested sync
         if: steps.releases.outputs.needs_update == 'true' && steps.pending.outputs.awaiting_review != 'true' && steps.boundary.outputs.review_required != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           git push origin HEAD:main
-
-          # Pushes made with GITHUB_TOKEN do not trigger other push workflows,
-          # so dispatch the signed release build explicitly after main updates.
-          gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref main
 
       # Upstream changed files the fork has also rewritten. Git may have merged
       # them cleanly and still be wrong, so a human reviews before anything is
@@ -163,7 +157,7 @@ jobs:
             echo "that is exactly why this needs eyes. Check the listed files for"
             echo "behaviour the merge kept from both sides."
             echo
-            echo "Merging this PR to \`main\` triggers the signed release build."
+            echo "After merging, dispatch \`release.yml\` manually when ready to publish."
           } > /tmp/pr-body.md
 
           gh pr create \
