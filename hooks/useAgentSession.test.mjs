@@ -92,3 +92,57 @@ test("assembles Pi 0.84 deltas and reseeds the stream after reconnects", () => {
   assert.match(reconcileSource, /seedStreamingSnapshot\(state\.streamingMessage\)/);
   assert.match(rpcManagerSource, /streamingMessage: this\.inner\.agent\.state\?\.streamingMessage/);
 });
+
+test("keeps live following cancellable when the user scrolls away from the tail", () => {
+  const streamUpdateSource = source.slice(
+    source.indexOf('case "message_start"'),
+    source.indexOf('case "message_end"'),
+  );
+  const scrollHandlerSource = source.slice(
+    source.indexOf("const handleScrollPositionChange"),
+    source.indexOf("// Load session on mount"),
+  );
+
+  assert.match(source, /const liveFollowFrameRef = useRef<number \| null>\(null\)/);
+  assert.match(streamUpdateSource, /liveFollowFrameRef\.current === null/);
+  assert.match(streamUpdateSource, /requestAnimationFrame\(\(\) => \{[\s\S]*?liveFollowFrameRef\.current = null;[\s\S]*?if \(isNearBottomRef\.current\) scrollToBottom\("auto"\)/);
+  assert.match(scrollHandlerSource, /cancelAnimationFrame\(liveFollowFrameRef\.current\)/);
+});
+
+test("keeps a newly sent user message at the top while its response starts", () => {
+  const streamUpdateSource = source.slice(
+    source.indexOf('case "message_start"'),
+    source.indexOf('case "message_end"'),
+  );
+  const userScrollSource = source.slice(
+    source.indexOf("const scrollUserMsgToTop"),
+    source.indexOf("const markUserScrollIntent"),
+  );
+  const scrollEffectSource = source.slice(
+    source.indexOf("useLayoutEffect(() => {\n    if (messages.length > 0)"),
+    source.indexOf("// Load model list"),
+  );
+
+  assert.match(streamUpdateSource, /!pendingScrollToUserRef\.current && isNearBottomRef\.current/);
+  assert.match(source, /const \[promptAnchorActive, setPromptAnchorActive\] = useState\(false\)/);
+  assert.match(source, /pendingScrollToUserRef\.current = true;\s*setPromptAnchorActive\(true\)/);
+  assert.match(userScrollSource, /const targetTop = Math\.min\(Math\.max\(0, elAbsTop - 16\), maxScrollTop\)/);
+  assert.match(userScrollSource, /cancelAnimationFrame\(liveFollowFrameRef\.current\)/);
+  assert.match(userScrollSource, /isNearBottomRef\.current = targetTop >= maxScrollTop - SCROLL_BOTTOM_THRESHOLD/);
+  assert.match(userScrollSource, /container\.scrollTo\(\{ top: targetTop, behavior: "smooth" \}\)/);
+  assert.match(scrollEffectSource, /pendingScrollToUserRef\.current = false;[\s\S]*?scrollUserMsgToTop\(\)/);
+  assert.match(chatWindowSource, /const maxScrollTopWithoutAnchor = Math\.max\([\s\S]*?container\.scrollHeight - promptAnchorSpacerHeightRef\.current - container\.clientHeight/);
+  assert.match(chatWindowSource, /const nextPromptAnchorSpacerHeight = Math\.max\([\s\S]*?Math\.ceil\(targetTop - maxScrollTopWithoutAnchor\)/);
+  assert.match(chatWindowSource, /<div aria-hidden="true" style=\{\{ height: promptAnchorSpacerHeight \}\} \/>/);
+});
+
+test("sizes the message tail from the rendered bottom composer", () => {
+  assert.match(chatWindowSource, /const bottomComposerRef = useRef<HTMLDivElement \| null>\(null\)/);
+  assert.match(chatWindowSource, /useLayoutEffect\(\(\) => \{/);
+  assert.match(chatWindowSource, /new ResizeObserver\(updateBottomComposerHeight\)/);
+  assert.match(chatWindowSource, /bottomComposerScrollFrameRef = useRef<number \| null>\(null\)/);
+  assert.match(chatWindowSource, /distanceFromBottom <= Math\.abs\(nextHeight - previousHeight\) \+ 1/);
+  assert.match(chatWindowSource, /scrollToBottom\("auto"\)/);
+  assert.match(chatWindowSource, /<div ref=\{bottomComposerRef\} className="relative">/);
+  assert.match(chatWindowSource, /height: bottomComposerHeight/);
+});
