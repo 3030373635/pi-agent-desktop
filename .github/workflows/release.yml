@@ -101,11 +101,12 @@ jobs:
 
             ### Fixes and improvements
 
+            - Bumped the bundled Pi runtime to 0.84.1.
             - Refined scrollbar styling for easier grabbing without cluttering idle views.
             - Allowed the file-index search API to accept an explicit match limit.
             - Hardened explorer upload-target resolution and chat file-drop handling with focused unit tests.
 
-            Bundled components: pi 0.84.0, pi-web 0.8.7.
+            Bundled components: pi 0.84.1, pi-web 0.8.7.
 
             ---
 
@@ -121,11 +122,12 @@ jobs:
 
             ### 修复与改进
 
+            - 升级内置 Pi 运行时到 0.84.1。
             - 优化滚动条样式，便于拖动且减少空闲时的视觉干扰。
             - 文件索引搜索 API 支持显式匹配数量上限。
             - 强化资源管理器上传目标解析与对话拖放处理，并补充单元测试。
 
-            内置组件版本：pi 0.84.0、pi-web 0.8.7。
+            内置组件版本：pi 0.84.1、pi-web 0.8.7。
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
