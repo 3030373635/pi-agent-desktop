@@ -89,47 +89,41 @@ jobs:
           tagName: v__VERSION__
           releaseName: pi-agent-desktop v__VERSION__
           releaseBody: |
-            ## Pi Agent Desktop 0.2.6
+            ## Pi Agent Desktop 0.2.7
 
-            This release upgrades the bundled Pi runtime and improves streaming recovery, desktop updates, and platform compatibility.
+            This release improves project file import and simplifies when the file preview panel appears.
 
             ### Highlights
 
-            - **Pi 0.84 support** — The desktop app now bundles Pi 0.84 and handles its delta-only assistant-message events. Streaming text, thinking, and tool calls are assembled correctly without relying on cumulative snapshots.
-            - **More resilient live responses** — An in-progress assistant message is restored from the server after an SSE reconnect or page refresh. Event streams remain available through retries, compaction, and extension-queued work, reducing missing or duplicated streaming bubbles.
-            - **Clearer desktop updates** — Update reminders now use only the latest stable `pi-agent-desktop` release as their source of truth. Settings shows the installed and available app versions together, and the upgrade action appears only when the installed desktop app is older.
+            - **Project file upload and drop** — Drag files into the Files explorer or chat to upload them into the current project, with clearer destination feedback and shared size limits.
+            - **File panel opens from files only** — The chat top bar no longer shows a “Show file panel” control. Opening a concrete file from Files expands the right panel; while open, “Hide file panel” closes it.
+            - **Leaner chat chrome** — Removed the chat minimap and tightened related layout/ownership markers.
 
             ### Fixes and improvements
 
-            - Added a Windows drive picker and normalized packaged resource paths before launching Node, including Windows installations under non-ASCII user paths.
-            - Improved iOS PWA viewport and software-keyboard behavior, and kept DOCX previews on the same origin for Safari compatibility.
-            - Preserved explicit model and thinking choices for new sessions, prevented API-key saves from hanging, and improved plugin package installation.
-            - Grouped dormant skills in the skills panel and slash-command palette, and added completion sounds for extension dialogs.
-            - Reduced per-message agent overhead and kept the chat minimap layout stable while switching sessions.
-            - Added Catppuccin file icons, collapsible slash-command expansions, smoother live-follow scrolling, improved display math handling, and image restoration when editing messages from pi-web 0.8.7.
+            - Refined scrollbar styling for easier grabbing without cluttering idle views.
+            - Allowed the file-index search API to accept an explicit match limit.
+            - Hardened explorer upload-target resolution and chat file-drop handling with focused unit tests.
 
             Bundled components: pi 0.84.0, pi-web 0.8.7.
 
             ---
 
-            ## Pi Agent Desktop 0.2.6
+            ## Pi Agent Desktop 0.2.7
 
-            本次发布升级了内置 Pi 运行时，并改进了流式回复恢复、桌面更新体验和跨平台兼容性。
+            本次发布改进了项目文件导入流程，并简化了文件预览面板的打开方式。
 
             ### 主要更新
 
-            - **支持 Pi 0.84** —— 桌面应用现已内置 Pi 0.84，并适配其仅发送增量的助手消息事件。流式文本、思考内容和工具调用无需依赖累计快照即可正确组装。
-            - **实时回复更加可靠** —— SSE 重连或页面刷新后，会从服务端恢复尚未完成的助手消息。事件流在重试、上下文压缩和扩展排队任务期间继续保持，减少流式气泡缺失或重复的问题。
-            - **桌面更新提示更清晰** —— 更新检查现在仅以最新稳定版 `pi-agent-desktop` Release 为准。设置界面会同时显示已安装版本和可用版本，并且仅在当前桌面应用版本较旧时显示升级操作。
+            - **项目文件上传与拖放** —— 可将文件拖入 Files 资源管理器或对话区，上传到当前项目；目标目录提示更清晰，并统一文件大小限制。
+            - **仅在打开具体文件时展开文件面板** —— 中间对话栏不再提供「显示文件面板」按钮。从 Files 点击具体文件才会展开右侧预览；展开后可通过「隐藏文件面板」关闭。
+            - **更精简的对话区域** —— 移除聊天缩略图（minimap），并同步相关布局与所有权标记。
 
             ### 修复与改进
 
-            - 新增 Windows 驱动器选择器，并在启动 Node 前规范化打包资源路径，兼容安装在非 ASCII 用户目录下的 Windows 环境。
-            - 改进 iOS PWA 的视口和软键盘行为，并让 DOCX 预览保持同源以兼容 Safari。
-            - 保留新会话显式选择的模型和思考级别，修复保存 API Key 后可能卡住的问题，并改进插件包安装流程。
-            - 在技能面板和斜杠命令列表中集中展示停用技能，并为扩展对话框加入完成提示音。
-            - 降低逐消息的代理运行开销，并在切换会话时保持聊天缩略图布局稳定。
-            - 随 pi-web 0.8.7 加入 Catppuccin 文件图标、可折叠的斜杠命令展开内容、更平滑的实时跟随滚动、改进的公式显示，以及编辑消息时的图片恢复。
+            - 优化滚动条样式，便于拖动且减少空闲时的视觉干扰。
+            - 文件索引搜索 API 支持显式匹配数量上限。
+            - 强化资源管理器上传目标解析与对话拖放处理，并补充单元测试。
 
             内置组件版本：pi 0.84.0、pi-web 0.8.7。
           releaseDraft: true
