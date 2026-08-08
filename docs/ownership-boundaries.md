@@ -67,7 +67,7 @@ is highly concentrated — three files carry 80% of it:
 | `components/TabBar.tsx` | 66 | accessibility: tab roles, roving focus, arrow-key navigation |
 | `components/FileExplorer.tsx` | 61 | selection highlighting; git status colours on CSS variables |
 | `hooks/useTheme.ts` | 57 | follows the OS colour scheme until the user chooses |
-| `components/ChatWindow.tsx` | 35 | branding copy, minimap mount, empty state |
+| `components/ChatWindow.tsx` | 35 | branding copy, empty state |
 
 Every other shared component is cosmetic-only.
 

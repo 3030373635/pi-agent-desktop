@@ -216,7 +216,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const wtDropdownRef = useRef<HTMLDivElement>(null);
   const wtNewInputRef = useRef<HTMLInputElement>(null);
   const [sidebarView, setSidebarView] = useState<"chats" | "files">("chats");
-  const [sessionQuery, setSessionQuery] = useState("");
+  const [sidebarQuery, setSidebarQuery] = useState("");
   const [explorerKey, setExplorerKey] = useState(0);
   const [explorerUploadBusy, setExplorerUploadBusy] = useState(false);
   const [changesCount, setChangesCount] = useState(0);
@@ -649,13 +649,18 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       : null);
 
   // Build parent-child tree within the filtered set, narrowed by the search box
-  const sessionSearch = sessionQuery.trim().toLowerCase();
+  const sessionSearch = sidebarQuery.trim().toLowerCase();
   const searchedSessions = sessionSearch
     ? filteredSessions.filter((s) =>
         (s.name ?? "").toLowerCase().includes(sessionSearch)
         || s.firstMessage.toLowerCase().includes(sessionSearch))
     : filteredSessions;
   const sessionTree = buildSessionTree(searchedSessions);
+  // Keep one mounted search input across tab switches — only the placeholder changes.
+  const sidebarSearchLabel = sidebarView === "files"
+    ? t("sidebar.searchFiles")
+    : t("sidebar.searchSessions");
+  const showSidebarSearch = Boolean(selectedCwdProp || selectedCwd);
 
   return (
     <div className="session-sidebar" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
@@ -1108,8 +1113,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         </div>
       )}
 
-      {/* Session search — narrows the list to matching titles / first messages */}
-      {(selectedCwdProp || selectedCwd) && sidebarView === "chats" && (
+      {/* Sidebar search — same input for both tabs; only the placeholder swaps. */}
+      {showSidebarSearch && (
         <div className="sidebar-search-wrap">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="sidebar-search-icon">
             <circle cx="11" cy="11" r="7" />
@@ -1118,23 +1123,23 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
           <input
             type="search"
             className="sidebar-search-input"
-            value={sessionQuery}
-            onChange={(e) => setSessionQuery(e.target.value)}
+            value={sidebarQuery}
+            onChange={(e) => setSidebarQuery(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Escape") {
                 e.stopPropagation();
-                if (sessionQuery) setSessionQuery("");
+                if (sidebarQuery) setSidebarQuery("");
                 else e.currentTarget.blur();
               }
             }}
-            placeholder={t("sidebar.searchSessions")}
-            aria-label={t("sidebar.searchSessions")}
+            placeholder={sidebarSearchLabel}
+            aria-label={sidebarSearchLabel}
           />
-          {sessionQuery && (
+          {sidebarQuery && (
             <button
               type="button"
               className="sidebar-search-clear"
-              onClick={() => setSessionQuery("")}
+              onClick={() => setSidebarQuery("")}
               title={t("sidebar.clearSearch")}
               aria-label={t("sidebar.clearSearch")}
             >
@@ -1272,6 +1277,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
               onOpenFile={onOpenFile ?? (() => {})}
               selectedFilePath={selectedFilePath}
               refreshKey={explorerKey}
+              searchQuery={sidebarQuery}
               onAtMention={onAtMention}
               onAtMentions={onAtMentions}
               onUploadBusyChange={setExplorerUploadBusy}

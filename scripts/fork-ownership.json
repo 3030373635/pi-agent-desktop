@@ -68,7 +68,7 @@
     "components/ChatWindow.tsx": {
       "risk": "medium",
       "drift": 89,
-      "reason": "Branding copy, the ChatMinimap mount and a redesigned empty state. Part of the fork's interaction design. Kept deliberately.",
+      "reason": "Branding copy and a redesigned empty state. Part of the fork's interaction design. Kept deliberately.",
       "structuralDrift": 35,
       "disposition": "accepted"
     },
@@ -125,13 +125,6 @@
       "drift": 10,
       "reason": "native-theme.css import, branding title, dark-mode bootstrap script.",
       "structuralDrift": 10,
-      "disposition": "accepted"
-    },
-    "components/ChatMinimap.tsx": {
-      "risk": "low",
-      "drift": 8,
-      "reason": "className hooks only, no structural change — the intended shape for every restyled file.",
-      "structuralDrift": 2,
       "disposition": "accepted"
     },
     "eslint.config.mjs": {

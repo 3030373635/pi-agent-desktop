@@ -7,14 +7,13 @@ import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { countToolCallBlocks, getDisplayableAssistantBlocks, splitFinalAssistantBlocks } from "@/lib/message-display";
 import { MessageView } from "./MessageView";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
-import { ChatMinimap, MINIMAP_WIDTH, useMessageRefs } from "./ChatMinimap";
 import { useI18n } from "@/hooks/useI18n";
 import { useAgentSession, type AgentPhase, type NoticeItem } from "@/hooks/useAgentSession";
 import { useAudio } from "@/hooks/useAudio";
 import { useDragDrop } from "@/hooks/useDragDrop";
-import { useIsMobile } from "@/hooks/useIsMobile";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 import { PRODUCT_NAME } from "@/lib/branding";
+import { importDroppedProjectFiles, partitionChatDroppedFiles } from "@/lib/chat-file-drop";
 import {
   captureScrollDistance,
   getNextVisibleCount,
@@ -38,6 +37,8 @@ interface Props {
   onSessionStatsPanelOpen?: () => void;
   onContextUsageChange?: (usage: { percent: number | null; contextWindow: number; tokens: number | null } | null) => void;
   onOpenFile?: (filePath: string) => void;
+  /** Fired after non-image drops are copied into the session cwd (so the explorer can refresh). */
+  onProjectFilesImported?: () => void;
 }
 
 function phaseLabel(phase: AgentPhase, t: (key: string, params?: Record<string, string | number>) => string): string | null {
@@ -54,7 +55,6 @@ function phaseLabel(phase: AgentPhase, t: (key: string, params?: Record<string, 
 }
 
 const CHAT_COLUMN_PADDING = 16;
-const CHAT_INPUT_RIGHT_PADDING = CHAT_COLUMN_PADDING + MINIMAP_WIDTH;
 
 function hasFinalAssistantAnswer(message: AgentMessage): boolean {
   if (message.role !== "assistant") return false;
@@ -204,10 +204,9 @@ function ProcessDetailsGroup({ messageCount, toolCallCount, children, t }: { mes
   );
 }
 
-export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile }: Props) {
+export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreated, onSessionForked, modelsRefreshKey, chatInputRef, onBranchDataChange, onSystemPromptChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onProjectFilesImported }: Props) {
   const { t } = useI18n();
   const { soundEnabled, onSoundToggle, playDoneSound, unlockAudio } = useAudio();
-  const isMobile = useIsMobile();
 
   // Wrap onAgentEnd to play the completion sound. This is more reliable than
   // wrapping handleAgentEventRef because useAgentSession overwrites that ref
@@ -239,6 +238,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     notices, extensionDialog, extensionCustomUi, extensionStatuses, extensionWidgets, respondToExtensionUi, sendExtensionCustomInput,
     isAutoModelSelection,
     agentPhase,
+    addNotice,
     isNew,
     sessionIdRef, messagesEndRef, scrollContainerRef,
     lastUserMsgRef, promptAnchorActive,
@@ -385,14 +385,66 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   }, [ctxKey, onContextUsageChange]);
   useEffect(() => () => { onContextUsageChange?.(null); }, [onContextUsageChange]);
 
+  const cwd = session?.cwd ?? newSessionCwd;
+  const projectImportBusyRef = useRef(false);
+
   const onDrop = useCallback((files: File[]) => {
-    if (sessionBusy) return;
-    chatInputRef?.current?.addImages(files);
-  }, [sessionBusy, chatInputRef]);
+    const { images, projectFiles } = partitionChatDroppedFiles(files);
+
+    // Images stay on the multimodal attachment path (blocked while the agent is busy).
+    if (images.length > 0 && !sessionBusy) {
+      chatInputRef?.current?.addImages(images);
+    }
+
+    // Documents/other files are copied into the project root and @mentioned so
+    // the agent can read them with its normal tools — not inlined into the prompt.
+    if (projectFiles.length === 0) return;
+    if (!cwd) {
+      addNotice({ type: "error", message: t("chat.dropNeedsProject") });
+      return;
+    }
+    if (projectImportBusyRef.current) return;
+    projectImportBusyRef.current = true;
+
+    void (async () => {
+      try {
+        const result = await importDroppedProjectFiles(cwd, projectFiles);
+        if (result.mentionText) {
+          chatInputRef?.current?.insertText(result.mentionText);
+          chatInputRef?.current?.focus();
+        }
+        if (result.uploaded.length > 0) onProjectFilesImported?.();
+
+        const failureParts = [
+          ...result.errors.map((item) => `${item.name}: ${item.error}`),
+          ...result.rejected.map((item) => `${item.name}: ${item.reason}`),
+        ];
+        if (failureParts.length > 0) {
+          addNotice({
+            type: result.mentionText ? "warning" : "error",
+            message: t("chat.dropProjectPartialFailure", { detail: failureParts.slice(0, 3).join("; ") }),
+          });
+        } else if (result.uploaded.length > 0 || result.skipped.length > 0) {
+          addNotice({
+            type: "success",
+            message: t("chat.dropProjectSuccess", {
+              count: result.uploaded.length + result.skipped.length,
+            }),
+          });
+        }
+      } catch (error) {
+        addNotice({
+          type: "error",
+          message: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        projectImportBusyRef.current = false;
+      }
+    })();
+  }, [addNotice, chatInputRef, cwd, onProjectFilesImported, sessionBusy, t]);
 
   const { isDragOver, handleDragEnter, handleDragOver, handleDragLeave, handleDrop } = useDragDrop(onDrop);
 
-  const visibleMessages = messages.filter((m) => m.role === "user" || m.role === "assistant");
   const inputHistory = useMemo(() => {
     const seen = new Set<string>();
     const history: string[] = [];
@@ -405,10 +457,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     }
     return history.reverse();
   }, [messages]);
-  const messageRefs = useMessageRefs(visibleMessages.length);
-  const revealHistoryForMinimap = useCallback(() => {
-    setVisibleCount((current) => Math.max(current, messages.length * 2));
-  }, [messages.length]);
 
   const isEmptyNew = isNew && !loading && !error && messages.length === 0 && !streamState.isStreaming && !sessionBusy;
   const messageCwd = session?.cwd ?? newSessionCwd ?? undefined;
@@ -558,19 +606,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       if (isGroupAnchor(messages[i])) { lastAnchorIdx = i; break; }
     }
 
-    const visibleRefIndexByMessage = new Map<number, number>();
-    let refIdx = 0;
-    messages.forEach((msg, idx) => {
-      if (msg.role === "user" || msg.role === "assistant") {
-        visibleRefIndexByMessage.set(idx, refIdx++);
-      }
-    });
-
-    const attachVisibleRef = (idx: number, refIndex: number) => (el: HTMLDivElement | null) => {
-      messageRefs.current[refIndex] = el;
-      if (idx === lastUserIdx) { (lastUserMsgRef as { current: HTMLDivElement | null }).current = el; }
-    };
-
     const renderMessage = (idx: number, options: { attachRef?: boolean; keyPrefix?: string; messageOverride?: AgentMessage; showTimestamp?: boolean } = {}): ReactNode => {
       const msg = options.messageOverride ?? messages[idx];
       const prevAssistantEntryId =
@@ -578,7 +613,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           ? entryIds[idx - 1]
           : undefined;
       const isVisible = msg.role === "user" || msg.role === "assistant";
-      const currentRefIdx = visibleRefIndexByMessage.get(idx);
       const keyPrefix = options.keyPrefix ?? "message";
       let showTimestamp = false;
       if (msg.role === "assistant") {
@@ -613,9 +647,21 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           sessionId={sessionIdForViews ?? sessionIdRef.current ?? undefined}
         />
       );
-      if (!isVisible || options.attachRef === false || currentRefIdx === undefined) return view;
+      if (!isVisible || options.attachRef === false) return view;
+      if (idx !== lastUserIdx) {
+        return (
+          <div key={`${keyPrefix}-${idx}`}>
+            {view}
+          </div>
+        );
+      }
       return (
-        <div key={`${keyPrefix}-${idx}`} ref={attachVisibleRef(idx, currentRefIdx)}>
+        <div
+          key={`${keyPrefix}-${idx}`}
+          ref={(el) => {
+            (lastUserMsgRef as { current: HTMLDivElement | null }).current = el;
+          }}
+        >
           {view}
         </div>
       );
@@ -667,27 +713,16 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
       const processCount = visibleProcessIndices.length + (finalProcessMessage ? 1 : 0);
       if (processCount > 0) {
-        const processRefIdx = visibleProcessIndices
-          .map((processIdx) => visibleRefIndexByMessage.get(processIdx))
-          .find((value): value is number => typeof value === "number")
-          ?? (finalAnswerMessage ? undefined : visibleRefIndexByMessage.get(finalAssistantIdx));
-        const processGroup = (
+        rendered.push(
           <ProcessDetailsGroup
+            key={`process-group-${userIdx}-${finalAssistantIdx}`}
             messageCount={processCount}
             t={t}
             toolCallCount={countToolCalls(messages, visibleProcessIndices) + countToolCallBlocks(finalSplit.processBlocks)}
           >
             {visibleProcessIndices.map((processIdx) => renderMessage(processIdx, { attachRef: false, keyPrefix: "process" }))}
             {finalProcessMessage && renderMessage(finalAssistantIdx, { attachRef: false, keyPrefix: "process-final", messageOverride: finalProcessMessage, showTimestamp: false })}
-          </ProcessDetailsGroup>
-        );
-        rendered.push(
-          <div
-            key={`process-group-${userIdx}-${finalAssistantIdx}`}
-            ref={processRefIdx === undefined ? undefined : (el) => { messageRefs.current[processRefIdx] = el; }}
-          >
-            {processGroup}
-          </div>,
+          </ProcessDetailsGroup>,
         );
       }
 
@@ -714,7 +749,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
     messages, entryIds, streamActive, sessionBusy, isNew, forkingEntryId,
     modelNames, messageCwd, onOpenFile, handleEditContent,
     stableHandleFork, stableHandleNavigate, sessionIdForViews,
-    visibleCount, t, messageRefs, lastUserMsgRef, sessionIdRef,
+    visibleCount, t, lastUserMsgRef, sessionIdRef,
   ]);
 
   const availableThinkingLevels = displayModelValue
@@ -783,7 +818,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {isDragOver && !sessionBusy && (
+      {isDragOver && (
         <div className="pointer-events-none absolute inset-0 z-50 flex animate-[drop-zone-in_0.15s_ease_both] items-center justify-center bg-[var(--accent-soft)] backdrop-blur-[1px]">
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             {[0, 0.8, 1.6].map((delay) => (
@@ -796,24 +831,32 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
           </div>
           {/* Neutral gray constants: SVG presentation attributes can't resolve
               CSS vars, and this gray reads fine on both light and dark. */}
-          <svg
-            width="280" height="280" viewBox="0 0 140 140" fill="none" xmlns="http://www.w3.org/2000/svg"
-            className="drop-shadow-[0_6px_18px_var(--focus-ring)]"
-          >
-            <rect x="28" y="44" width="84" height="60" rx="8" fill="rgba(120,120,128,0.10)" stroke="rgba(120,120,128,0.55)" strokeWidth="1.8"/>
-            <path d="M36 100 L54 72 L68 88 L80 74 L104 100Z" fill="rgba(120,120,128,0.18)" stroke="rgba(120,120,128,0.45)" strokeWidth="1.4" strokeLinejoin="round"/>
-            <circle cx="96" cy="58" r="8" fill="rgba(120,120,128,0.24)" stroke="rgba(120,120,128,0.60)" strokeWidth="1.6"/>
-            <g stroke="rgba(120,120,128,0.50)" strokeWidth="1.4" strokeLinecap="round">
-              <line x1="96" y1="46" x2="96" y2="43"/>
-              <line x1="96" y1="70" x2="96" y2="73"/>
-              <line x1="84" y1="58" x2="81" y2="58"/>
-              <line x1="108" y1="58" x2="111" y2="58"/>
-              <line x1="87.5" y1="49.5" x2="85.4" y2="47.4"/>
-              <line x1="104.5" y1="66.5" x2="106.6" y2="68.6"/>
-              <line x1="104.5" y1="49.5" x2="106.6" y2="47.4"/>
-              <line x1="87.5" y1="66.5" x2="85.4" y2="68.6"/>
-            </g>
-          </svg>
+          <div className="relative z-[1] flex flex-col items-center gap-3 px-6 text-center">
+            <svg
+              width="280" height="280" viewBox="0 0 140 140" fill="none" xmlns="http://www.w3.org/2000/svg"
+              className="drop-shadow-[0_6px_18px_var(--focus-ring)]"
+            >
+              <rect x="28" y="44" width="84" height="60" rx="8" fill="rgba(120,120,128,0.10)" stroke="rgba(120,120,128,0.55)" strokeWidth="1.8"/>
+              <path d="M36 100 L54 72 L68 88 L80 74 L104 100Z" fill="rgba(120,120,128,0.18)" stroke="rgba(120,120,128,0.45)" strokeWidth="1.4" strokeLinejoin="round"/>
+              <circle cx="96" cy="58" r="8" fill="rgba(120,120,128,0.24)" stroke="rgba(120,120,128,0.60)" strokeWidth="1.6"/>
+              <g stroke="rgba(120,120,128,0.50)" strokeWidth="1.4" strokeLinecap="round">
+                <line x1="96" y1="46" x2="96" y2="43"/>
+                <line x1="96" y1="70" x2="96" y2="73"/>
+                <line x1="84" y1="58" x2="81" y2="58"/>
+                <line x1="108" y1="58" x2="111" y2="58"/>
+                <line x1="87.5" y1="49.5" x2="85.4" y2="47.4"/>
+                <line x1="104.5" y1="66.5" x2="106.6" y2="68.6"/>
+                <line x1="104.5" y1="49.5" x2="106.6" y2="47.4"/>
+                <line x1="87.5" y1="66.5" x2="85.4" y2="68.6"/>
+              </g>
+            </svg>
+            <div style={{ maxWidth: 320, color: "var(--text)", fontSize: 13, fontWeight: 550, lineHeight: 1.35 }}>
+              {t("chat.dropFilesHint")}
+            </div>
+            <div style={{ maxWidth: 360, color: "var(--text-muted)", fontSize: 11.5, lineHeight: 1.4 }}>
+              {t("chat.dropFilesDetail")}
+            </div>
+          </div>
         </div>
       )}
 
@@ -832,12 +875,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       )}
 
       {isEmptyNew ? (
-        <div
-          className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-4 py-8"
-          // Reserve the same gutter the minimap column occupies, so switching
-          // between the empty state and a session keeps the centre line fixed.
-          style={isMobile ? undefined : { paddingRight: `calc(1rem + ${MINIMAP_WIDTH}px)` }}
-        >
+        <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-4 py-8">
           <div className="chat-empty-state w-full max-w-[820px]">
             <div
               className="chat-empty-brand mb-3"
@@ -860,8 +898,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
         </div>
       ) : (
       <>
-      {/* Row: (messages + input) column on the left, full-height minimap on the right */}
-      <div className="flex flex-1 overflow-hidden">
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
       <div className="relative flex min-w-0 flex-1 overflow-hidden">
         <div
@@ -879,7 +915,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
             <NoticeShelf notices={notices} floating align="right" />
           </div>
         </div>
-        <div ref={scrollContainerRef} className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto pt-4 [scrollbar-width:none]">
+        <div ref={scrollContainerRef} className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto pt-4">
           <div style={{ minWidth: 0, padding: `0 ${CHAT_COLUMN_PADDING}px` }}>
             <div style={{ width: "100%", minWidth: 0, maxWidth: 820, margin: "0 auto" }}>
               {loading || error ? (
@@ -961,7 +997,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
         <div
           style={{
             padding: `0 ${CHAT_COLUMN_PADDING}px`,
-            paddingRight: isMobile ? CHAT_COLUMN_PADDING : CHAT_INPUT_RIGHT_PADDING,
           }}
         >
           <div style={{ maxWidth: 820, margin: "0 auto" }}>
@@ -970,16 +1005,6 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
         </div>
         {chatInputElement}
       </div>
-      </div>
-      {isMobile ? null : (
-        <ChatMinimap
-          messages={messages}
-          streamingMessage={streamState.streamingMessage}
-          scrollContainer={scrollContainerRef}
-          messageRefs={messageRefs}
-          onRevealHistory={revealHistoryForMinimap}
-        />
-      )}
       </div>
       </>
       )}

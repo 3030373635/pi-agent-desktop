@@ -436,7 +436,7 @@ html.dark .sidebar-view-switcher-thumb {
   transform: scale(0.97);
 }
 
-/* Session search box between the view switcher and the list. */
+/* Sidebar search box between the view switcher and the chats/files list. */
 .sidebar-search-wrap {
   position: relative;
   display: flex;
@@ -580,7 +580,7 @@ html.dark .sidebar-view-switcher-thumb {
   min-height: 100%;
 }
 
-/* Drag & drop upload target — dashed inset ring + centered hint. */
+/* Drag & drop upload target — dashed inset ring + sticky destination banner. */
 .file-tree.is-drop-target::after {
   content: "";
   position: absolute;
@@ -592,19 +592,31 @@ html.dark .sidebar-view-switcher-thumb {
   pointer-events: none;
 }
 
-.file-tree-drop-overlay {
-  position: absolute;
-  inset: 0;
+.file-tree-drop-banner {
+  position: sticky;
+  top: 0;
   z-index: 6;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-direction: column;
   gap: 6px;
-  color: var(--text-muted);
-  font-size: 11.5px;
+  margin: 4px 6px 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--accent-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 88%, var(--accent));
+  color: var(--text);
+  font-size: 11px;
   font-weight: 550;
   pointer-events: none;
+  box-shadow: var(--shadow-control);
+}
+
+.file-tree-drop-banner span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .file-tree-list {
@@ -626,7 +638,8 @@ html.dark .sidebar-view-switcher-thumb {
   transition:
     color 120ms ease,
     background 120ms ease,
-    transform 120ms var(--ease-native);
+    transform 120ms var(--ease-native),
+    box-shadow 120ms ease;
 }
 
 .file-tree-row:hover {
@@ -642,6 +655,16 @@ html.dark .sidebar-view-switcher-thumb {
   background: var(--bg-selected);
   color: var(--text);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.file-tree-row.is-drop-folder {
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg-hover));
+  color: var(--text);
+  box-shadow: inset 0 0 0 1.5px var(--accent-border);
+}
+
+.file-tree-row.is-drop-folder .file-tree-icon {
+  color: var(--accent);
 }
 
 .file-tree-row:focus-visible {

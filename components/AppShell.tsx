@@ -474,6 +474,10 @@ export function AppShell() {
     setExplorerRefreshKey((k) => k + 1);
   }, []);
 
+  const handleProjectFilesImported = useCallback(() => {
+    setExplorerRefreshKey((k) => k + 1);
+  }, []);
+
   const handleAutoName = useCallback(async () => {
     const sessionId = selectedSession?.id;
     if (!sessionId || autoNameStatus.kind === "naming") return;
@@ -1532,29 +1536,6 @@ export function AppShell() {
             </div>
           )}
 
-          {/* Right panel opener — while the panel (and its own close button) is hidden.
-              Sits at the window's top-right, the same corner the close button
-              occupies when the panel is open. */}
-          {!rightPanelOpen && (
-            <button
-              className="native-icon-button"
-              onClick={() => setRightPanelOpen(true)}
-              title={translate("files.showPanel")}
-              aria-label={translate("files.showPanel")}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                width: TOP_BAR_ICON_BUTTON_SIZE, height: TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
-                background: "none", border: "none", borderLeft: "1px solid var(--border)",
-                color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="15" y1="3" x2="15" y2="21" />
-              </svg>
-            </button>
-          )}
           <WindowControls />
         </div>
 
@@ -1576,6 +1557,7 @@ export function AppShell() {
               onSessionStatsPanelOpen={openSessionStatsPanel}
               onContextUsageChange={handleContextUsageChange}
               onOpenFile={handleOpenLinkedFile}
+              onProjectFilesImported={handleProjectFilesImported}
             />
           ) : initialCwdStatus === "validating" ? (
             <div
@@ -1659,7 +1641,7 @@ export function AppShell() {
               onCloseTab={handleCloseFileTab}
             />
           </div>
-          {/* Panel close at its own top-right — same window corner as the topbar opener */}
+          {/* Panel close — only shown while the file panel is open */}
           <button
             className="right-panel-close"
             onClick={() => setRightPanelOpen(false)}

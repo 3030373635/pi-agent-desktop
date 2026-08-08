@@ -32,6 +32,8 @@ const MAX_WALK_DEPTH = 8;
 const MAX_QUERY_LENGTH = 500;
 const CACHE_TTL_MS = 10_000;
 const CACHE_MAX_ENTRIES = 20;
+const DEFAULT_MATCH_LIMIT = 20;
+const MAX_MATCH_LIMIT = 200;
 
 interface FileListing {
   /** Full listing up to the hard cap (not the client cap) */
@@ -121,6 +123,10 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "cwd must be an absolute path" }, { status: 400 });
     }
     const query = req.nextUrl.searchParams.get("q")?.slice(0, MAX_QUERY_LENGTH) ?? "";
+    const parsedLimit = Number.parseInt(req.nextUrl.searchParams.get("limit") ?? "", 10);
+    const matchLimit = Number.isFinite(parsedLimit)
+      ? Math.min(Math.max(parsedLimit, 1), MAX_MATCH_LIMIT)
+      : DEFAULT_MATCH_LIMIT;
 
     const allowedRoots = await getAllowedFileRoots();
     if (!isFilePathAllowed(cwd, allowedRoots)) {
@@ -155,7 +161,7 @@ export async function GET(req: NextRequest) {
 
     if (query) {
       cached.entries ??= buildEntriesFromFiles(cached.listing.files);
-      return NextResponse.json({ matches: filterFileEntries(cached.entries, query) });
+      return NextResponse.json({ matches: filterFileEntries(cached.entries, query, matchLimit) });
     }
 
     const { files, hardTruncated } = cached.listing;
