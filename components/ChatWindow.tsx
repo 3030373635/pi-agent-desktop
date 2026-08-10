@@ -898,7 +898,8 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
         </div>
       ) : (
       <>
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      {/* Composer overlays the scrollport; trailing spacer clears the last lines. */}
+      <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
       <div className="relative flex min-w-0 flex-1 overflow-hidden">
         <div
           style={{
@@ -982,7 +983,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
               <div aria-hidden="true" style={{ height: promptAnchorSpacerHeight }} />
             )}
 
-            {/* Match the trailing space to the live bottom composer height. */}
+            {/* Clears the overlay composer so the last lines can scroll fully into view. */}
             <div aria-hidden="true" style={{ height: bottomComposerHeight }} />
 
             <div ref={messagesEndRef} />
@@ -993,7 +994,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
         </div>
       </div>
 
-      <div ref={bottomComposerRef} className="relative">
+      <div ref={bottomComposerRef} className="absolute inset-x-0 bottom-0 z-20">
         <div
           style={{
             padding: `0 ${CHAT_COLUMN_PADDING}px`,
