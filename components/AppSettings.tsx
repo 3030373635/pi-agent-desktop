@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { AppComponentReleaseInfo, AppUpdatesResponse } from "@/lib/app-update-types";
 import {
   APP_DISTRIBUTION_NAME,
+  APP_RELEASES_URL,
   APP_REPOSITORY,
   APP_REPOSITORY_URL,
   APP_VERSION_DISPLAY,
@@ -62,6 +63,73 @@ function ChoiceButton({
     >
       {children}
     </button>
+  );
+}
+
+const metaChipStyle = (emphasized: boolean): CSSProperties => ({
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  maxWidth: "100%",
+  padding: "6px 9px",
+  border: `1px solid ${emphasized ? "var(--accent)" : "var(--border)"}`,
+  borderRadius: 7,
+  background: emphasized
+    ? "color-mix(in srgb, var(--accent) 10%, transparent)"
+    : "var(--bg)",
+  color: emphasized ? "var(--accent)" : "var(--text-muted)",
+  fontFamily: "var(--font-mono)",
+  fontSize: 11,
+  fontWeight: emphasized ? 700 : 500,
+  lineHeight: 1.35,
+  textDecoration: "none",
+});
+
+function MetaChip({
+  label,
+  value,
+  emphasized = false,
+  href,
+  title,
+  ariaLabel,
+}: {
+  label: string;
+  value: string;
+  emphasized?: boolean;
+  href?: string;
+  title?: string;
+  ariaLabel?: string;
+}) {
+  const content = (
+    <>
+      <span style={{ opacity: 0.72, fontWeight: 500 }}>{label}</span>
+      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {value}
+      </span>
+      {href ? <span aria-hidden="true">↗</span> : null}
+    </>
+  );
+
+  if (href) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        title={title}
+        aria-label={ariaLabel ?? title}
+        style={metaChipStyle(emphasized)}
+        onClick={(event) => handleExternalLinkClick(event, href)}
+      >
+        {content}
+      </a>
+    );
+  }
+
+  return (
+    <span title={title} aria-label={ariaLabel ?? title} style={metaChipStyle(emphasized)}>
+      {content}
+    </span>
   );
 }
 
@@ -133,11 +201,13 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
 
   const latestReleaseText = loading
     ? "…"
-    : !appRelease || appRelease.releaseStatus === "unknown"
-      ? t("appSettings.releaseUnavailable")
-      : appRelease.releaseStatus === "unpublished" || !appRelease.latestVersion
-        ? t("appSettings.noReleases")
-        : `v${appRelease.latestVersion}`;
+    : loadError
+      ? t("appSettings.checkFailed")
+      : !appRelease || appRelease.releaseStatus === "unknown"
+        ? t("appSettings.releaseUnavailable")
+        : appRelease.releaseStatus === "unpublished" || !appRelease.latestVersion
+          ? t("appSettings.noReleases")
+          : `v${appRelease.latestVersion}`;
 
   const statusText = loading
     ? t("appSettings.checkingReleases")
@@ -209,34 +279,27 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
               {t("appSettings.taglineDetails")}
             </div>
             <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
-              <a
-                href={appRelease?.releaseUrl ?? APP_REPOSITORY_URL}
-                target="_blank"
-                rel="noreferrer"
-                aria-label={`${statusText} ${APP_REPOSITORY}, v${APP_VERSION_DISPLAY}${updateAvailable ? ` → ${latestReleaseText}` : ""}`}
+              <MetaChip
+                label={t("appSettings.repository")}
+                value={APP_REPOSITORY}
+                href={APP_REPOSITORY_URL}
+                title={t("appSettings.openRepository")}
+                ariaLabel={`${t("appSettings.repository")}: ${APP_REPOSITORY}`}
+              />
+              <MetaChip
+                label={t("appSettings.latestRelease")}
+                value={latestReleaseText}
+                emphasized={updateAvailable}
+                href={APP_RELEASES_URL}
                 title={statusText}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: "6px 9px",
-                  border: `1px solid ${updateAvailable ? "var(--accent)" : "var(--border)"}`,
-                  borderRadius: 7,
-                  background: updateAvailable ? "color-mix(in srgb, var(--accent) 10%, transparent)" : "var(--bg)",
-                  color: updateAvailable ? "var(--accent)" : "var(--text-muted)",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 11,
-                  fontWeight: updateAvailable ? 700 : 500,
-                  textDecoration: "none",
-                }}
-                onClick={(event) => handleExternalLinkClick(event, appRelease?.releaseUrl ?? APP_REPOSITORY_URL)}
-              >
-                <span>{APP_REPOSITORY}</span>
-                <span aria-hidden="true">↗</span>
-                <span aria-hidden="true" style={{ opacity: 0.55 }}>·</span>
-                <span>v{APP_VERSION_DISPLAY}</span>
-                {updateAvailable && <span>→ {latestReleaseText}</span>}
-              </a>
+                ariaLabel={`${t("appSettings.latestRelease")}: ${latestReleaseText}. ${statusText}`}
+              />
+              <MetaChip
+                label={t("appSettings.currentVersion")}
+                value={`v${APP_VERSION_DISPLAY}`}
+                title={statusText}
+                ariaLabel={`${t("appSettings.currentVersion")}: v${APP_VERSION_DISPLAY}`}
+              />
               {(updateAvailable || upgradeProgress) && (
                 <button
                   className="native-button native-button-primary"
