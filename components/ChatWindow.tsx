@@ -6,6 +6,7 @@ import { normalizeCustomPanelLines, parseAnsiLine } from "@/lib/ansi";
 import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { countToolCallBlocks, getDisplayableAssistantBlocks, splitFinalAssistantBlocks } from "@/lib/message-display";
 import { MessageView } from "./MessageView";
+import { ConversationNavigator, type ConversationTurnLocation } from "./ConversationNavigator";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { useI18n } from "@/hooks/useI18n";
 import { useAgentSession, type AgentPhase, type NoticeItem } from "@/hooks/useAgentSession";
@@ -85,6 +86,17 @@ function getUserInputText(message: AgentMessage): string | null {
     .join("\n")
     .trim();
   return text.length > 0 ? text : null;
+}
+
+function getAssistantPreviewText(message: AgentMessage): string | null {
+  if (message.role !== "assistant") return null;
+  const text = getFinalSplit(message as AssistantMessage).answerBlocks
+    .filter((block) => block.type === "text")
+    .map((block) => block.text)
+    .join("\n")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text || null;
 }
 
 function countToolCalls(messages: AgentMessage[], indices: number[]): number {
@@ -253,6 +265,20 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   });
   const sessionBusy = agentRunning || bashRunning;
 
+  const conversationTurns = useMemo<ConversationTurnLocation[]>(() => {
+    const turns: ConversationTurnLocation[] = [];
+    for (let userIdx = 0; userIdx < messages.length; userIdx++) {
+      const question = getUserInputText(messages[userIdx]);
+      if (!question) continue;
+      let answer: string | null = null;
+      for (let idx = userIdx + 1; idx < messages.length && messages[idx].role !== "user"; idx++) {
+        answer = getAssistantPreviewText(messages[idx]) ?? answer;
+      }
+      turns.push({ index: turns.length, question, answer });
+    }
+    return turns;
+  }, [messages]);
+
   // Fork/navigate stay referentially stable across busy transitions; gating
   // happens at call time (ref) and visually via the data-session-busy CSS
   // hook. Toggling these props between undefined and a function would defeat
@@ -288,6 +314,17 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
   );
   const sentinelRef = useRef<HTMLDivElement>(null);
   const prevScrollDistanceRef = useRef<number | null>(null);
+
+  const selectConversationTurn = useCallback((turnIndex: number) => {
+    setVisibleCount(messages.length);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const container = scrollContainerRef.current;
+      const anchor = container?.querySelector<HTMLElement>(`[data-conversation-turn="${turnIndex}"]`);
+      if (!container || !anchor) return;
+      const top = anchor.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop - 16;
+      container.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    }));
+  }, [messages.length, scrollContainerRef]);
 
   // Reset the lazy-load window when switching sessions, otherwise the page
   // count grown in a long session carries over and the next session mounts
@@ -606,6 +643,14 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       if (isGroupAnchor(messages[i])) { lastAnchorIdx = i; break; }
     }
 
+    const turnIndexByMessageIndex = new Map<number, number>();
+    let nextTurnIndex = 0;
+    for (let messageIdx = 0; messageIdx < messages.length; messageIdx++) {
+      if (messages[messageIdx].role === "user" && getUserInputText(messages[messageIdx])) {
+        turnIndexByMessageIndex.set(messageIdx, nextTurnIndex++);
+      }
+    }
+
     const renderMessage = (idx: number, options: { attachRef?: boolean; keyPrefix?: string; messageOverride?: AgentMessage; showTimestamp?: boolean } = {}): ReactNode => {
       const msg = options.messageOverride ?? messages[idx];
       const prevAssistantEntryId =
@@ -650,7 +695,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       if (!isVisible || options.attachRef === false) return view;
       if (idx !== lastUserIdx) {
         return (
-          <div key={`${keyPrefix}-${idx}`}>
+          <div key={`${keyPrefix}-${idx}`} data-conversation-turn={turnIndexByMessageIndex.get(idx)}>
             {view}
           </div>
         );
@@ -658,6 +703,7 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
       return (
         <div
           key={`${keyPrefix}-${idx}`}
+          data-conversation-turn={turnIndexByMessageIndex.get(idx)}
           ref={(el) => {
             (lastUserMsgRef as { current: HTMLDivElement | null }).current = el;
           }}
@@ -992,6 +1038,11 @@ export function ChatWindow({ session, newSessionCwd, onAgentEnd, onSessionCreate
             </div>
           </div>
         </div>
+        <ConversationNavigator
+          turns={conversationTurns}
+          scrollContainerRef={scrollContainerRef}
+          onSelect={selectConversationTurn}
+        />
       </div>
 
       <div ref={bottomComposerRef} className="absolute inset-x-0 bottom-0 z-20">

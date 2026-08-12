@@ -134,6 +134,86 @@ body {
   background-clip: padding-box;
 }
 
+/* Codex-style conversation minimap: scrub between user questions and preview
+   the corresponding question/answer without taking space from the chat. */
+.conversation-navigator {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  z-index: 30;
+  width: 58px;
+  height: min(46vh, 280px);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.conversation-navigator-track {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 48px;
+  cursor: ns-resize;
+  touch-action: none;
+  pointer-events: auto;
+  outline: none;
+}
+.conversation-navigator-tick {
+  position: absolute;
+  left: 4px;
+  width: 21px;
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 20%, transparent);
+  transform: translateY(-50%);
+  transition: width 120ms ease, height 120ms ease, background 120ms ease;
+}
+.conversation-navigator-tick.is-active {
+  width: 42px;
+  height: 4px;
+  background: var(--text);
+}
+.conversation-navigator-track:focus-visible {
+  border-radius: 8px;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.conversation-navigator-preview {
+  position: absolute;
+  left: 74px;
+  top: 50%;
+  width: min(640px, calc(100vw - 220px));
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.12);
+  transform: translateY(-50%);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  pointer-events: none;
+}
+.conversation-navigator-question,
+.conversation-navigator-answer {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+}
+.conversation-navigator-question {
+  margin-bottom: 10px;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.35;
+  -webkit-line-clamp: 2;
+}
+.conversation-navigator-answer {
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-line-clamp: 3;
+}
+
+@media (max-width: 640px) {
+  .conversation-navigator { display: none; }
+}
+
 /* Sidebar session list: scrollbar thumb only visible while scrolling
    (`is-scrolling` is toggled by the scroll handler in SessionSidebar). */
 .sidebar-session-list {
