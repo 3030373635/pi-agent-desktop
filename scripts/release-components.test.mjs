@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   compareVersions,
   createComponentManifest,
+  isReleasePinValid,
   nextPatchVersion,
   normalizeVersion,
 } from "./release-components.mjs";
@@ -23,6 +24,12 @@ test("compares stable and prerelease versions", () => {
 test("bumps the patch version", () => {
   assert.equal(nextPatchVersion("v0.1.0"), "0.1.1");
   assert.equal(nextPatchVersion("1.2"), "1.2.1");
+});
+
+test("only accepts explicit pins for the exact bundled component version", () => {
+  assert.equal(isReleasePinValid({ version: "0.8.7", reason: "Fork compatibility review" }, "0.8.7"), true);
+  assert.equal(isReleasePinValid({ version: "0.8.8", reason: "Wrong version" }, "0.8.7"), false);
+  assert.equal(isReleasePinValid({ version: "0.8.7", reason: "" }, "0.8.7"), false);
 });
 
 test("writes an auditable three-component manifest", () => {

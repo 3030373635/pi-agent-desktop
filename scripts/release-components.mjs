@@ -56,6 +56,18 @@ export function nextPatchVersion(value) {
   return `${numbers[0]}.${numbers[1]}.${numbers[2] + 1}`;
 }
 
+/**
+ * A component can be intentionally kept behind its upstream release only when
+ * the exact bundled version and a human-readable reason are committed.
+ * This keeps release verification strict by default while making fork pins
+ * visible and reviewable.
+ */
+export function isReleasePinValid(pin, localVersion) {
+  if (!pin || typeof pin !== "object" || Array.isArray(pin)) return false;
+  if (typeof pin.version !== "string" || typeof pin.reason !== "string" || !pin.reason.trim()) return false;
+  return normalizeVersion(pin.version) === normalizeVersion(localVersion);
+}
+
 async function readJson(path) {
   return JSON.parse(await readFile(path, "utf8"));
 }

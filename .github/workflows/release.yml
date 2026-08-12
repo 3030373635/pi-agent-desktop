@@ -89,43 +89,39 @@ jobs:
           tagName: v__VERSION__
           releaseName: pi-agent-desktop v__VERSION__
           releaseBody: |
-            ## Pi Agent Desktop 0.2.7
+            ## Pi Agent Desktop 0.2.8
 
-            This release improves project file import and simplifies when the file preview panel appears.
+            This release adds a Codex-style conversation navigator for quickly moving through long chats.
 
             ### Highlights
 
-            - **Project file upload and drop** — Drag files into the Files explorer or chat to upload them into the current project, with clearer destination feedback and shared size limits.
-            - **File panel opens from files only** — The chat top bar no longer shows a “Show file panel” control. Opening a concrete file from Files expands the right panel; while open, “Hide file panel” closes it.
-            - **Leaner chat chrome** — Removed the chat minimap and tightened related layout/ownership markers.
+            - **Conversation navigator** — A left-side scrubber maps every user question to its final answer, with a live question-and-answer preview.
+            - **Fast long-chat navigation** — Click, drag, or use the arrow keys to jump to a turn; older lazy-loaded messages are loaded automatically before scrolling.
+            - **Responsive layout** — The navigator stays out of the way on mobile while preserving the desktop chat layout.
 
             ### Fixes and improvements
 
-            - Bumped the bundled Pi runtime to 0.84.1.
-            - Refined scrollbar styling for easier grabbing without cluttering idle views.
-            - Allowed the file-index search API to accept an explicit match limit.
-            - Hardened explorer upload-target resolution and chat file-drop handling with focused unit tests.
+            - Kept bundled Pi at 0.84.1 and pi-web at 0.8.7.
+            - Verified the full test suite, TypeScript checks, and lint before packaging.
 
             Bundled components: pi 0.84.1, pi-web 0.8.7.
 
             ---
 
-            ## Pi Agent Desktop 0.2.7
+            ## Pi Agent Desktop 0.2.8
 
-            本次发布改进了项目文件导入流程，并简化了文件预览面板的打开方式。
+            本次发布新增了类似 Codex 的对话定位器，可在长对话中快速定位问题与回答。
 
             ### 主要更新
 
-            - **项目文件上传与拖放** —— 可将文件拖入 Files 资源管理器或对话区，上传到当前项目；目标目录提示更清晰，并统一文件大小限制。
-            - **仅在打开具体文件时展开文件面板** —— 中间对话栏不再提供「显示文件面板」按钮。从 Files 点击具体文件才会展开右侧预览；展开后可通过「隐藏文件面板」关闭。
-            - **更精简的对话区域** —— 移除聊天缩略图（minimap），并同步相关布局与所有权标记。
+            - **对话定位器** —— 左侧轨道对应每一轮用户问题和最终回答，并提供问题与回答摘要预览。
+            - **长对话快速跳转** —— 可点击、拖动或通过方向键跳转到某一轮；定位到较早内容时会自动载入历史消息。
+            - **响应式布局** —— 移动端自动隐藏定位器，桌面端聊天布局保持稳定。
 
             ### 修复与改进
 
-            - 升级内置 Pi 运行时到 0.84.1。
-            - 优化滚动条样式，便于拖动且减少空闲时的视觉干扰。
-            - 文件索引搜索 API 支持显式匹配数量上限。
-            - 强化资源管理器上传目标解析与对话拖放处理，并补充单元测试。
+            - 内置 Pi 保持在 0.84.1，pi-web 保持在 0.8.7。
+            - 打包前已完成完整测试、TypeScript 检查和 lint 验证。
 
             内置组件版本：pi 0.84.1、pi-web 0.8.7。
           releaseDraft: true

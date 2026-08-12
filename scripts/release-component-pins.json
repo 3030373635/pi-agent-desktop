@@ -1,0 +1,6 @@
+{
+  "pi-web": {
+    "version": "0.8.7",
+    "reason": "The desktop fork intentionally remains on pi-web 0.8.7 while the v0.8.8 upstream merge is adapted and verified separately."
+  }
+}
