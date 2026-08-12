@@ -12,7 +12,7 @@ const desktopBuildDir = join(rootDir, ".next-desktop");
 const standaloneDir = join(desktopBuildDir, "standalone");
 const serverResourcesDir = join(rootDir, "src-tauri", "resources", "server");
 const serverHelperDir = join(rootDir, "src-tauri", "resources", "Pi Agent Server.app");
-const windowsNodeDir = join(rootDir, "src-tauri", "resources", "node");
+const nodeResourcesDir = join(rootDir, "src-tauri", "resources", "node");
 
 async function runNextBuild() {
   const require = createRequire(import.meta.url);
@@ -197,13 +197,13 @@ async function findNpmSource() {
     }
   }
 
-  throw new Error("Could not locate npm next to the Windows Node.js runtime.");
+  throw new Error("Could not locate npm next to the bundled Node.js runtime.");
 }
 
 async function bundleNodeRuntime() {
   const triple = desktopTargetTriple();
   await rm(serverHelperDir, { recursive: true, force: true });
-  await rm(windowsNodeDir, { recursive: true, force: true });
+  await rm(nodeResourcesDir, { recursive: true, force: true });
 
   let binaryPath;
   if (process.platform === "darwin") {
@@ -221,12 +221,14 @@ async function bundleNodeRuntime() {
       join(contentsDir, "Info.plist"),
     );
   } else {
-    binaryPath = join(windowsNodeDir, "node.exe");
-    await mkdir(windowsNodeDir, { recursive: true });
+    const executableName = process.platform === "win32" ? "node.exe" : "node";
+    binaryPath = join(nodeResourcesDir, executableName);
+    await mkdir(nodeResourcesDir, { recursive: true });
     await copyFile(process.execPath, binaryPath);
+    await chmod(binaryPath, 0o755);
     await cp(
       await findNpmSource(),
-      join(windowsNodeDir, "node_modules", "npm"),
+      join(nodeResourcesDir, "node_modules", "npm"),
       { recursive: true },
     );
   }

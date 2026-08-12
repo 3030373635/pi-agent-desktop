@@ -1,6 +1,6 @@
 # Desktop release updates
 
-`pi-agent-desktop` updates the installed macOS or Windows app as one updater-signed, atomic bundle. The bundle records the exact versions of all three components in `src-tauri/resources/component-versions.json`:
+`pi-agent-desktop` 会将已安装的 macOS、Windows 或 Linux 应用作为一个由 updater 签名的完整包更新。该安装包会记录三个组件在 `src-tauri/resources/component-versions.json` 中的确切版本：
 
 1. `abcwyc/pi-agent-desktop`
 2. `earendil-works/pi`
@@ -42,6 +42,6 @@ Never commit the private key or its password. The public key is embedded at comp
 
 ## Publishing
 
-After a successful component sync updates `main`, it explicitly starts **Publish signed desktop release**. The release workflow can also be started manually. It verifies that the bundled `pi` and `pi-web` versions exactly match their latest stable Releases, then sequentially creates Apple Silicon (`aarch64`) DMG/updater artifacts and a Windows x64 NSIS `-setup.exe`/updater archive. Intel Mac (`x86_64-apple-darwin`) artifacts are not built. The Release stays in draft until both platforms and the component manifest are present; only then is `v<pi-agent-desktop version>` published as the latest Release.
+After a successful component sync updates `main`, it explicitly starts **Publish signed desktop release**. The release workflow can also be started manually. It verifies that the bundled `pi` and `pi-web` versions exactly match their latest stable Releases, then sequentially creates Apple Silicon (`aarch64`) DMG/updater artifacts, a Linux x64 `.deb`, and a Windows x64 NSIS `-setup.exe`/updater archive. Intel Mac (`x86_64-apple-darwin`) artifacts are not built. The Release stays in draft until all platforms and the component manifest are present; only then is `v<pi-agent-desktop version>` published as the latest Release.
 
-The workflow currently uses ad-hoc macOS application signing and Tauri updater signatures on both platforms. Before distributing outside a controlled environment, configure an Apple Developer ID certificate/notarization and a Windows Authenticode certificate. Without Authenticode, Windows may show a SmartScreen warning even though updater verification remains cryptographically signed.
+The workflow currently uses ad-hoc macOS application signing, Tauri updater signatures, and the native Linux package format. Before distributing outside a controlled environment, configure an Apple Developer ID certificate/notarization and a Windows Authenticode certificate. Without Authenticode, Windows may show a SmartScreen warning even though updater verification remains cryptographically signed.

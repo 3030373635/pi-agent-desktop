@@ -21,6 +21,10 @@ jobs:
             target: aarch64-apple-darwin
             args: --target aarch64-apple-darwin
             apple_signing_identity: "-"
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            args: --target x86_64-unknown-linux-gnu --bundles deb
+            apple_signing_identity: ""
           # Restored after the file-tracer fix in eacaca3/7f2a1c0: a literal
           # homedir() reaching an fs call made @vercel/nft glob the whole
           # Windows profile at build time, which failed on its junction loops.
@@ -60,6 +64,16 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Install Linux desktop dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            libayatana-appindicator3-dev \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            librsvg2-dev
+
       - name: Install dependencies
         run: npm ci
 
@@ -74,7 +88,7 @@ jobs:
         run: npm run desktop:prepare
 
       - name: Test desktop shell
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' || runner.os == 'Linux'
         run: cargo test --release --manifest-path src-tauri/Cargo.toml --lib --target ${{ matrix.target }}
 
       - name: Build, sign, and upload updater artifacts

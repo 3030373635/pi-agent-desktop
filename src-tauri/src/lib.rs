@@ -506,6 +506,11 @@ fn bundled_node_path(resource_dir: &Path) -> PathBuf {
     resource_dir.join("resources/node/node.exe")
 }
 
+#[cfg(all(feature = "custom-protocol", target_os = "linux"))]
+fn bundled_node_path(resource_dir: &Path) -> PathBuf {
+    resource_dir.join("resources/node/node")
+}
+
 #[cfg(feature = "custom-protocol")]
 fn child_process_compatible_path(path: &Path) -> PathBuf {
     // Tauri resolves its Windows resource directory from a canonicalized
