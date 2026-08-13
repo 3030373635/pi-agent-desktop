@@ -157,91 +157,6 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
     && prev.sessionId === next.sessionId;
 });
 
-interface SkillBlockData {
-  name: string;
-  content: string;
-}
-
-// Skill invocations are stored expanded in the user message as
-// <skill name="..." location="...">…full SKILL.md…</skill> followed by the
-// user's actual input. Extract those blocks so they can be rendered collapsed.
-function extractSkillBlocks(text: string): { skills: SkillBlockData[]; rest: string } {
-  if (!text.includes("<skill")) return { skills: [], rest: text };
-  const skills: SkillBlockData[] = [];
-  const rest = text.replace(/<skill\b([^>]*)>\n?([\s\S]*?)<\/skill>[ \t]*\n?/g, (_match, attrs: string, body: string) => {
-    const name = /name="([^"]*)"/.exec(attrs)?.[1] ?? "skill";
-    skills.push({ name, content: body.trim() });
-    return "";
-  });
-  return { skills, rest: rest.trim() };
-}
-
-function UserSkillBlock({ name, content, cwd, onOpenFile }: {
-  name: string;
-  content: string;
-  cwd?: string;
-  onOpenFile?: (filePath: string) => void;
-}) {
-  const { t } = useI18n();
-  const [expanded, setExpanded] = useState(false);
-
-  return (
-    <div
-      style={{
-        border: "1px solid color-mix(in srgb, var(--text) 14%, transparent)",
-        borderRadius: 8,
-        overflow: "hidden",
-        fontSize: 12,
-        marginBottom: 6,
-        background: "color-mix(in srgb, var(--bg) 40%, transparent)",
-      }}
-    >
-      <button
-        onClick={() => setExpanded((v) => !v)}
-        title={expanded ? t("i18n.collapse") : t("i18n.expand")}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          width: "100%",
-          padding: "5px 9px",
-          background: "none",
-          border: "none",
-          color: "var(--text-muted)",
-          cursor: "pointer",
-          fontSize: 11,
-          textAlign: "left",
-          minWidth: 0,
-        }}
-      >
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-        </svg>
-        <span style={{ fontWeight: 600, flexShrink: 0 }}>{t("i18n.skillLabel")}</span>
-        <span style={{ fontFamily: "var(--font-mono)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
-          {name}
-        </span>
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>
-          <polyline points="2 3.5 5 6.5 8 3.5" />
-        </svg>
-      </button>
-      {expanded && (
-        <div
-          style={{
-            padding: "8px 10px",
-            maxHeight: 320,
-            overflowY: "auto",
-            borderTop: "1px solid color-mix(in srgb, var(--text) 12%, transparent)",
-            fontSize: 12,
-          }}
-        >
-          <MarkdownBody className="markdown-user-message" cwd={cwd} onOpenFile={onOpenFile}>{content}</MarkdownBody>
-        </div>
-      )}
-    </div>
-  );
-}
-
 const USER_TEXT_COLLAPSE_HEIGHT = 220;
 
 function CollapsibleUserText({ text, cwd, onOpenFile }: {
@@ -455,10 +370,10 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
               )}
             </div>
           ) : (
-          <>
-          {imageBlocksNode}
-          {content && <MarkdownBody className="markdown-user-message" cwd={cwd} onOpenFile={onOpenFile}>{content}</MarkdownBody>}
-          </>
+            <>
+              {imageBlocksNode}
+              {content && <CollapsibleUserText text={content} cwd={cwd} onOpenFile={onOpenFile} />}
+            </>
           )}
         </div>
 

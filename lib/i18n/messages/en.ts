@@ -434,7 +434,6 @@ export const enLocale: LocalePlugin = {
     "i18n.showExtensionMessage": "Show extension message",
     "i18n.collapse": "Collapse",
     "i18n.expand": "Expand",
-    "i18n.skillLabel": "Skill",
     "i18n.hideDetails": "Hide details",
     "i18n.showDetails": "Show details",
     "i18n.thinkingUnavailable": "Thinking content unavailable",

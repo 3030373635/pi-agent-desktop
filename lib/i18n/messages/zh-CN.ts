@@ -434,7 +434,6 @@ export const zhCNLocale: LocalePlugin = {
     "i18n.showExtensionMessage": "显示扩展消息",
     "i18n.collapse": "收起",
     "i18n.expand": "展开",
-    "i18n.skillLabel": "技能",
     "i18n.hideDetails": "隐藏详情",
     "i18n.showDetails": "显示详情",
     "i18n.thinkingUnavailable": "思考内容不可用",
