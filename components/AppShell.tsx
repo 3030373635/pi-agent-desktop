@@ -267,6 +267,26 @@ export function AppShell() {
   }, [selectedSession?.id]);
 
   useEffect(() => {
+    if (!activeTopPanel) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      // Panel DOM lives under topBarRef (fixed-position child); treat the whole
+      // top bar — including toggle buttons — as inside so toggles stay reliable.
+      if (!topBarRef.current?.contains(event.target as Node)) setActiveTopPanel(null);
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setActiveTopPanel(null);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [activeTopPanel]);
+
+  useEffect(() => {
     if (!activeTopPanel || !topBarRef.current) return;
     const update = () => {
       const topBarRect = topBarRef.current!.getBoundingClientRect();
@@ -598,20 +618,17 @@ export function AppShell() {
 
   const handleViewFullHistory = useCallback(() => {
     if (!selectedSession) return;
-    const exportUrl = `/api/sessions/${encodeURIComponent(selectedSession.id)}/export`;
-    void (async () => {
-      const { downloadUrlAsFile, isTauriDesktop, openExternal } = await import("@/lib/desktop-native");
-      if (isTauriDesktop()) {
-        const name = (selectedSession.name || selectedSession.id).replace(/[^\w.-]+/g, "_") || "session";
-        try {
-          await downloadUrlAsFile(`${exportUrl}?inline=0`, `${name}.html`);
-        } catch (error) {
-          console.error("Failed to export session:", error);
-        }
-        return;
-      }
-      await openExternal(`${exportUrl}?inline=1`);
-    })();
+    // Absolute URL so Tauri's open_external_url (http/https only) can hand the
+    // page to the system browser for inline viewing — not a save dialog.
+    const exportUrl = new URL(
+      `/api/sessions/${encodeURIComponent(selectedSession.id)}/export?inline=1`,
+      window.location.origin,
+    ).href;
+    void import("@/lib/desktop-native").then(({ openExternal }) => {
+      void openExternal(exportUrl).catch((error) => {
+        console.error("Failed to open full history:", error);
+      });
+    });
   }, [selectedSession]);
 
   // Show chat area if a session is selected, or if we have a cwd to start a new session in
@@ -1352,7 +1369,7 @@ export function AppShell() {
             }}>
               {activeTopPanel === "system" && (
                 <div style={{
-                  background: "var(--bg-panel)",
+                  background: "var(--surface-elevated)",
                   borderBottom: "1px solid var(--border)",
                 }}>
                   {systemPrompt ? (
@@ -1381,9 +1398,9 @@ export function AppShell() {
               )}
               {activeTopPanel === "session" && (
                 <div className="session-info-popover" style={{
-                  background: "var(--bg-panel)",
+                  background: "var(--surface-elevated)",
                   borderBottom: "1px solid var(--border)",
-                  boxShadow: "0 10px 28px rgba(0,0,0,0.10)",
+                  boxShadow: "var(--shadow-popover)",
                   padding: "12px 16px",
                 }}>
                   {sessionStats ? (() => {

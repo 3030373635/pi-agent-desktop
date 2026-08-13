@@ -898,6 +898,14 @@ html.dark .sidebar-view-switcher-thumb {
   background: color-mix(in srgb, var(--bg) 88%, var(--surface)) !important;
 }
 
+/* Session / system top panels sit over chat content — keep them fully opaque
+   (unlike --bg-panel, which is intentionally translucent for the chrome). */
+.session-info-popover {
+  background: var(--surface-elevated) !important;
+  box-shadow: var(--shadow-popover) !important;
+  border-bottom: 1px solid var(--separator) !important;
+}
+
 .app-topbar-title {
   display: flex;
   flex: 1 1 auto;
