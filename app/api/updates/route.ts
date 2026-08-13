@@ -129,11 +129,11 @@ async function writeState(state: UpdateCheckState): Promise<void> {
   }
 }
 
-async function performUpdateCheck(): Promise<AppUpdatesResponse> {
+async function performUpdateCheck(forceRefresh = false): Promise<AppUpdatesResponse> {
   const now = Date.now();
   const state = await readState();
   const dueProjects = APP_UPDATE_PROJECTS.filter((project) => (
-    isAppUpdateDue(state.lastCheckedAt[project.id], now)
+    forceRefresh || isAppUpdateDue(state.lastCheckedAt[project.id], now)
   ));
 
   const settled = await Promise.allSettled(dueProjects.map(async (project) => ({
@@ -185,9 +185,10 @@ async function performUpdateCheck(): Promise<AppUpdatesResponse> {
   };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const forceRefresh = new URL(request.url).searchParams.get("refresh") === "1";
   if (!globalThis.__piWebAppUpdateCheck) {
-    globalThis.__piWebAppUpdateCheck = performUpdateCheck()
+    globalThis.__piWebAppUpdateCheck = performUpdateCheck(forceRefresh)
       .finally(() => {
         globalThis.__piWebAppUpdateCheck = undefined;
       });

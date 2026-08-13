@@ -7,9 +7,11 @@ import {
   APP_RELEASES_URL,
   APP_REPOSITORY,
   APP_REPOSITORY_URL,
+  APP_VERSION,
   APP_VERSION_DISPLAY,
   PRODUCT_NAME,
 } from "@/lib/branding";
+import { compareAppVersions } from "@/lib/app-updates";
 import { APP_PREF_KEYS, getPrefBool, setPrefBool } from "@/lib/app-prefs";
 import {
   installLatestDesktopRelease,
@@ -133,6 +135,77 @@ function MetaChip({
   );
 }
 
+function VersionChip({
+  currentValue,
+  latestValue,
+  versionsMatch,
+  updateAvailable,
+  href,
+  title,
+  ariaLabel,
+  versionLabel,
+  currentLabel,
+  latestLabel,
+  upgradeAvailableLabel,
+}: {
+  currentValue: string;
+  latestValue: string;
+  versionsMatch: boolean;
+  updateAvailable: boolean;
+  href: string;
+  title: string;
+  ariaLabel: string;
+  versionLabel: string;
+  currentLabel: string;
+  latestLabel: string;
+  upgradeAvailableLabel: string;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      title={title}
+      aria-label={ariaLabel}
+      style={metaChipStyle(updateAvailable)}
+      onClick={(event) => handleExternalLinkClick(event, href)}
+    >
+      {versionsMatch ? (
+        <>
+          <span style={{ opacity: 0.72, fontWeight: 500 }}>{versionLabel}</span>
+          <span>{currentValue}</span>
+        </>
+      ) : (
+        <>
+          <span style={{ opacity: 0.72, fontWeight: 500 }}>{currentLabel}</span>
+          <span>{currentValue}</span>
+          <span aria-hidden="true" style={{ width: 1, height: 13, background: "currentColor", opacity: 0.2 }} />
+          <span style={{ opacity: updateAvailable ? 0.9 : 0.72, fontWeight: 500 }}>{latestLabel}</span>
+          <span style={{ color: updateAvailable ? "var(--accent)" : undefined, fontWeight: updateAvailable ? 800 : undefined }}>
+            {latestValue}
+          </span>
+          {updateAvailable ? (
+            <span
+              style={{
+                padding: "1px 5px",
+                borderRadius: 999,
+                background: "var(--accent)",
+                color: "var(--bg-panel)",
+                fontSize: 9,
+                fontWeight: 800,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {upgradeAvailableLabel}
+            </span>
+          ) : null}
+        </>
+      )}
+      <span aria-hidden="true">↗</span>
+    </a>
+  );
+}
+
 export function AppSettings({ onClose }: { onClose: () => void }) {
   const { t, locale, setLocale, supportedLocales } = useI18n();
   const { theme, setTheme } = useTheme();
@@ -147,7 +220,7 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch("/api/updates", { cache: "no-store", signal: controller.signal })
+    fetch("/api/updates?refresh=1", { cache: "no-store", signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return response.json() as Promise<AppUpdatesResponse>;
@@ -216,6 +289,16 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
       : updateAvailable
         ? t("appSettings.updateAvailable")
         : t("appSettings.upToDate");
+
+  const currentVersion = appRelease?.currentVersion ?? APP_VERSION;
+  const currentVersionText = `v${currentVersion === APP_VERSION ? APP_VERSION_DISPLAY : currentVersion}`;
+  const versionsMatch = Boolean(
+    appRelease?.latestVersion
+      && compareAppVersions(currentVersion, appRelease.latestVersion) === 0,
+  );
+  const versionAriaLabel = versionsMatch
+    ? `${t("appSettings.version")}: ${currentVersionText}. ${statusText}`
+    : `${t("appSettings.currentVersion")}: ${currentVersionText}. ${t("appSettings.latestRelease")}: ${latestReleaseText}. ${statusText}`;
 
   const handleUpgrade = async () => {
     if (!canUpgrade) return;
@@ -286,19 +369,18 @@ export function AppSettings({ onClose }: { onClose: () => void }) {
                 title={t("appSettings.openRepository")}
                 ariaLabel={`${t("appSettings.repository")}: ${APP_REPOSITORY}`}
               />
-              <MetaChip
-                label={t("appSettings.latestRelease")}
-                value={latestReleaseText}
-                emphasized={updateAvailable}
-                href={APP_RELEASES_URL}
+              <VersionChip
+                currentValue={currentVersionText}
+                latestValue={latestReleaseText}
+                versionsMatch={versionsMatch}
+                updateAvailable={updateAvailable}
+                href={appRelease?.releaseUrl ?? APP_RELEASES_URL}
                 title={statusText}
-                ariaLabel={`${t("appSettings.latestRelease")}: ${latestReleaseText}. ${statusText}`}
-              />
-              <MetaChip
-                label={t("appSettings.currentVersion")}
-                value={`v${APP_VERSION_DISPLAY}`}
-                title={statusText}
-                ariaLabel={`${t("appSettings.currentVersion")}: v${APP_VERSION_DISPLAY}`}
+                ariaLabel={versionAriaLabel}
+                versionLabel={t("appSettings.version")}
+                currentLabel={t("appSettings.currentVersion")}
+                latestLabel={t("appSettings.latestRelease")}
+                upgradeAvailableLabel={t("appSettings.upgradeAvailable")}
               />
               {(updateAvailable || upgradeProgress) && (
                 <button

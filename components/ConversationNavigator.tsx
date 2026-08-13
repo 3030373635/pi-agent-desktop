@@ -23,6 +23,7 @@ function nearestTurnIndex(event: ReactPointerEvent<HTMLDivElement>, count: numbe
 export function ConversationNavigator({ turns, scrollContainerRef, onSelect }: Props) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const [isHovering, setIsHovering] = useState(false);
   const draggingRef = useRef(false);
 
   useEffect(() => {
@@ -65,15 +66,24 @@ export function ConversationNavigator({ turns, scrollContainerRef, onSelect }: P
   }, [onSelect, turns.length]);
 
   const preview = previewIndex == null ? null : turns[previewIndex];
+  const navigatorHeight = turns.length * 2 + (turns.length - 1) * 8;
   const tickPositions = useMemo(() => turns.map((turn, index) => ({
     ...turn,
-    top: turns.length === 1 ? 50 : (index / (turns.length - 1)) * 100,
+    top: 1 + index * 10,
   })), [turns]);
 
   if (turns.length < 2) return null;
 
   return (
-    <div className="conversation-navigator" onPointerLeave={() => { if (!draggingRef.current) setPreviewIndex(null); }}>
+    <div
+      className={`conversation-navigator${isHovering ? " is-hovering" : ""}`}
+      style={{ height: navigatorHeight }}
+      onPointerEnter={() => setIsHovering(true)}
+      onPointerLeave={() => {
+        setIsHovering(false);
+        if (!draggingRef.current) setPreviewIndex(null);
+      }}
+    >
       {preview && (
         <div className="conversation-navigator-preview" role="status">
           <div className="conversation-navigator-question">{preview.question}</div>
@@ -90,6 +100,7 @@ export function ConversationNavigator({ turns, scrollContainerRef, onSelect }: P
         aria-valuemax={turns.length}
         aria-valuenow={activeIndex + 1}
         tabIndex={0}
+        onBlur={() => { if (!draggingRef.current) setPreviewIndex(null); }}
         onKeyDown={(event) => {
           if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
           event.preventDefault();
@@ -117,13 +128,16 @@ export function ConversationNavigator({ turns, scrollContainerRef, onSelect }: P
         }}
         onPointerCancel={() => { draggingRef.current = false; }}
       >
-        {tickPositions.map((turn) => (
-          <span
-            key={turn.index}
-            className={`conversation-navigator-tick${turn.index === activeIndex ? " is-active" : ""}`}
-            style={{ top: `${turn.top}%` }}
-          />
-        ))}
+        {tickPositions.map((turn, index) => {
+          const previewDistance = previewIndex == null ? null : Math.abs(index - previewIndex);
+          return (
+            <span
+              key={turn.index}
+              className={`conversation-navigator-tick${previewDistance === 1 ? " is-near-preview-1" : ""}${previewDistance === 2 ? " is-near-preview-2" : ""}${index === previewIndex ? " is-preview" : ""}${turn.index === activeIndex ? " is-active" : ""}`}
+              style={{ top: turn.top }}
+            />
+          );
+        })}
       </div>
     </div>
   );

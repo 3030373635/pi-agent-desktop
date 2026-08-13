@@ -105,6 +105,152 @@ html.dark {
     0 4px 18px rgba(0, 0, 0, 0.36);
 }
 
+/* Keep the conversation navigator visually compact: its markers cluster at
+   the viewport midpoint while retaining a forgiving invisible scrub target. */
+.conversation-navigator {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  z-index: 30;
+  width: 42px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.conversation-navigator-track {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 36px;
+  cursor: ns-resize;
+  touch-action: none;
+  pointer-events: auto;
+  outline: none;
+}
+
+.conversation-navigator-tick {
+  position: absolute;
+  left: 4px;
+  width: 10px;
+  height: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  transform: translateY(-50%);
+  transition:
+    width 140ms var(--ease-native),
+    background 140ms var(--ease-native),
+    opacity 140ms var(--ease-native);
+}
+
+.conversation-navigator-tick.is-active {
+  width: 10px;
+  height: 2px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.conversation-navigator.is-hovering .conversation-navigator-tick {
+  width: 12px;
+  height: 2px;
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.conversation-navigator.is-hovering .conversation-navigator-tick.is-near-preview-2 {
+  width: 14px;
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.conversation-navigator.is-hovering .conversation-navigator-tick.is-near-preview-1 {
+  width: 17px;
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.conversation-navigator.is-hovering .conversation-navigator-tick.is-active {
+  width: 19px;
+  background: color-mix(in srgb, var(--accent) 54%, transparent);
+}
+
+.conversation-navigator.is-hovering .conversation-navigator-tick.is-preview {
+  width: 20px;
+  background: color-mix(in srgb, var(--accent) 62%, transparent);
+}
+
+.conversation-navigator.is-hovering .conversation-navigator-tick.is-preview.is-active {
+  width: 22px;
+  background: color-mix(in srgb, var(--accent) 72%, transparent);
+}
+
+.conversation-navigator-track:focus-visible {
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
+.conversation-navigator-preview {
+  position: absolute;
+  left: 46px;
+  top: 50%;
+  width: min(360px, calc(100vw - 156px));
+  padding: 12px 14px;
+  border: 1px solid var(--separator);
+  border-color: var(--separator);
+  border-radius: var(--radius-lg);
+  background: var(--surface-elevated);
+  box-shadow: var(--shadow-control), 0 10px 28px rgba(15, 23, 42, 0.1);
+  transform: translateY(-50%);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  pointer-events: none;
+  animation: conversation-navigator-preview-in 140ms var(--ease-native);
+}
+
+html.dark .conversation-navigator-preview {
+  box-shadow: var(--shadow-control), 0 12px 30px rgba(0, 0, 0, 0.32);
+}
+
+.conversation-navigator-question {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text);
+  -webkit-box-orient: vertical;
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.35;
+  -webkit-line-clamp: 2;
+}
+
+.conversation-navigator-answer {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-muted);
+  -webkit-box-orient: vertical;
+  font-size: 12.5px;
+  line-height: 1.45;
+  -webkit-line-clamp: 2;
+}
+
+@keyframes conversation-navigator-preview-in {
+  from {
+    opacity: 0;
+    transform: translate(-4px, -50%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, -50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conversation-navigator-tick,
+  .conversation-navigator-preview {
+    transition: none;
+    animation: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .conversation-navigator {
+    display: none;
+  }
+}
+
 /* A short crossfade feels closer to a desktop appearance change than a
    decorative radial wipe. */
 ::view-transition-old(root),
