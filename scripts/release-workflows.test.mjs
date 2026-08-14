@@ -160,7 +160,7 @@ test("the manifest job only publishes when every platform succeeded", async () =
   assert.match(manifestJob, /--draft=false --latest/);
 });
 
-test("release workflow publishes Apple Silicon and Windows x64 installers", async () => {
+test("release workflow publishes Apple Silicon, Linux x64, and Windows x64 installers", async () => {
   const workflow = await readFile(
     join(root, ".github", "workflows", "release.yml"),
     "utf8",
@@ -170,6 +170,11 @@ test("release workflow publishes Apple Silicon and Windows x64 installers", asyn
   assert.match(workflow, /max-parallel: 1/);
   assert.match(workflow, /runner: macos-15/);
   assert.match(workflow, /target: aarch64-apple-darwin/);
+  assert.match(workflow, /runner: ubuntu-24\.04/);
+  assert.match(workflow, /target: x86_64-unknown-linux-gnu/);
+  assert.match(workflow, /--bundles deb/);
+  assert.match(workflow, /libwebkit2gtk-4\.1-dev/);
+  assert.match(workflow, /libayatana-appindicator3-dev/);
   assert.match(workflow, /runner: windows-latest/);
   assert.match(workflow, /target: x86_64-pc-windows-msvc/);
   assert.match(workflow, /--bundles nsis/);

@@ -7,10 +7,14 @@ import { desktopTargetTriple } from "./desktop-platform.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
-test("desktop builds target Apple Silicon and Windows x64", () => {
+test("desktop builds target Apple Silicon, Linux x64, and Windows x64", () => {
   assert.equal(
     desktopTargetTriple("darwin", "arm64"),
     "aarch64-apple-darwin",
+  );
+  assert.equal(
+    desktopTargetTriple("linux", "x64"),
+    "x86_64-unknown-linux-gnu",
   );
   assert.equal(
     desktopTargetTriple("win32", "x64"),
@@ -24,21 +28,25 @@ test("unsupported desktop platforms fail before packaging", () => {
     /Unsupported desktop platform: darwin\/x64/,
   );
   assert.throws(
-    () => desktopTargetTriple("linux", "x64"),
-    /Unsupported desktop platform: linux\/x64/,
+    () => desktopTargetTriple("linux", "arm64"),
+    /Unsupported desktop platform: linux\/arm64/,
   );
 });
 
-test("Windows packaging includes Node, npm, an icon, and an NSIS installer", async () => {
-  const [prepareSource, configSource] = await Promise.all([
+test("Linux and Windows packaging include the bundled Node runtime", async () => {
+  const [prepareSource, linuxConfigSource, windowsConfigSource] = await Promise.all([
     readFile(join(root, "scripts", "prepare-desktop.mjs"), "utf8"),
+    readFile(join(root, "src-tauri", "tauri.linux.conf.json"), "utf8"),
     readFile(join(root, "src-tauri", "tauri.windows.conf.json"), "utf8"),
   ]);
-  const config = JSON.parse(configSource);
+  const linuxConfig = JSON.parse(linuxConfigSource);
+  const windowsConfig = JSON.parse(windowsConfigSource);
 
-  assert.match(prepareSource, /node\.exe/);
+  assert.match(prepareSource, /process\.platform === "win32" \? "node\.exe" : "node"/);
   assert.match(prepareSource, /node_modules", "npm"/);
-  assert.deepEqual(config.bundle.targets, ["nsis"]);
-  assert.ok(config.bundle.icon.includes("icons/icon.ico"));
-  assert.ok(config.bundle.resources.includes("resources/node"));
+  assert.deepEqual(linuxConfig.bundle.targets, ["deb"]);
+  assert.ok(linuxConfig.bundle.resources.includes("resources/node"));
+  assert.deepEqual(windowsConfig.bundle.targets, ["nsis"]);
+  assert.ok(windowsConfig.bundle.icon.includes("icons/icon.ico"));
+  assert.ok(windowsConfig.bundle.resources.includes("resources/node"));
 });
