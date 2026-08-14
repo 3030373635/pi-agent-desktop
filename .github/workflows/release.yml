@@ -103,20 +103,21 @@ jobs:
           tagName: v__VERSION__
           releaseName: pi-agent-desktop v__VERSION__
           releaseBody: |
-            ## Pi Agent Desktop 0.2.9
+            ## Pi Agent Desktop 0.3.0
 
-            This release polishes long-chat navigation, version updates, and session history viewing.
+            This release adds Linux desktop packages and makes desktop recovery after sleep substantially more reliable.
 
             ### Highlights
 
-            - **Refined conversation navigator** — Compact markers stay centered and expand progressively on hover, with solid question-and-answer previews plus click, drag, and keyboard navigation.
-            - **Clearer version and update status** — Settings refreshes GitHub release data when opened, combines current and latest versions, and highlights available upgrades.
-            - **Smoother session controls** — Top panels are opaque, close on outside click or Escape, and full session history opens directly in the browser.
+            - **Linux x64 support** — Releases now include a Debian `.deb` package with the bundled Node.js runtime and the GTK/WebKitGTK integration required by the Tauri shell.
+            - **Reliable reconnect after sleep** — Overlapping wake-up probes can no longer leave the app falsely offline, and the Reconnect action can refresh stale connections or relaunch a stopped packaged server.
+            - **Three-platform release pipeline** — Signed releases now build Apple Silicon macOS, Linux x64, and Windows x64 packages before publication.
 
             ### Fixes and improvements
 
-            - Kept chat content stable while scrollbars appear by reserving the scrollbar gutter.
-            - Restored collapse and expand controls for long user messages while retaining the compact `/skill:` display.
+            - Cancelled superseded health probes so stale failures cannot overwrite a newer successful response.
+            - Added Linux packaging checks, platform tests, documentation, and native window behavior.
+            - Updated GitHub Actions to the Node.js 24-compatible action releases.
             - Kept bundled Pi at 0.84.1 and pi-web at 0.8.7.
             - Verified the full test suite, TypeScript checks, and lint before packaging.
 
@@ -124,20 +125,21 @@ jobs:
 
             ---
 
-            ## Pi Agent Desktop 0.2.9
+            ## Pi Agent Desktop 0.3.0
 
-            本次发布重点优化长对话导航、版本更新状态和会话历史查看体验。
+            本次发布新增 Linux 桌面安装包，并显著提升电脑睡眠唤醒后的桌面连接恢复能力。
 
             ### 主要更新
 
-            - **对话定位器优化** —— 标记紧凑居中，悬停时渐进展开，并提供清晰的问题与回答预览；支持点击、拖动和键盘导航。
-            - **版本与更新状态更清晰** —— 打开设置时主动刷新 GitHub Release 信息，合并展示当前与最新版本，并突出可用升级。
-            - **会话操作更顺畅** —— 顶部面板改为不透明显示，支持点击外部或按 Escape 关闭；完整会话历史可直接在浏览器中打开。
+            - **支持 Linux x64** —— Release 现在提供 Debian `.deb` 安装包，内置 Node.js runtime，并包含 Tauri 桌面壳所需的 GTK/WebKitGTK 集成。
+            - **睡眠唤醒后可靠重连** —— 并发唤醒探测不会再让应用错误地停留在离线状态；“重新连接”可刷新失效连接，或重新启动已停止的内置服务。
+            - **三平台发布流水线** —— 正式发布前会依次构建 Apple Silicon macOS、Linux x64 和 Windows x64 安装包。
 
             ### 修复与改进
 
-            - 预留滚动条空间，避免滚动条出现时聊天内容横向跳动。
-            - 恢复长用户消息的收起与展开，同时保留紧凑的 `/skill:` 展示。
+            - 取消已过期的健康探测，避免旧失败结果覆盖新的成功结果。
+            - 补充 Linux 打包检查、平台测试、使用文档和原生窗口行为。
+            - 将 GitHub Actions 升级到兼容 Node.js 24 的版本。
             - 内置 Pi 保持在 0.84.1，pi-web 保持在 0.8.7。
             - 打包前已完成完整测试、TypeScript 检查和 lint 验证。
 
