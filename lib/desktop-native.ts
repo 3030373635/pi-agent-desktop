@@ -345,4 +345,11 @@ export async function showMainWindowNative(): Promise<void> {
   await invoke("show_main_window_cmd");
 }
 
+/** Relaunch the desktop shell and its packaged local server. */
+export async function relaunchAppNative(): Promise<void> {
+  if (!isTauriDesktop()) return;
+  const { relaunch } = await import("@tauri-apps/plugin-process");
+  await relaunch();
+}
+
 export { isTauriDesktop };
