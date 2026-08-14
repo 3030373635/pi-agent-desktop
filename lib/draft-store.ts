@@ -82,6 +82,9 @@ export function setDraft(key: string, draft: ChatDraft): void {
     schedulePersist();
     return;
   }
+  // Map.set() does not refresh insertion order for an existing key. Delete it
+  // first so the persistence cap below keeps the most recently edited drafts.
+  drafts.delete(key);
   drafts.set(key, cloneDraft(draft));
   schedulePersist();
 }

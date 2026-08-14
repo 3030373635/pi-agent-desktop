@@ -8,6 +8,7 @@ import type {
   ExtensionWidgetItem,
   SessionInfo,
   SessionTreeNode,
+  UserMessage,
 } from "@/lib/types";
 import { normalizeToolCalls } from "@/lib/normalize";
 import { sendAgentCommand } from "@/lib/agent-client";
@@ -314,6 +315,7 @@ function readCompactResult(result: unknown, reason: string): CompactResultInfo |
 export interface ChatInputHandle {
   insertText: (text: string) => void;
   insertIfEmpty: (content: string) => void;
+  replaceMessage: (message: UserMessage) => void;
   prependText: (text: string) => void;
   addImages: (files: File[]) => void;
   focus: () => void;
@@ -462,6 +464,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // switches A → B → A before the first A request settles.
   const contextLoadIdRef = useRef(0);
   const toolsLoadIdRef = useRef(0);
+  const sessionGenerationRef = useRef(0);
   const agentRunningRef = useRef(false);
   const sdkAgentActiveRef = useRef(false);
   const rpcPromptPendingRef = useRef(false);
@@ -529,6 +532,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       newSessionPromotedRef.current = false;
       contextLoadIdRef.current += 1;
       toolsLoadIdRef.current += 1;
+      sessionGenerationRef.current += 1;
       agentRunningRef.current = false;
       bashRunningRef.current = false;
       initialScrollDoneRef.current = false;
@@ -1252,10 +1256,21 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         setRetryInfo(null);
         dispatch({ type: "end" });
         if (sessionIdRef.current) {
-          loadSession(sessionIdRef.current);
-          fetch(`/api/agent/${encodeURIComponent(sessionIdRef.current)}`)
-            .then((r) => r.json())
+          const sid = sessionIdRef.current;
+          const sessionGeneration = sessionGenerationRef.current;
+          const runId = promptRunIdRef.current;
+          void loadSession(sid);
+          fetch(`/api/agent/${encodeURIComponent(sid)}`)
+            .then((r) => {
+              if (!r.ok) throw new Error(`HTTP ${r.status}`);
+              return r.json();
+            })
             .then((d: { state?: AgentStateResponse }) => {
+              if (
+                sessionIdRef.current !== sid
+                || sessionGenerationRef.current !== sessionGeneration
+                || promptRunIdRef.current !== runId
+              ) return;
               if (d.state?.contextUsage !== undefined) setContextUsage(d.state.contextUsage ?? null);
               if (d.state?.systemPrompt !== undefined) setSystemPrompt(d.state.systemPrompt ?? null);
               if (d.state?.extensionStatuses !== undefined) setExtensionStatuses(d.state.extensionStatuses ?? []);
@@ -1462,7 +1477,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     rpcPromptPendingRef.current = true;
 
     const imageBlocks = images?.map((img) => ({ type: "image" as const, source: { type: "base64" as const, media_type: img.mimeType, data: img.data } }));
-    const userMsg: AgentMessage = {
+    const userMsg: UserMessage = {
       role: "user",
       content: imageBlocks?.length
         ? [...(message.trim() ? [{ type: "text" as const, text: message }] : []), ...imageBlocks]
@@ -1532,25 +1547,28 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       rpcPromptPendingRef.current = false;
       agentRunningRef.current = false;
       closeEvents();
-      if (e instanceof EventStreamConnectionError) {
-        const optimisticKey = optimisticUserMessageKeyRef.current;
-        if (optimisticKey) {
-          setMessages((prev) => {
-            const last = prev[prev.length - 1];
-            return last?.role === "user" && userMessageKey(last) === optimisticKey
-              ? prev.slice(0, -1)
-              : prev;
-          });
-        }
-        addNotice({ type: "error", message: e.message });
-        // The prompt never reached the agent, so restore the user's text into
-        // the input instead of losing it. Mirrors the shell-command recovery in
-        // executeBash; insertIfEmpty avoids clobbering anything typed since.
-        if (message) opts.chatInputRef?.current?.insertIfEmpty(message);
+      const optimisticKey = optimisticUserMessageKeyRef.current;
+      if (optimisticKey) {
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          return last?.role === "user" && userMessageKey(last) === optimisticKey
+            ? prev.slice(0, -1)
+            : prev;
+        });
       }
+      addNotice({
+        type: "error",
+        message: e instanceof Error ? e.message : String(e),
+      });
+      // No prompt request started, so the complete optimistic message is safe
+      // to restore. replaceMessage preserves image attachments and refuses to
+      // overwrite anything the user typed while startup was failing.
+      opts.chatInputRef?.current?.replaceMessage(userMsg);
       optimisticUserMessageKeyRef.current = null;
       setAgentRunning(false);
       setAgentPhase(null);
+      pendingScrollToUserRef.current = false;
+      setPromptAnchorActive(false);
       dispatch({ type: "end" });
     }
   }, [isNew, newSessionCwd, newSessionModel, session, ensureNewSession, ensureEventsConnected, promoteNewSession, waitForPromptSettlement, addNotice, cancelEventStreamGrace, closeEvents, dispatch, opts.chatInputRef]);
