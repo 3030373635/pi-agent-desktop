@@ -30,6 +30,17 @@ test("tool preset loads ignore stale sessions and out-of-order responses", async
   assert.match(body, /tools && isCurrent\(\)/);
 });
 
+test("agent-end state refreshes cannot overwrite a switched session or newer run", async () => {
+  const source = await readFile(sourceUrl, "utf8");
+  const body = functionSlice(source, 'case "agent_end"', 'case "agent_settled"');
+  assert.match(body, /const sid = sessionIdRef\.current/);
+  assert.match(body, /const sessionGeneration = sessionGenerationRef\.current/);
+  assert.match(body, /const runId = promptRunIdRef\.current/);
+  assert.match(body, /sessionIdRef\.current !== sid/);
+  assert.match(body, /sessionGenerationRef\.current !== sessionGeneration/);
+  assert.match(body, /promptRunIdRef\.current !== runId/);
+});
+
 test("a stale branch load cannot navigate the newly active session", async () => {
   const source = await readFile(sourceUrl, "utf8");
   const body = functionSlice(source, "const handleLeafChange = useCallback", "const handleModelChange = useCallback");

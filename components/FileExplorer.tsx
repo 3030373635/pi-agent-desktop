@@ -262,6 +262,8 @@ function TreeNode({
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hovered, setHovered] = useState(false);
+  const staleRef = useRef(false);
+  const lastRefreshTokenRef = useRef(refreshToken);
 
   const loadChildren = useCallback(async (force = false) => {
     if (loaded && !force) return;
@@ -278,18 +280,33 @@ function TreeNode({
     }
   }, [loaded, node.fullPath]);
 
-  // Re-fetch children when the tree refreshes and the directory is open.
+  // Refresh open directories immediately. Collapsed directory components keep
+  // their local children cache, so remember that they missed this refresh and
+  // force a reload the next time they are expanded.
   useEffect(() => {
+    if (lastRefreshTokenRef.current === refreshToken) return;
+    lastRefreshTokenRef.current = refreshToken;
+    if (!loaded) {
+      // A request that started before this refresh may still complete with an
+      // old listing. Make the next expansion verify it once more.
+      if (loading) staleRef.current = true;
+      return;
+    }
     if (open && loaded) {
-      loadChildren(true);
+      staleRef.current = false;
+      void loadChildren(true);
+    } else {
+      staleRef.current = true;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshToken]);
 
-  // Programmatic expand (e.g. after uploading into a collapsed folder) must load children.
+  // Both click and programmatic expansion pass through this effect.
   useEffect(() => {
-    if (open && !loaded && !loading) {
-      void loadChildren();
+    if (open && !loading && (!loaded || staleRef.current)) {
+      const force = loaded;
+      staleRef.current = false;
+      void loadChildren(force);
     }
   }, [open, loaded, loading, loadChildren]);
 
@@ -298,11 +315,10 @@ function TreeNode({
     if (node.isDir) {
       const next = !open;
       onToggleExpanded(node.fullPath, next);
-      if (next && !loaded) loadChildren();
     } else {
       onOpenFile(node.fullPath, node.name);
     }
-  }, [node.isDir, node.fullPath, node.name, loaded, open, loadChildren, onOpenFile, onSelectPath, onToggleExpanded]);
+  }, [node.isDir, node.fullPath, node.name, open, onOpenFile, onSelectPath, onToggleExpanded]);
 
   const handleDragEnter = useCallback((event: React.DragEvent) => {
     if (!hasDraggedFiles(event) || uploadBusy) return;

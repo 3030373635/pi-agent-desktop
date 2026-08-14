@@ -6,44 +6,57 @@ export const dynamic = "force-dynamic";
 // session ids. Pushes an update whenever any session starts or stops working,
 // so the sidebar never has to poll.
 export async function GET(req: Request) {
+  let dispose = () => {};
   const stream = new ReadableStream({
     start(controller) {
       const encoder = new TextEncoder();
+      let closed = false;
+      let unsubscribe = () => {};
+      let heartbeat: ReturnType<typeof setInterval> | null = null;
+      const cleanup = () => {
+        if (closed) return;
+        closed = true;
+        if (heartbeat) clearInterval(heartbeat);
+        unsubscribe();
+        req.signal?.removeEventListener("abort", cleanup);
+        try { controller.close(); } catch { /* already closed/cancelled */ }
+      };
+      dispose = cleanup;
+      req.signal?.addEventListener("abort", cleanup);
       const encode = (data: unknown) => {
+        if (closed) return false;
         const text = `data: ${JSON.stringify(data)}\n\n`;
-        controller.enqueue(encoder.encode(text));
+        try {
+          controller.enqueue(encoder.encode(text));
+          return true;
+        } catch {
+          cleanup();
+          return false;
+        }
       };
 
       // Subscribe BEFORE taking the initial snapshot so no state change can slip
       // through the gap between snapshot and subscription.
-      const unsubscribe = subscribeRunningSessions((ids) => {
-        try {
-          encode({ type: "running", runningSessionIds: ids });
-        } catch {
-          // controller already closed
-        }
+      const nextUnsubscribe = subscribeRunningSessions((ids) => {
+        encode({ type: "running", runningSessionIds: ids });
       });
+      if (closed) nextUnsubscribe();
+      else unsubscribe = nextUnsubscribe;
 
       // Initial snapshot so the client renders the correct state immediately.
       // (A duplicate frame here is harmless: the client just sets the same set.)
       encode({ type: "running", runningSessionIds: getRunningRpcSessionIds() });
 
       // Heartbeat to keep the connection alive through proxies/timeouts.
-      const heartbeat = setInterval(() => {
-        try {
-          controller.enqueue(encoder.encode(":\n\n"));
-        } catch {
-          // controller already closed
-        }
+      if (!closed) heartbeat = setInterval(() => {
+        if (closed) return;
+        try { controller.enqueue(encoder.encode(":\n\n")); }
+        catch { cleanup(); }
       }, 30_000);
 
-      const cleanup = () => {
-        clearInterval(heartbeat);
-        unsubscribe();
-        try { controller.close(); } catch { /* already closed */ }
-      };
-
-      req.signal?.addEventListener("abort", cleanup);
+    },
+    cancel() {
+      dispose();
     },
   });
 
