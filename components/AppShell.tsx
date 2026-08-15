@@ -46,6 +46,7 @@ import {
   RIGHT_PANEL_MAX_WIDTH,
   RIGHT_PANEL_MIN_WIDTH,
   SIDEBAR_DEFAULT_WIDTH,
+  SPLIT_PANEL_MIN_WIDTH,
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
 } from "@/lib/panel-layout";
@@ -159,6 +160,12 @@ export function AppShell() {
   useEffect(() => {
     if (isMobile) setSidebarOpen(false);
   }, [isMobile]);
+  // Close right panel when viewport is too narrow for split-panel layout
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (rightPanelOpen && window.innerWidth < SPLIT_PANEL_MIN_WIDTH)
+      setRightPanelOpen(false);
+  }, [rightPanelOpen]);
   useEffect(() => {
     setMobileSidebarReady(true);
   }, []);
