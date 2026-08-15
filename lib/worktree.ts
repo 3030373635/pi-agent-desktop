@@ -48,13 +48,15 @@ export function invalidateProjectCache(): void {
   globalThis.__piProjectCache?.clear();
 }
 
-async function git(cwd: string, args: string[]): Promise<string> {
+async function git(cwd: string, args: string[], timeoutMs = 10_000): Promise<string> {
   const { stdout } = await execFileAsync("git", ["-C", cwd, ...args], {
-    timeout: 10_000,
+    timeout: timeoutMs,
     maxBuffer: 1024 * 1024,
     // Pin the message locale so error-text matching (e.g. the dirty-worktree
     // detection in the DELETE route) works regardless of system language.
-    env: { ...process.env, LC_ALL: "C" },
+    // GIT_TERMINAL_PROMPT=0 makes credential-hungry network commands (fetch)
+    // fail fast instead of blocking the timeout on an invisible prompt.
+    env: { ...process.env, LC_ALL: "C", GIT_TERMINAL_PROMPT: "0" },
   });
   return stdout.trim();
 }
@@ -189,6 +191,130 @@ export async function listLocalBranches(cwd: string, limit = 40): Promise<string
     if (branches.length >= limit) break;
   }
   return branches;
+}
+
+// ============================================================================
+// Branch switching in the current checkout
+//
+// The worktree switcher covers branches that already have a checkout; these
+// helpers cover switching the *current* checkout to another branch in place,
+// including remote-only branches (checked out with a local tracking branch).
+// ============================================================================
+
+/** Strip the remote prefix from "<remote>/<branch>" ("origin/feature/x" → "feature/x"). */
+export function stripRemotePrefix(ref: string): string | null {
+  const slash = ref.indexOf("/");
+  if (slash <= 0) return null;
+  const name = ref.slice(slash + 1);
+  // <remote>/HEAD is a symbolic pointer, not a checkoutable branch
+  if (!name || name === "HEAD") return null;
+  return name;
+}
+
+/** Remote-tracking refs (short "<remote>/<branch>" names) that end in `branch`.
+ *  More than one match means the name is ambiguous across remotes. */
+export function matchRemoteRefs(refs: string[], branch: string): string[] {
+  return refs.filter((ref) => stripRemotePrefix(ref) === branch);
+}
+
+/**
+ * Split raw local + remote ref lists into the switcher's two sections:
+ * `local` as-is, and `remoteOnly` holding remote branches (prefix stripped)
+ * with no local counterpart yet — those need `checkout -b --track`.
+ */
+export function partitionBranchList(
+  local: string[],
+  remote: string[],
+): { local: string[]; remoteOnly: string[] } {
+  const localSet = new Set(local);
+  const remoteOnly: string[] = [];
+  const seen = new Set<string>();
+  for (const ref of remote) {
+    const name = stripRemotePrefix(ref);
+    if (!name || localSet.has(name) || seen.has(name)) continue;
+    seen.add(name);
+    remoteOnly.push(name);
+  }
+  return { local, remoteOnly };
+}
+
+async function listRemoteRefs(cwd: string): Promise<string[]> {
+  const repoRoot = await getRepoRoot(cwd);
+  const out = await git(repoRoot, [
+    "for-each-ref",
+    "--sort=-committerdate",
+    "--format=%(refname:short)",
+    "refs/remotes",
+  ]);
+  const refs: string[] = [];
+  const seen = new Set<string>();
+  for (const line of out.split("\n")) {
+    const name = line.trim();
+    if (!name || name.endsWith("/HEAD") || seen.has(name)) continue;
+    seen.add(name);
+    refs.push(name);
+  }
+  return refs;
+}
+
+/** Remote-tracking branches ("<remote>/<branch>") for the switcher UI (capped). */
+export async function listRemoteBranches(cwd: string, limit = 40): Promise<string[]> {
+  const refs = await listRemoteRefs(cwd);
+  return refs.slice(0, limit);
+}
+
+/**
+ * Check out `branch` in the cwd's checkout. Local branches switch directly;
+ * a branch that only exists on exactly one remote gets a local tracking
+ * branch (`checkout -b --track`). Surfaces git's own errors (e.g. the branch
+ * is checked out in another worktree, or uncommitted changes conflict).
+ */
+export async function switchBranch(cwd: string, branch: string): Promise<{ branch: string }> {
+  const trimmed = branch.trim();
+  // Branch names are passed as argv to git — never let one start with "-"
+  // ("--upload-pack=…" would be parsed as an option, not a ref).
+  if (!trimmed || trimmed.startsWith("-")) {
+    throw new Error("Invalid branch name");
+  }
+
+  try {
+    const repoRoot = await getRepoRoot(cwd);
+    let branchExists = false;
+    try {
+      await git(repoRoot, ["rev-parse", "--verify", "--quiet", `refs/heads/${trimmed}`]);
+      branchExists = true;
+    } catch {
+      branchExists = false;
+    }
+
+    if (branchExists) {
+      await git(cwd, ["checkout", trimmed]);
+    } else {
+      const matches = matchRemoteRefs(await listRemoteRefs(repoRoot), trimmed);
+      if (matches.length === 0) throw new Error(`Branch not found: ${trimmed}`);
+      if (matches.length > 1) {
+        throw new Error(`Branch exists on multiple remotes: ${matches.join(", ")}`);
+      }
+      await git(cwd, ["checkout", "-b", trimmed, "--track", matches[0]]);
+    }
+  } catch (error) {
+    // extractGitError passes through plain Error messages (no stderr), so the
+    // "not found" / "ambiguous" errors above surface unchanged.
+    throw new Error(extractGitError(error));
+  }
+
+  invalidateProjectCache();
+  return { branch: trimmed };
+}
+
+/** `git fetch --prune` so newly pushed branches show up in the switcher. */
+export async function fetchRemote(cwd: string): Promise<void> {
+  const repoRoot = await getRepoRoot(cwd);
+  try {
+    await git(repoRoot, ["fetch", "--prune"], 90_000);
+  } catch (error) {
+    throw new Error(extractGitError(error));
+  }
 }
 
 export async function addWorktree(cwd: string, branch: string): Promise<{ path: string; branch: string }> {
