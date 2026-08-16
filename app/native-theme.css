@@ -1830,6 +1830,11 @@ html.dark .sidebar-view-switcher-thumb {
 }
 
 .chat-input-shell {
+  /* Stop short of the scroll container's right-edge scrollbar gutter (see
+     scrollbarGutter: "stable both-edges" on .chat-window's scroll container)
+     so this full-width overlay doesn't paint over the scrollbar and fade it
+     out before it reaches the bottom. */
+  width: calc(100% - 8px);
   background:
     linear-gradient(to bottom, transparent, color-mix(in srgb, var(--bg) 94%, transparent) 18%) !important;
 }
