@@ -112,7 +112,9 @@ const CODING_TOOL_NAMES = ["read", "bash", "edit", "write", "grep", "find", "ls"
 class PlainTextTheme extends Theme {
   constructor() {
     super(
-      { thinkingXhigh: "" } as ConstructorParameters<typeof Theme>[0],
+      // Pi 0.84 derives searchMatchText from text during construction, even
+      // though this headless theme overrides every color operation.
+      { thinkingXhigh: "", text: "" } as ConstructorParameters<typeof Theme>[0],
       // Pi 0.84 derives scrollbarThumb from selectedBg during construction,
       // even though this headless theme overrides every color operation.
       { selectedBg: "" } as ConstructorParameters<typeof Theme>[1],
