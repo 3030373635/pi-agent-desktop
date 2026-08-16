@@ -15,9 +15,11 @@ use std::os::unix::process::CommandExt as _;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt as _;
 
+#[cfg(not(target_os = "linux"))]
+use tauri::menu::{Menu, MenuItem};
+#[cfg(not(target_os = "linux"))]
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{
-    menu::{Menu, MenuItem},
-    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     webview::{Color, NewWindowResponse},
     AppHandle, Manager, RunEvent, Theme, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
 };
@@ -84,6 +86,154 @@ fn quit_application(app: &AppHandle) {
         server.stop();
     }
     app.exit(0);
+}
+
+#[cfg(target_os = "linux")]
+const LINUX_TRAY_SHOW_LABEL: &str = "Show Pi Agent";
+#[cfg(target_os = "linux")]
+const LINUX_TRAY_QUIT_LABEL: &str = "Quit Pi Agent";
+
+#[cfg(target_os = "linux")]
+struct LinuxTray {
+    app: AppHandle,
+    icon: ksni::Icon,
+}
+
+#[cfg(target_os = "linux")]
+impl ksni::Tray for LinuxTray {
+    fn id(&self) -> String {
+        "pi-agent-desktop".into()
+    }
+
+    fn title(&self) -> String {
+        "Pi Agent".into()
+    }
+
+    fn icon_name(&self) -> String {
+        "pi-agent-desktop".into()
+    }
+
+    fn icon_pixmap(&self) -> Vec<ksni::Icon> {
+        vec![self.icon.clone()]
+    }
+
+    fn tool_tip(&self) -> ksni::ToolTip {
+        ksni::ToolTip {
+            title: "Pi Agent".into(),
+            ..Default::default()
+        }
+    }
+
+    fn activate(&mut self, _x: i32, _y: i32) {
+        show_main_window_on_main_thread(&self.app);
+    }
+
+    fn menu(&self) -> Vec<ksni::MenuItem<Self>> {
+        let show_app = self.app.clone();
+        let quit_app = self.app.clone();
+
+        vec![
+            visible_linux_tray_item(LINUX_TRAY_SHOW_LABEL, move |_| {
+                show_main_window_on_main_thread(&show_app)
+            }),
+            visible_linux_tray_item(LINUX_TRAY_QUIT_LABEL, move |_| {
+                quit_application_on_main_thread(&quit_app)
+            }),
+        ]
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn visible_linux_tray_item<T: 'static>(
+    label: &str,
+    activate: impl Fn(&mut T) + 'static,
+) -> ksni::MenuItem<T> {
+    ksni::menu::StandardItem {
+        label: label.into(),
+        enabled: true,
+        visible: true,
+        activate: Box::new(activate),
+        ..Default::default()
+    }
+    .into()
+}
+
+#[cfg(target_os = "linux")]
+fn show_main_window_on_main_thread(app: &AppHandle) {
+    let app_handle = app.clone();
+    let _ = app.run_on_main_thread(move || show_main_window(&app_handle));
+}
+
+#[cfg(target_os = "linux")]
+fn quit_application_on_main_thread(app: &AppHandle) {
+    let app_handle = app.clone();
+    let _ = app.run_on_main_thread(move || quit_application(&app_handle));
+}
+
+#[cfg(target_os = "linux")]
+fn linux_tray_icon(icon: &tauri::image::Image<'_>) -> ksni::Icon {
+    let mut data = Vec::with_capacity(icon.rgba().len());
+    for rgba in icon.rgba().chunks_exact(4) {
+        data.extend_from_slice(&[rgba[3], rgba[0], rgba[1], rgba[2]]);
+    }
+
+    ksni::Icon {
+        width: icon.width() as i32,
+        height: icon.height() as i32,
+        data,
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn build_linux_tray(app: &tauri::App) -> Result<(), std::io::Error> {
+    let icon = app
+        .default_window_icon()
+        .ok_or_else(|| std::io::Error::other("missing default window icon"))?;
+    let service = ksni::TrayService::new(LinuxTray {
+        app: app.handle().clone(),
+        icon: linux_tray_icon(icon),
+    });
+
+    std::thread::spawn(move || {
+        if let Err(error) = service.run() {
+            eprintln!("Pi Agent Linux tray stopped: {error}");
+        }
+    });
+    Ok(())
+}
+
+#[cfg(not(target_os = "linux"))]
+fn build_platform_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    let show_item = MenuItem::with_id(app, "show", "Show Pi Agent", true, None::<&str>)?;
+    let quit_item = MenuItem::with_id(app, "quit", "Quit Pi Agent", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+    let icon = app
+        .default_window_icon()
+        .cloned()
+        .ok_or_else(|| std::io::Error::other("missing default window icon"))?;
+
+    let _tray = TrayIconBuilder::new()
+        .icon(icon)
+        .menu(&menu)
+        .tooltip("Pi Agent")
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "show" => show_main_window(app),
+            "quit" => quit_application(app),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                show_main_window(tray.app_handle());
+            }
+        })
+        .build(app)?;
+
+    Ok(())
 }
 
 impl DesktopServer {
@@ -739,6 +889,10 @@ fn start_packaged_server(
 #[cfg(all(test, feature = "custom-protocol"))]
 mod tests {
     use super::{child_process_compatible_path, response_has_instance_id};
+    #[cfg(target_os = "linux")]
+    use super::{
+        visible_linux_tray_item, LinuxTray, LINUX_TRAY_QUIT_LABEL, LINUX_TRAY_SHOW_LABEL,
+    };
     use std::path::{Path, PathBuf};
 
     #[cfg(windows)]
@@ -761,6 +915,21 @@ mod tests {
     fn leaves_non_windows_path_unchanged() {
         let path = Path::new("/Applications/Pi Agent.app/Contents/Resources/server");
         assert_eq!(child_process_compatible_path(path), PathBuf::from(path));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_tray_menu_items_publish_visible_labels() {
+        for label in [LINUX_TRAY_SHOW_LABEL, LINUX_TRAY_QUIT_LABEL] {
+            let item = visible_linux_tray_item(label, |_: &mut LinuxTray| {});
+            let ksni::MenuItem::Standard(item) = item else {
+                panic!("Linux tray command must be a standard menu item");
+            };
+
+            assert_eq!(item.label, label);
+            assert!(item.enabled);
+            assert!(item.visible);
+        }
     }
 
     #[test]
@@ -834,34 +1003,10 @@ pub fn run() {
             app.manage(server);
             build_window(app.handle(), url)?;
 
-            let show_item = MenuItem::with_id(app, "show", "Show Pi Agent", true, None::<&str>)?;
-            let quit_item = MenuItem::with_id(app, "quit", "Quit Pi Agent", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
-            let icon = app
-                .default_window_icon()
-                .cloned()
-                .ok_or_else(|| std::io::Error::other("missing default window icon"))?;
-
-            let _tray = TrayIconBuilder::new()
-                .icon(icon)
-                .menu(&menu)
-                .tooltip("Pi Agent")
-                .on_menu_event(|app, event| match event.id.as_ref() {
-                    "show" => show_main_window(app),
-                    "quit" => quit_application(app),
-                    _ => {}
-                })
-                .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click {
-                        button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
-                        ..
-                    } = event
-                    {
-                        show_main_window(tray.app_handle());
-                    }
-                })
-                .build(app)?;
+            #[cfg(target_os = "linux")]
+            build_linux_tray(app)?;
+            #[cfg(not(target_os = "linux"))]
+            build_platform_tray(app)?;
 
             Ok(())
         })
