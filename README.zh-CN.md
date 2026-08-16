@@ -31,9 +31,10 @@
 发布版本可从 [GitHub Releases](https://github.com/abcwyc/pi-agent-desktop/releases) 下载：
 
 - Apple Silicon Mac：下载 `aarch64.dmg`，打开后将 App 拖入 `Applications`。正式 Release 不构建 Intel Mac 版本。
+- Linux x64：下载 `.deb` 包，用发行版自带的包管理器安装。社区还维护了一个 [flatpark.org](https://flatpark.org/apps/io.github.abcwyc.pi-agent-desktop/) 上的 Flatpak 版本——不是官方发布，但 Flatpak 兼容大多数发行版，也会帮你处理更新。
 - Windows x64：下载名称以 `x64-setup.exe` 结尾的安装程序并运行。安装器会在需要时安装 Microsoft WebView2。
 
-正式 Release 支持运行 macOS 11 或更高版本的 Apple Silicon Mac，以及 Windows 10/11 x64。桌面包内包含运行 Pi Agent 所需的 Next.js 服务、Node.js runtime 和当前版本的 Pi SDK，打开 App 时会自动启动本地服务，不需要用户另开终端、安装 Node.js 或单独启动 Web Server。
+正式 Release 支持运行 macOS 11 或更高版本的 Apple Silicon Mac、Windows 10/11 x64，以及使用 WebKitGTK 4.1 和 GTK 3 的 Linux x64 发行版。桌面包内包含运行 Pi Agent 所需的 Next.js 服务、Node.js runtime 和当前版本的 Pi SDK，打开 App 时会自动启动本地服务，不需要用户另开终端、安装 Node.js 或单独启动 Web Server。
 
 > 安装 Pi Agent 后，可以直接使用 App 中的 Pi Agent 功能；但它不会在系统全局安装 `pi` 命令。如果还需要在终端中使用 Pi CLI，请按照 [pi 项目](https://github.com/earendil-works/pi) 的说明单独安装。
 

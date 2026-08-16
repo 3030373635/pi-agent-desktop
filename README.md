@@ -31,7 +31,7 @@ Repository: [abcwyc/pi-agent-desktop](https://github.com/abcwyc/pi-agent-desktop
 Builds are available from [GitHub Releases](https://github.com/abcwyc/pi-agent-desktop/releases):
 
 - Apple Silicon Mac: download the `aarch64.dmg`, open it, and drag the app into `Applications`. Official releases do not build for Intel Macs.
-- Linux x64: download the `.deb` package and install it with your distribution's package manager.
+- Linux x64: download the `.deb` package and install it with your distribution's package manager. A community-maintained Flatpak is also available at [flatpark.org](https://flatpark.org/apps/io.github.abcwyc.pi-agent-desktop/) — not an official release, but Flatpak works across most distributions and handles updates for you.
 
 - Windows x64: download the installer whose name ends in `x64-setup.exe` and run it. The installer pulls in Microsoft WebView2 when it is missing.
 
