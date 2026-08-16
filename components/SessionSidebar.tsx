@@ -209,10 +209,21 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   const [wtNewOpen, setWtNewOpen] = useState(false);
   const [wtNewBranch, setWtNewBranch] = useState("");
   const [wtBranches, setWtBranches] = useState<string[]>([]);
+  // Remote-only branch names (prefix stripped) for the switcher's branch list
+  const [wtRemoteBranches, setWtRemoteBranches] = useState<string[]>([]);
+  // False until the first branch-list response lands, so the "no other
+  // branches" hint is not flashed while the list is still loading.
+  const [wtBranchesLoaded, setWtBranchesLoaded] = useState(false);
   const [wtError, setWtError] = useState<string | null>(null);
   const [wtBusy, setWtBusy] = useState(false);
+  // Branch currently being checked out (name shown dimmed with a spinner)
+  const [wtSwitchingBranch, setWtSwitchingBranch] = useState<string | null>(null);
+  const [wtFetching, setWtFetching] = useState(false);
   const [wtConfirmRemove, setWtConfirmRemove] = useState<{ path: string; force: boolean } | null>(null);
   const [worktreeLoadingCwd, setWorktreeLoadingCwd] = useState<string | null>(null);
+  // Ticked by the poll/focus effect below so the worktree row reflects
+  // branches checked out outside pi (terminal, IDE) without a manual reload.
+  const [wtPollTick, setWtPollTick] = useState(0);
   const wtDropdownRef = useRef<HTMLDivElement>(null);
   const wtNewInputRef = useRef<HTMLInputElement>(null);
   const [sidebarView, setSidebarView] = useState<"chats" | "files">("chats");
@@ -471,7 +482,25 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         }
       });
     return () => { cancelled = true; };
-  }, [selectedCwd, wtRefreshKey, refreshKey]);
+  }, [selectedCwd, wtRefreshKey, refreshKey, wtPollTick]);
+
+  // Keep the worktree/branch display honest when branches are switched outside
+  // pi (terminal, IDE, another client): poll while the tab is visible and
+  // refresh on window focus. `git worktree list` is a cheap local op.
+  useEffect(() => {
+    const bump = () => setWtPollTick((t) => t + 1);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") bump();
+    };
+    const id = setInterval(onVisible, 10_000);
+    window.addEventListener("focus", bump);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("focus", bump);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
 
   // Auto-select cwd and restore session from URL on first load
   useEffect(() => {
@@ -495,19 +524,94 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     }
   }, [allSessions, selectedCwd, initialSessionId, skipInitialProjectSelection, onSelectSession, onInitialRestoreDone]);
 
+  // Branch list for the switcher section (and the new-worktree datalist).
+  // Loaded while the dropdown is open and on every poll tick, so branches
+  // created or fetched elsewhere show up on the next open.
+  const wtProjectRoot = worktreeState?.projectRoot ?? null;
   useEffect(() => {
-    if (!wtNewOpen || !worktreeState) return;
+    if (!wtDropdownOpen || !wtProjectRoot) return;
     let cancelled = false;
-    fetch(`/api/worktrees?cwd=${encodeURIComponent(worktreeState.projectRoot)}&branches=1`)
+    fetch(`/api/worktrees?cwd=${encodeURIComponent(wtProjectRoot)}&branches=1`)
       .then((r) => r.json())
-      .then((d: { branches?: string[] }) => {
-        if (!cancelled) setWtBranches(Array.isArray(d.branches) ? d.branches : []);
+      .then((d: { branches?: string[]; remoteBranches?: string[] }) => {
+        if (cancelled) return;
+        setWtBranchesLoaded(true);
+        setWtBranches(Array.isArray(d.branches) ? d.branches : []);
+        setWtRemoteBranches(Array.isArray(d.remoteBranches) ? d.remoteBranches : []);
       })
       .catch(() => {
-        if (!cancelled) setWtBranches([]);
+        if (!cancelled) {
+          setWtBranches([]);
+          setWtRemoteBranches([]);
+        }
       });
     return () => { cancelled = true; };
-  }, [wtNewOpen, worktreeState]);
+  }, [wtDropdownOpen, wtProjectRoot, wtPollTick]);
+
+  const handleSwitchBranch = useCallback(async (branch: string) => {
+    if (!worktreeState || wtBusy || wtSwitchingBranch) return;
+    // git refuses to check out a branch that another worktree already holds —
+    // jump to that worktree instead; that is what the user means anyway.
+    const holder = worktreeState.worktrees.find((w) => w.branch === branch && w.path !== selectedCwd);
+    if (holder) {
+      setSelectedCwd(holder.path);
+      setWtDropdownOpen(false);
+      setWtError(null);
+      setWtFilter("");
+      return;
+    }
+    const currentBranch = worktreeState.worktrees.find((w) => w.path === selectedCwd)?.branch ?? null;
+    if (currentBranch === branch) return;
+    const cwd = selectedCwd ?? worktreeState.projectRoot;
+    setWtSwitchingBranch(branch);
+    setWtError(null);
+    try {
+      const res = await fetch("/api/worktrees", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cwd, branch }),
+      });
+      const data = await res.json().catch(() => ({})) as { branch?: string; error?: string };
+      if (!res.ok || data.error || !data.branch) {
+        setWtError(data.error ?? `HTTP ${res.status}`);
+        return;
+      }
+      setWtDropdownOpen(false);
+      setWtRefreshKey((k) => k + 1);
+      // The checkout's contents just changed wholesale — refresh the explorer
+      // and the session rows (worktreeBranch subtitles) alongside the header.
+      setExplorerKey((k) => k + 1);
+      void loadSessions(false);
+    } catch (e) {
+      setWtError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setWtSwitchingBranch(null);
+    }
+  }, [worktreeState, wtBusy, wtSwitchingBranch, selectedCwd, loadSessions]);
+
+  const handleFetchBranches = useCallback(async () => {
+    if (!worktreeState || wtFetching) return;
+    setWtFetching(true);
+    setWtError(null);
+    try {
+      const res = await fetch("/api/worktrees/fetch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cwd: worktreeState.projectRoot }),
+      });
+      const data = await res.json().catch(() => ({})) as { branches?: string[]; remoteBranches?: string[]; error?: string };
+      if (!res.ok || data.error) {
+        setWtError(data.error ?? `HTTP ${res.status}`);
+        return;
+      }
+      setWtBranches(Array.isArray(data.branches) ? data.branches : []);
+      setWtRemoteBranches(Array.isArray(data.remoteBranches) ? data.remoteBranches : []);
+    } catch (e) {
+      setWtError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setWtFetching(false);
+    }
+  }, [worktreeState, wtFetching]);
 
   const handleCreateWorktree = useCallback(async () => {
     const branch = wtNewBranch.trim();
@@ -732,7 +836,12 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             <div ref={wtDropdownRef} style={{ position: "relative" }}>
               <button
                 className="sidebar-header-row"
-                onClick={() => setWtDropdownOpen((v) => !v)}
+                onClick={() => {
+                  setWtDropdownOpen((v) => !v);
+                  // Opening should show the branch state as of now, not as of
+                  // the last poll — the branch may have been switched outside pi.
+                  if (!wtDropdownOpen) setWtRefreshKey((k) => k + 1);
+                }}
                  title={currentWt ? t("sidebar.switchWorktreeTitle", { path: currentWt.path }) : t("sidebar.switchWorktree")}
                 style={{ background: wtDropdownOpen ? "var(--bg-hover)" : undefined }}
               >
@@ -918,6 +1027,101 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                       <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--text-dim)" }}>{t("sidebar.noMatchingWorktrees")}</div>
                     )}
                   </div>
+
+                  {/* Branches of the current checkout — switch in place without
+                      creating a worktree. Hidden while the new-worktree form is
+                      open so the dropdown stays focused on one task. */}
+                  {!wtNewOpen && (() => {
+                    const currentBranch = currentWt?.branch ?? null;
+                    const branchRows = [
+                      ...wtBranches.map((name) => ({ name, remote: false })),
+                      ...wtRemoteBranches.map((name) => ({ name, remote: true })),
+                    ];
+                    return (
+                      <div style={{ borderTop: "1px solid var(--border)" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "5px 8px 3px" }}>
+                          <span style={{ flex: 1, fontSize: 10, fontWeight: 600, letterSpacing: "0.03em", color: "var(--text-dim)" }}>{t("sidebar.switchBranch")}</span>
+                          <button
+                            type="button"
+                            onClick={() => { void handleFetchBranches(); }}
+                            disabled={wtFetching}
+                            title={t("sidebar.fetchBranchesTitle")}
+                            style={{
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              width: 22, height: 20, padding: 0,
+                              background: "none", border: "none",
+                              color: wtFetching ? "var(--accent)" : "var(--text-dim)",
+                              cursor: "pointer", borderRadius: 4, flexShrink: 0,
+                            }}
+                          >
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={wtFetching ? { animation: "spin 0.9s linear infinite" } : undefined}>
+                              <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                              <polyline points="21 3 21 9 15 9" />
+                            </svg>
+                          </button>
+                        </div>
+                        <div style={{ maxHeight: "min(28vh, 200px)", overflowY: "auto" }}>
+                          {wtBranchesLoaded && branchRows.length === 0 && (
+                            <div style={{ padding: "3px 10px 8px", fontSize: 11, color: "var(--text-dim)" }}>{t("sidebar.noOtherBranches")}</div>
+                          )}
+                          {branchRows.map(({ name, remote }) => {
+                            const isCurrent = name === currentBranch;
+                            const holder = worktreeState.worktrees.find((w) => w.branch === name && w.path !== selectedCwd);
+                            const switching = wtSwitchingBranch === name;
+                            return (
+                              <button
+                                key={name}
+                                onClick={() => { void handleSwitchBranch(name); }}
+                                disabled={wtSwitchingBranch !== null}
+                                title={
+                                  holder ? t("sidebar.branchInWorktreeTitle", { branch: name })
+                                    : remote ? t("sidebar.branchRemoteTitle")
+                                      : t("sidebar.switchBranchTitle", { branch: name })
+                                }
+                                style={{
+                                  display: "flex", alignItems: "center", gap: 7,
+                                  width: "100%", padding: "6px 10px",
+                                  background: isCurrent ? "var(--bg-hover)" : "none",
+                                  border: "none",
+                                  color: isCurrent ? "var(--text)" : "var(--text-muted)",
+                                  cursor: "pointer", textAlign: "left",
+                                  fontSize: 11, fontFamily: "var(--font-mono)",
+                                  opacity: switching ? 0.55 : 1,
+                                }}
+                              >
+                                {isCurrent ? (
+                                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                    <polyline points="1.5 5 4 7.5 8.5 2.5" />
+                                  </svg>
+                                ) : (
+                                  <span style={{ width: 10, flexShrink: 0 }} />
+                                )}
+                                <PathLabel text={name} style={{ flex: 1 }} />
+                                {holder && (
+                                  <span title={holder.path} style={{ flexShrink: 0, display: "flex", alignItems: "center", color: "var(--text-dim)" }}>
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <line x1="6" y1="3" x2="6" y2="15" />
+                                      <circle cx="18" cy="6" r="3" />
+                                      <circle cx="6" cy="18" r="3" />
+                                      <path d="M18 9a9 9 0 0 1-9 9" />
+                                    </svg>
+                                  </span>
+                                )}
+                                {remote && !holder && (
+                                  <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 9.5 }}>{t("sidebar.remoteBranchTag")}</span>
+                                )}
+                                {switching && (
+                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0, animation: "spin 0.8s linear infinite" }}>
+                                    <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                                  </svg>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {!wtNewOpen ? (
                     <button
