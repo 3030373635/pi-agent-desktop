@@ -74,3 +74,10 @@ export function isFilePathAllowed(target: string, allowedRoots: Set<string>): bo
 export function isExistingFilePathAllowed(target: string, allowedRoots: Set<string>): boolean {
   return isExistingPathWithinRoots(target, allowedRoots);
 }
+
+/** Whether `target` is a session cwd / project root / explicitly allowed dir
+ *  that currently exists — the gate shared by /api/files and /api/worktrees. */
+export async function isCwdAllowed(target: string): Promise<boolean> {
+  const allowedRoots = await getAllowedFileRoots();
+  return isFilePathAllowed(target, allowedRoots) && isExistingFilePathAllowed(target, allowedRoots);
+}

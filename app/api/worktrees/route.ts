@@ -10,16 +10,12 @@ import {
   resolveProject,
   switchBranch,
 } from "@/lib/worktree";
-import { allowFileRoot, getAllowedFileRoots, isExistingFilePathAllowed, isFilePathAllowed } from "@/lib/file-access";
+import { allowFileRoot, isCwdAllowed } from "@/lib/file-access";
 
 /** Same gate as /api/files: only session cwds / project roots / explicitly
  *  allowed dirs may be inspected or mutated through this endpoint. */
 async function checkCwdAllowed(cwd: string): Promise<NextResponse | null> {
-  const allowedRoots = await getAllowedFileRoots();
-  if (!isFilePathAllowed(cwd, allowedRoots) || !isExistingFilePathAllowed(cwd, allowedRoots)) {
-    return NextResponse.json({ error: "Access denied" }, { status: 403 });
-  }
-  return null;
+  return (await isCwdAllowed(cwd)) ? null : NextResponse.json({ error: "Access denied" }, { status: 403 });
 }
 
 // GET /api/worktrees?cwd=  →  { projectRoot, isGit, isTopLevel, worktrees }

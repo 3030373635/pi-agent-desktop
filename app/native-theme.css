@@ -2092,6 +2092,11 @@ html.dark .sidebar-view-switcher-thumb {
   padding: 6px 10px;
   text-align: left;
   vertical-align: top;
+  /* `anywhere` (not `break-word`) also shrinks min-content sizing: without it
+     one column of long unbreakable tokens (paths, identifiers) claims its full
+     width and starves breakable columns — CJK text then collapses to a single
+     character per line no matter how wide the window is. */
+  overflow-wrap: anywhere;
 }
 .markdown-body tr:last-child td { border-bottom: 0; }
 .markdown-body th {

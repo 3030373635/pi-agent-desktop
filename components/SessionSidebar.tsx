@@ -550,11 +550,20 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     return () => { cancelled = true; };
   }, [wtDropdownOpen, wtProjectRoot, wtPollTick]);
 
+  // The worktree matching selectedCwd, falling back to the main worktree when
+  // worktreeState hasn't caught up to selectedCwd yet (e.g. right after
+  // creating/switching to a worktree, before the next refresh lands) — same
+  // fallback the switcher dropdown itself uses to stay correct through that
+  // race, instead of comparing raw paths that may not (yet) match anything.
+  const currentWt = worktreeState?.worktrees.find((w) => w.path === selectedCwd)
+    ?? worktreeState?.worktrees.find((w) => w.isMain)
+    ?? null;
+
   const handleSwitchBranch = useCallback(async (branch: string) => {
     if (!worktreeState || wtBusy || wtSwitchingBranch) return;
     // git refuses to check out a branch that another worktree already holds —
     // jump to that worktree instead; that is what the user means anyway.
-    const holder = worktreeState.worktrees.find((w) => w.branch === branch && w.path !== selectedCwd);
+    const holder = worktreeState.worktrees.find((w) => w.branch === branch && w.path !== currentWt?.path);
     if (holder) {
       setSelectedCwd(holder.path);
       setWtDropdownOpen(false);
@@ -562,9 +571,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       setWtFilter("");
       return;
     }
-    const currentBranch = worktreeState.worktrees.find((w) => w.path === selectedCwd)?.branch ?? null;
-    if (currentBranch === branch) return;
-    const cwd = selectedCwd ?? worktreeState.projectRoot;
+    if (currentWt?.branch === branch) return;
+    const cwd = currentWt?.path ?? selectedCwd ?? worktreeState.projectRoot;
     setWtSwitchingBranch(branch);
     setWtError(null);
     try {
@@ -589,7 +597,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
     } finally {
       setWtSwitchingBranch(null);
     }
-  }, [worktreeState, wtBusy, wtSwitchingBranch, selectedCwd, loadSessions]);
+  }, [worktreeState, wtBusy, wtSwitchingBranch, currentWt, selectedCwd, loadSessions]);
 
   const handleFetchBranches = useCallback(async () => {
     if (!worktreeState || wtFetching) return;
@@ -828,8 +836,6 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
             project share the same list anyway. */}
         {showWorktreeSwitcher && (() => {
           if (!worktreeState) return null;
-          const currentWt = worktreeState.worktrees.find((w) => w.path === selectedCwd)
-            ?? worktreeState.worktrees.find((w) => w.isMain);
           const showWtFilter = worktreeState.worktrees.length >= 8;
           const visibleWorktrees = showWtFilter && wtFilter.trim()
             ? worktreeState.worktrees.filter((w) =>

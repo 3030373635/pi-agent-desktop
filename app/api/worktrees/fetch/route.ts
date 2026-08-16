@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { existsSync } from "fs";
 import { fetchRemote, listLocalBranches, listRemoteBranches, partitionBranchList, resolveProject } from "@/lib/worktree";
-import { getAllowedFileRoots, isExistingFilePathAllowed, isFilePathAllowed } from "@/lib/file-access";
+import { isCwdAllowed } from "@/lib/file-access";
 
 // POST /api/worktrees/fetch  body: { cwd }  →  { branches, remoteBranches }
 // Runs `git fetch --prune` and returns the fresh branch lists so the switcher
@@ -12,8 +12,7 @@ export async function POST(req: Request) {
     if (!body.cwd || typeof body.cwd !== "string") {
       return NextResponse.json({ error: "cwd is required" }, { status: 400 });
     }
-    const allowedRoots = await getAllowedFileRoots();
-    if (!isFilePathAllowed(body.cwd, allowedRoots) || !isExistingFilePathAllowed(body.cwd, allowedRoots)) {
+    if (!(await isCwdAllowed(body.cwd))) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
