@@ -356,7 +356,15 @@ export class AgentSessionWrapper {
   }
 
   private emit(event: AgentEvent): void {
-    for (const l of this.listeners) l(event);
+    for (const listener of this.listeners) {
+      try {
+        listener(event);
+      } catch (error) {
+        // A disconnected SSE client must not prevent the remaining listeners
+        // or the running-session notification path from receiving this event.
+        console.error("Agent session event listener failed:", error);
+      }
+    }
   }
 
   private resetIdleTimer(): void {

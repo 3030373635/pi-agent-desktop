@@ -20,3 +20,12 @@ test("SSE routes reuse one TextEncoder per stream", () => {
     assert.match(source, /controller\.enqueue\(encoder\.encode\(":\\n\\n"\)\)/);
   }
 });
+
+test("SSE routes clean up safely when the response consumer cancels", () => {
+  for (const source of [agentEventsSource, runningEventsSource]) {
+    assert.match(source, /let dispose = \(\) => \{\}/);
+    assert.match(source, /if \(closed\) return/);
+    assert.match(source, /try \{ controller\.close\(\); \} catch/);
+    assert.match(source, /cancel\(\) \{\s*dispose\(\);/);
+  }
+});

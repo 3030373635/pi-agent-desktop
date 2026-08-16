@@ -50,6 +50,8 @@ test("keeps the session event stream open through the idle grace window", () => 
   assert.match(promptDoneSource, /scheduleEventStreamClose\(sid\)/);
   assert.match(sendSource, /if \(promptRequestStarted && sentSessionId\) \{[\s\S]*?waitForPromptSettlement/);
   assert.match(sendSource, /if \(promptRequestStarted && sentSessionId\) \{[\s\S]*?return;[\s\S]*?\}[\s\S]*?closeEvents\(\)/);
+  assert.match(sendSource, /opts\.chatInputRef\?\.current\?\.replaceMessage\(userMsg\)/);
+  assert.doesNotMatch(sendSource, /if \(e instanceof EventStreamConnectionError\)/);
 });
 
 test("reuses an open event stream and hides an empty agent phase", () => {

@@ -1,7 +1,7 @@
 use std::{
     env,
     fs::{self, OpenOptions},
-    io,
+    io::{self, Read, Write},
     net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
@@ -26,6 +26,8 @@ use tauri::{
 
 const WINDOW_LABEL: &str = "main";
 const DESKTOP_API_TOKEN_ENV: &str = "PI_DESKTOP_API_TOKEN";
+const DESKTOP_INSTANCE_ID_ENV: &str = "PI_DESKTOP_INSTANCE_ID";
+const DESKTOP_INSTANCE_ID_HEADER: &str = "x-pi-desktop-instance";
 #[cfg(not(feature = "custom-protocol"))]
 const DEV_SERVER_URL: &str = "http://127.0.0.1:30141";
 /// Preferred localhost port for the packaged Next server. Keeping this stable
@@ -49,17 +51,21 @@ struct CloseQuits(Mutex<bool>);
 
 struct DesktopApiToken(String);
 
-fn load_or_generate_desktop_api_token() -> Result<String, String> {
-    if let Ok(token) = env::var(DESKTOP_API_TOKEN_ENV) {
-        let token = token.trim();
-        if token.len() >= 32 {
-            return Ok(token.to_string());
-        }
-    }
-
+fn generate_random_hex() -> Result<String, String> {
     let mut bytes = [0_u8; 32];
     getrandom::fill(&mut bytes).map_err(|error| error.to_string())?;
     Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
+}
+
+fn load_or_generate_desktop_api_token() -> Result<String, String> {
+    if let Ok(value) = env::var(DESKTOP_API_TOKEN_ENV) {
+        let value = value.trim();
+        if value.len() >= 32 {
+            return Ok(value.to_string());
+        }
+    }
+
+    generate_random_hex()
 }
 
 #[tauri::command]
@@ -454,9 +460,8 @@ fn show_main_window_cmd(app: AppHandle) -> Result<(), String> {
 /// user's light/dark choice even when the local server port changes.
 #[tauri::command]
 fn set_ui_theme(app: AppHandle, theme: String) -> Result<(), String> {
-    let theme = normalize_theme(&theme).ok_or_else(|| {
-        "theme must be \"light\" or \"dark\"".to_string()
-    })?;
+    let theme =
+        normalize_theme(&theme).ok_or_else(|| "theme must be \"light\" or \"dark\"".to_string())?;
     write_ui_prefs_theme(&app, theme)?;
     apply_window_theme(&app, theme);
     Ok(())
@@ -708,18 +713,89 @@ fn choose_port(app: &AppHandle) -> io::Result<u16> {
 }
 
 #[cfg(feature = "custom-protocol")]
-fn wait_for_server(child: &mut Child, address: SocketAddr, log_path: &Path) -> io::Result<()> {
+fn response_has_instance_id(response: &[u8], expected_instance_id: &str) -> bool {
+    let Ok(response) = std::str::from_utf8(response) else {
+        return false;
+    };
+    let Some((headers, _)) = response.split_once("\r\n\r\n") else {
+        return false;
+    };
+    let mut lines = headers.lines();
+    let Some(status) = lines.next() else {
+        return false;
+    };
+    if !(status.starts_with("HTTP/1.1 204 ") || status.starts_with("HTTP/1.0 204 ")) {
+        return false;
+    }
+
+    lines.any(|line| {
+        line.split_once(':').is_some_and(|(name, value)| {
+            name.eq_ignore_ascii_case(DESKTOP_INSTANCE_ID_HEADER)
+                && value.trim() == expected_instance_id
+        })
+    })
+}
+
+#[cfg(feature = "custom-protocol")]
+fn server_identity_matches(address: SocketAddr, expected_instance_id: &str) -> bool {
+    let Ok(mut stream) = TcpStream::connect_timeout(&address, Duration::from_millis(200)) else {
+        return false;
+    };
+    let timeout = Some(Duration::from_millis(500));
+    if stream.set_read_timeout(timeout).is_err() || stream.set_write_timeout(timeout).is_err() {
+        return false;
+    }
+
+    let request = format!(
+        "GET /api/desktop/identity HTTP/1.1\r\nHost: {address}\r\nConnection: close\r\n\r\n"
+    );
+    if stream.write_all(request.as_bytes()).is_err() {
+        return false;
+    }
+
+    let mut response = Vec::with_capacity(1024);
+    let mut chunk = [0_u8; 512];
+    while response.len() < 8 * 1024 {
+        let Ok(read) = stream.read(&mut chunk) else {
+            return false;
+        };
+        if read == 0 {
+            break;
+        }
+        response.extend_from_slice(&chunk[..read]);
+        if response.windows(4).any(|window| window == b"\r\n\r\n") {
+            break;
+        }
+    }
+
+    response_has_instance_id(&response, expected_instance_id)
+}
+
+#[cfg(feature = "custom-protocol")]
+fn wait_for_server(
+    child: &mut Child,
+    address: SocketAddr,
+    expected_instance_id: &str,
+    log_path: &Path,
+) -> io::Result<()> {
     let deadline = Instant::now() + SERVER_START_TIMEOUT;
     while Instant::now() < deadline {
-        if TcpStream::connect_timeout(&address, Duration::from_millis(200)).is_ok() {
-            return Ok(());
-        }
-
         if let Some(status) = child.try_wait()? {
             return Err(io::Error::other(format!(
                 "Pi Agent server exited early with {status}; see {}",
                 log_path.display()
             )));
+        }
+        if server_identity_matches(address, expected_instance_id) {
+            // Re-check after the HTTP handshake. A losing child can exit with
+            // EADDRINUSE while another process is answering on the same port.
+            if let Some(status) = child.try_wait()? {
+                return Err(io::Error::other(format!(
+                    "Pi Agent server exited during startup with {status}; see {}",
+                    log_path.display()
+                )));
+            }
+            return Ok(());
         }
         thread::sleep(Duration::from_millis(100));
     }
@@ -738,6 +814,7 @@ fn wait_for_server(child: &mut Child, address: SocketAddr, log_path: &Path) -> i
 fn start_packaged_server(
     app: &tauri::AppHandle,
     desktop_api_token: &str,
+    desktop_instance_id: &str,
 ) -> Result<(Url, DesktopServer), Box<dyn std::error::Error>> {
     let resource_dir = child_process_compatible_path(&app.path().resource_dir()?);
     let node_path = bundled_node_path(&resource_dir);
@@ -782,6 +859,7 @@ fn start_packaged_server(
         .env("NEXT_TELEMETRY_DISABLED", "1")
         .env("PI_WEB_PARENT_PID", std::process::id().to_string())
         .env(DESKTOP_API_TOKEN_ENV, desktop_api_token)
+        .env(DESKTOP_INSTANCE_ID_ENV, desktop_instance_id)
         .stdin(Stdio::null())
         .stdout(Stdio::from(stdout))
         .stderr(Stdio::from(stderr));
@@ -798,7 +876,7 @@ fn start_packaged_server(
     let mut child = command.spawn()?;
 
     let address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
-    if let Err(error) = wait_for_server(&mut child, address, &log_path) {
+    if let Err(error) = wait_for_server(&mut child, address, desktop_instance_id, &log_path) {
         let server = DesktopServer::running(child);
         server.stop();
         return Err(error.into());
@@ -810,7 +888,7 @@ fn start_packaged_server(
 
 #[cfg(all(test, feature = "custom-protocol"))]
 mod tests {
-    use super::child_process_compatible_path;
+    use super::{child_process_compatible_path, response_has_instance_id};
     #[cfg(target_os = "linux")]
     use super::{
         visible_linux_tray_item, LinuxTray, LINUX_TRAY_QUIT_LABEL, LINUX_TRAY_SHOW_LABEL,
@@ -853,6 +931,18 @@ mod tests {
             assert!(item.visible);
         }
     }
+
+    #[test]
+    fn packaged_server_handshake_requires_the_expected_instance_header() {
+        let expected = "instance-123";
+        let matching = b"HTTP/1.1 204 No Content\r\nx-pi-desktop-instance: instance-123\r\n\r\n";
+        let wrong = b"HTTP/1.1 204 No Content\r\nx-pi-desktop-instance: other\r\n\r\n";
+        let body_spoof = b"HTTP/1.1 204 No Content\r\nContent-Type: text/plain\r\n\r\ninstance-123";
+
+        assert!(response_has_instance_id(matching, expected));
+        assert!(!response_has_instance_id(wrong, expected));
+        assert!(!response_has_instance_id(body_spoof, expected));
+    }
 }
 
 #[cfg(not(feature = "custom-protocol"))]
@@ -866,8 +956,12 @@ fn start_development_server(
 pub fn run() {
     let desktop_api_token = load_or_generate_desktop_api_token()
         .expect("failed to create desktop API authorization token");
+    let desktop_instance_id =
+        generate_random_hex().expect("failed to create desktop server instance id");
     #[cfg(feature = "custom-protocol")]
     let server_api_token = desktop_api_token.clone();
+    #[cfg(feature = "custom-protocol")]
+    let server_instance_id = desktop_instance_id.clone();
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
@@ -901,7 +995,8 @@ pub fn run() {
             }
 
             #[cfg(feature = "custom-protocol")]
-            let (url, server) = start_packaged_server(app.handle(), &server_api_token)?;
+            let (url, server) =
+                start_packaged_server(app.handle(), &server_api_token, &server_instance_id)?;
             #[cfg(not(feature = "custom-protocol"))]
             let (url, server) = start_development_server(app.handle())?;
 

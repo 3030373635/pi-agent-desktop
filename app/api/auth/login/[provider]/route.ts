@@ -50,7 +50,15 @@ export async function GET(
 
   const encoder = new TextEncoder();
   const send = (controller: ReadableStreamDefaultController, data: unknown) => {
-    controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+    try {
+      controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const close = (controller: ReadableStreamDefaultController) => {
+    try { controller.close(); } catch { /* already closed/cancelled */ }
   };
 
   // AbortController propagates client disconnect into ModelRuntime.login().
@@ -62,7 +70,7 @@ export async function GET(
       const modelRuntime = await ModelRuntime.create();
       if (!modelRuntime.getProvider(provider)?.auth.oauth) {
         send(controller, { type: "error", message: `Unknown provider: ${provider}` });
-        controller.close();
+        close(controller);
         return;
       }
 
@@ -174,7 +182,7 @@ export async function GET(
         }
       } finally {
         cleanup();
-        controller.close();
+        close(controller);
       }
     },
     cancel() {

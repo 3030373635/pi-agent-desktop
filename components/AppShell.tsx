@@ -46,6 +46,7 @@ import {
   RIGHT_PANEL_MAX_WIDTH,
   RIGHT_PANEL_MIN_WIDTH,
   SIDEBAR_DEFAULT_WIDTH,
+  SPLIT_PANEL_MIN_WIDTH,
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
 } from "@/lib/panel-layout";
@@ -159,6 +160,20 @@ export function AppShell() {
   useEffect(() => {
     if (isMobile) setSidebarOpen(false);
   }, [isMobile]);
+  // Close right panel when viewport is too narrow for split-panel layout.
+  // Uses matchMedia's change event (not just the rightPanelOpen dependency)
+  // so it also fires when an already-open panel's viewport is resized narrow,
+  // not only when the panel itself is opened.
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mql = window.matchMedia(`(max-width: ${SPLIT_PANEL_MIN_WIDTH - 1}px)`);
+    const checkWidth = () => {
+      if (mql.matches) setRightPanelOpen(false);
+    };
+    checkWidth();
+    mql.addEventListener("change", checkWidth);
+    return () => mql.removeEventListener("change", checkWidth);
+  }, []);
   useEffect(() => {
     setMobileSidebarReady(true);
   }, []);

@@ -25,40 +25,57 @@ export async function GET(
     }
   }
 
+  let dispose = () => {};
   const stream = new ReadableStream({
     start(controller) {
       const encoder = new TextEncoder();
-      const encode = (data: unknown) => {
-        const text = `data: ${JSON.stringify(data)}\n\n`;
-        controller.enqueue(encoder.encode(text));
+      let closed = false;
+      let unsubscribe = () => {};
+      let heartbeat: ReturnType<typeof setInterval> | null = null;
+      const cleanup = () => {
+        if (closed) return;
+        closed = true;
+        if (heartbeat) clearInterval(heartbeat);
+        unsubscribe();
+        req.signal?.removeEventListener("abort", cleanup);
+        try { controller.close(); } catch { /* already closed/cancelled */ }
       };
+      const encode = (data: unknown) => {
+        if (closed) return false;
+        const text = `data: ${JSON.stringify(data)}\n\n`;
+        try {
+          controller.enqueue(encoder.encode(text));
+          return true;
+        } catch {
+          cleanup();
+          return false;
+        }
+      };
+      dispose = cleanup;
+      req.signal?.addEventListener("abort", cleanup);
 
       // Send initial connected event
       encode({ type: "connected", sessionId: id });
 
-      const unsubscribe = session.onEvent((event) => {
-        const clientEvent = projectAgentEventForClient(event);
-        if (clientEvent) encode(clientEvent);
-      });
+      if (!closed) {
+        const nextUnsubscribe = session.onEvent((event) => {
+          const clientEvent = projectAgentEventForClient(event);
+          if (clientEvent) encode(clientEvent);
+        });
+        if (closed) nextUnsubscribe();
+        else unsubscribe = nextUnsubscribe;
+      }
 
       // Heartbeat every 30s to prevent server/proxy timeout (Next.js default ~120-150s)
-      const heartbeat = setInterval(() => {
-        try {
-          controller.enqueue(encoder.encode(":\n\n"));
-        } catch {
-          // controller already closed
-        }
+      if (!closed) heartbeat = setInterval(() => {
+        if (closed) return;
+        try { controller.enqueue(encoder.encode(":\n\n")); }
+        catch { cleanup(); }
       }, 30_000);
 
-      // Cleanup when client disconnects
-      const cleanup = () => {
-        clearInterval(heartbeat);
-        unsubscribe();
-        controller.close();
-      };
-
-      // Detect client disconnect via abort signal
-      req.signal?.addEventListener("abort", cleanup);
+    },
+    cancel() {
+      dispose();
     },
   });
 
