@@ -20,6 +20,11 @@ export async function toggleMaximizeWindow(): Promise<void> {
   await getCurrentWindow().toggleMaximize();
 }
 
+export async function startDraggingWindow(): Promise<void> {
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  await getCurrentWindow().startDragging();
+}
+
 export async function closeWindow(): Promise<void> {
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
   await getCurrentWindow().close();

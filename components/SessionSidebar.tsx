@@ -12,6 +12,7 @@ import { notifyDesktop } from "@/lib/desktop-notify";
 import { isTauriDesktop } from "@/lib/desktop-updater";
 import { revealItemInDirNative } from "@/lib/desktop-native";
 import { getDesktopPlatform, type DesktopPlatform } from "@/lib/desktop-window";
+import { useWindowDrag } from "./desktop";
 
 function ToolbarIconButton({
   onClick,
@@ -202,6 +203,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
   useEffect(() => {
     if (isTauriDesktop()) setDesktopPlatform(getDesktopPlatform());
   }, []);
+  const windowDrag = useWindowDrag();
   const [wtFilter, setWtFilter] = useState("");
   // Worktree switcher state
   const [worktreeState, setWorktreeState] = useState<WorktreeState | null>(null);
@@ -772,6 +774,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
       <div
         className={`session-sidebar-header${desktopPlatform === "macos" ? " session-sidebar-header--mac-inset" : ""}`}
         data-tauri-drag-region={desktopPlatform ? true : undefined}
+        {...windowDrag}
         style={{
           padding: "12px 10px 10px",
           borderBottom: "1px solid var(--border)",
@@ -803,7 +806,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
         </button>
 
         {/* Row 2: current folder — flat row */}
-        <div className="sidebar-folder-row" style={{ display: "flex", alignItems: "center", gap: 2 }}>
+        <div className="sidebar-folder-row" data-no-drag style={{ display: "flex", alignItems: "center", gap: 2 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <ProjectPicker
               recentProjects={recentProjects}
@@ -833,7 +836,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                 (w.branch ?? displayCwd(w.path, homeDir)).toLowerCase().includes(wtFilter.trim().toLowerCase()))
             : worktreeState.worktrees;
           return (
-            <div ref={wtDropdownRef} style={{ position: "relative" }}>
+            <div ref={wtDropdownRef} data-no-drag style={{ position: "relative" }}>
               <button
                 className="sidebar-header-row"
                 onClick={() => {

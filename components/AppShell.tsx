@@ -37,7 +37,7 @@ import {
   workspaceFileTabsMatchContext,
   type PersistedWorkspace,
 } from "@/lib/workspace-state";
-import { WindowControls, useDesktopChrome } from "./desktop";
+import { WindowControls, useDesktopChrome, useWindowDrag } from "./desktop";
 import {
   getDefaultRightPanelWidth,
   getRightPanelMaxWidth,
@@ -102,6 +102,7 @@ export function AppShell() {
   // and only needs the top bar inset for them; other platforms get the buttons
   // from <WindowControls />, which renders nothing in a browser build.
   const desktopChrome = useDesktopChrome();
+  const windowDrag = useWindowDrag();
   const sidebarWidthRef = useRef(SIDEBAR_DEFAULT_WIDTH);
   const rightPanelWidthRef = useRef(RIGHT_PANEL_FALLBACK_WIDTH);
   const getResponsiveRightPanelWidth = useCallback(
@@ -1069,6 +1070,7 @@ export function AppShell() {
           ref={topBarRef}
           className={`app-topbar${desktopChrome.isMacOS && (!sidebarOpen || isMobile) ? " app-topbar--mac-inset" : ""}`}
           {...desktopChrome.dragRegionProps}
+          {...windowDrag}
           style={{ display: "flex", alignItems: "center", flexShrink: 0, borderBottom: "1px solid var(--border)", height: "calc(36px + env(safe-area-inset-top))", paddingTop: "env(safe-area-inset-top)", background: "var(--bg-panel)" }}
         >
           {/* Sidebar reopen — only while the sidebar (and its own toggle) is hidden */}
