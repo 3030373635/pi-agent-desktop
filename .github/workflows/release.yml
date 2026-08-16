@@ -103,37 +103,43 @@ jobs:
           tagName: v__VERSION__
           releaseName: pi-agent-desktop v__VERSION__
           releaseBody: |
-            ## Pi Agent Desktop 0.3.0
+            ## Pi Agent Desktop 0.3.1
 
-            This release adds Linux desktop packages and makes desktop recovery after sleep substantially more reliable.
+            This release fixes the Linux system tray menu, adds live worktree branch switching in the sidebar, and cleans up several window/layout glitches.
 
             ### Highlights
 
-            - **Linux x64 support** — Releases now include a Debian `.deb` package with the bundled Node.js runtime and the GTK/WebKitGTK integration required by the Tauri shell.
-            - **Reliable reconnect after sleep** — Overlapping wake-up probes can no longer leave the app falsely offline, and the Reconnect action can refresh stale connections or relaunch a stopped packaged server.
-            - **Three-platform release pipeline** — Signed releases now build Apple Silicon macOS, Linux x64, and Windows x64 packages before publication.
+            - **Fixed Linux tray menu** — Replaced Tauri's libappindicator bridge with a direct ksni StatusNotifierItem service; the tray's Show/Quit entries were clickable but blank under GNOME and now render correctly.
+            - **Live worktree branch switching** — The sidebar worktree row now polls for branch changes, refreshes on window focus, and lets you check out or fetch branches in place instead of only reflecting the branch active when the agent last ran.
 
             ### Fixes and improvements
 
-            - Cancelled superseded health probes so stale failures cannot overwrite a newer successful response.
-            - Added Linux packaging checks, platform tests, documentation, and native window behavior.
-            - Updated GitHub Actions to the Node.js 24-compatible action releases.
+            - Fixed the chat scrollbar fading out behind the bottom composer instead of reaching the bottom of the window.
+            - Fixed frameless-window drag regions not working when triggered from nested child elements.
+            - Made the right panel auto-close reactively when the window is resized to a narrow viewport, not just on initial layout.
+            - Documented the community Flatpak build in the Linux install instructions.
             - Kept bundled Pi at 0.84.1 and pi-web at 0.8.7.
-            - Verified the full test suite, TypeScript checks, and lint before packaging.
 
             Bundled components: pi 0.84.1, pi-web 0.8.7.
 
             ---
 
-            ## Pi Agent Desktop 0.3.0
+            ## Pi Agent Desktop 0.3.1
 
-            本次发布新增 Linux 桌面安装包，并显著提升电脑睡眠唤醒后的桌面连接恢复能力。
+            本次发布修复了 Linux 托盘菜单问题，为侧边栏加入了实时的 worktree 分支切换功能，并修复了若干窗口/布局相关的小问题。
 
             ### 主要更新
 
-            - **支持 Linux x64** —— Release 现在提供 Debian `.deb` 安装包，内置 Node.js runtime，并包含 Tauri 桌面壳所需的 GTK/WebKitGTK 集成。
-            - **睡眠唤醒后可靠重连** —— 并发唤醒探测不会再让应用错误地停留在离线状态；“重新连接”可刷新失效连接，或重新启动已停止的内置服务。
-            - **三平台发布流水线** —— 正式发布前会依次构建 Apple Silicon macOS、Linux x64 和 Windows x64 安装包。
+            - **修复 Linux 托盘菜单** —— 用直接的 ksni StatusNotifierItem 服务替换了 Tauri 的 libappindicator 桥接；此前在 GNOME 下托盘的“显示/退出”菜单项可点击但不显示文字，现已修复。
+            - **实时 worktree 分支切换** —— 侧边栏的 worktree 行现在会轮询分支变化、在窗口获得焦点时刷新，并支持直接在原地检出或拉取分支，不再只能反映 agent 上次运行时所在的分支。
+
+            ### 修复与改进
+
+            - 修复聊天窗口滚动条在底部输入框区域被遮挡淡化、无法滑动到底的问题。
+            - 修复无边框窗口拖拽区域在从嵌套子元素触发时不生效的问题。
+            - 让右侧面板在窗口缩小到较窄宽度时能响应式自动收起，而不仅仅在初次布局时判断。
+            - 在 Linux 安装说明中补充了社区维护的 Flatpak 构建方式。
+            - 内置 Pi 保持在 0.84.1，pi-web 保持在 0.8.7。
 
             ### 修复与改进
 
