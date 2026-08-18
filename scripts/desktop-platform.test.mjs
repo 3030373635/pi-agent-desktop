@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { ESLint } from "eslint";
 import { desktopTargetTriple } from "./desktop-platform.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -60,4 +61,22 @@ test("Linux packaging includes the Playwright CLI, browser, and bundled Node run
   assert.deepEqual(windowsConfig.bundle.targets, ["nsis"]);
   assert.ok(windowsConfig.bundle.icon.includes("icons/icon.ico"));
   assert.ok(windowsConfig.bundle.resources.includes("resources/node"));
+});
+
+test("lint ignores generated Playwright browser resources", async () => {
+  const eslint = new ESLint({ cwd: root });
+  const generatedBrowserScript = join(
+    root,
+    "src-tauri",
+    "resources",
+    "playwright-browsers",
+    "chromium-test",
+    "main.js",
+  );
+
+  assert.equal(
+    await eslint.isPathIgnored(generatedBrowserScript),
+    true,
+    "downloaded Chromium files must not be treated as project source",
+  );
 });

@@ -5,6 +5,7 @@ const eslintConfig = [
   {
     ignores: [
       ".next-desktop/**",
+      "src-tauri/resources/playwright-browsers/**",
       "src-tauri/resources/server/**",
       "src-tauri/target/**",
     ],
