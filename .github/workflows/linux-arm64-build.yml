@@ -1,0 +1,84 @@
+name: Build Linux ARM64 package
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Check out pi-agent-desktop
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu
+
+      - name: Install Linux desktop dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            libayatana-appindicator3-dev \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            librsvg2-dev
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Install Playwright system dependencies
+        run: sudo env "PATH=$PATH" node node_modules/playwright/cli.js install-deps chromium
+
+      - name: Prepare packaged desktop resources
+        run: npm run desktop:prepare
+
+      - name: Verify bundled ARM64 tools
+        run: |
+          test "$(uname -m)" = "aarch64"
+          test -x src-tauri/resources/node/node
+          test -x src-tauri/resources/node/playwright-cli
+          file src-tauri/resources/node/node | grep -q "ARM aarch64"
+          PLAYWRIGHT_BROWSERS_PATH=src-tauri/resources/playwright-browsers \
+            node node_modules/playwright/cli.js install --list
+
+      - name: Smoke test packaged Playwright CLI
+        run: |
+          src-tauri/resources/node/playwright-cli open about:blank
+          src-tauri/resources/node/playwright-cli snapshot
+          src-tauri/resources/node/playwright-cli close
+
+      - name: Test JavaScript and TypeScript
+        run: |
+          npm test
+          node_modules/.bin/tsc --noEmit
+          npm run lint
+
+      - name: Test desktop shell
+        run: cargo test --release --manifest-path src-tauri/Cargo.toml --lib --target aarch64-unknown-linux-gnu
+
+      - name: Build ARM64 Debian package
+        run: npx tauri build --target aarch64-unknown-linux-gnu --bundles deb
+
+      - name: Inspect Debian package
+        run: |
+          package_path="$(find src-tauri/target/aarch64-unknown-linux-gnu/release/bundle/deb -name '*.deb' -print -quit)"
+          test -n "$package_path"
+          test "$(dpkg-deb --field "$package_path" Architecture)" = "arm64"
+          dpkg-deb --info "$package_path"
+
+      - name: Upload Debian package
+        uses: actions/upload-artifact@v7
+        with:
+          name: pi-agent-linux-arm64
+          path: src-tauri/target/aarch64-unknown-linux-gnu/release/bundle/deb/*.deb
+          if-no-files-found: error
