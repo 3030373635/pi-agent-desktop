@@ -1,4 +1,4 @@
-import { access, chmod, copyFile, cp, mkdir, readFile, readdir, rm } from "node:fs/promises";
+import { access, chmod, copyFile, cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
@@ -13,6 +13,8 @@ const standaloneDir = join(desktopBuildDir, "standalone");
 const serverResourcesDir = join(rootDir, "src-tauri", "resources", "server");
 const serverHelperDir = join(rootDir, "src-tauri", "resources", "Pi Agent Server.app");
 const nodeResourcesDir = join(rootDir, "src-tauri", "resources", "node");
+const playwrightBrowsersDir = join(rootDir, "src-tauri", "resources", "playwright-browsers");
+const playwrightPackageNames = ["@playwright/cli", "playwright", "playwright-core"];
 
 async function runNextBuild() {
   const require = createRequire(import.meta.url);
@@ -76,6 +78,20 @@ async function assembleServer() {
     await cp(publicDir, join(serverResourcesDir, "public"), { recursive: true });
   } catch {
     // `public/` is optional in Next.js projects.
+  }
+}
+
+/**
+ * Copies the Playwright CLI and its runtime packages into the packaged server.
+ * The Next.js file tracer cannot discover packages invoked only through a shell command.
+ */
+async function assemblePlaywrightCli() {
+  if (process.platform !== "linux") return;
+
+  for (const packageName of playwrightPackageNames) {
+    const source = join(rootDir, "node_modules", packageName);
+    const destination = join(serverResourcesDir, "node_modules", packageName);
+    await cp(source, destination, { recursive: true, force: true });
   }
 }
 
@@ -236,8 +252,71 @@ async function bundleNodeRuntime() {
   return { binaryPath, triple };
 }
 
+/**
+ * Downloads the Chromium revision required by the pinned Playwright package.
+ * PLAYWRIGHT_BROWSERS_PATH keeps architecture-specific browser files inside Tauri resources.
+ */
+async function bundlePlaywrightBrowser() {
+  if (process.platform !== "linux") return null;
+
+  await rm(playwrightBrowsersDir, { recursive: true, force: true });
+  await mkdir(playwrightBrowsersDir, { recursive: true });
+
+  const playwrightCli = join(rootDir, "node_modules", "playwright", "cli.js");
+  await new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [playwrightCli, "install", "chromium"], {
+      cwd: rootDir,
+      env: {
+        ...process.env,
+        CI: "1",
+        PLAYWRIGHT_BROWSERS_PATH: playwrightBrowsersDir,
+        PLAYWRIGHT_SKIP_BROWSER_GC: "1",
+      },
+      stdio: "inherit",
+    });
+
+    child.once("error", reject);
+    child.once("exit", (code, signal) => {
+      if (code === 0) resolve();
+      else reject(new Error(`Playwright browser install failed (${signal ?? `exit ${code}`}).`));
+    });
+  });
+
+  return playwrightBrowsersDir;
+}
+
+/**
+ * Creates the Linux launcher exposed to Pi's shell through the bundled Node directory.
+ * The launcher resolves every path relative to itself so Debian installation prefixes are safe.
+ */
+async function writePlaywrightLauncher() {
+  if (process.platform !== "linux") return null;
+
+  const launcherPath = join(nodeResourcesDir, "playwright-cli");
+  const launcher = `#!/bin/sh
+set -eu
+
+PLAYWRIGHT_NODE_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+PLAYWRIGHT_RESOURCE_DIR="$(dirname -- "$PLAYWRIGHT_NODE_DIR")"
+
+export NO_UPDATE_NOTIFIER=1
+export PLAYWRIGHT_BROWSERS_PATH="$PLAYWRIGHT_RESOURCE_DIR/playwright-browsers"
+export PLAYWRIGHT_MCP_BROWSER=chromium
+export PLAYWRIGHT_SKIP_BROWSER_GC=1
+
+exec "$PLAYWRIGHT_NODE_DIR/node" \\
+  "$PLAYWRIGHT_RESOURCE_DIR/server/node_modules/@playwright/cli/playwright-cli.js" \\
+  "$@"
+`;
+
+  await writeFile(launcherPath, launcher, { mode: 0o755 });
+  await chmod(launcherPath, 0o755);
+  return launcherPath;
+}
+
 await runNextBuild();
 await assembleServer();
+await assemblePlaywrightCli();
 
 const deduped = await dedupeNestedPackages();
 if (deduped > 0) console.log(`Removed ${deduped} redundant nested package cop${deduped === 1 ? "y" : "ies"}`);
@@ -254,6 +333,12 @@ if (overlong.length > 0) {
 }
 
 const { binaryPath: nodeBinary, triple } = await bundleNodeRuntime();
+const playwrightBrowsers = await bundlePlaywrightBrowser();
+const playwrightLauncher = await writePlaywrightLauncher();
 
 console.log(`Desktop server staged at ${serverResourcesDir}`);
 console.log(`Node runtime staged at ${nodeBinary} (${triple})`);
+if (playwrightBrowsers && playwrightLauncher) {
+  console.log(`Playwright browsers staged at ${playwrightBrowsers}`);
+  console.log(`Playwright CLI staged at ${playwrightLauncher}`);
+}

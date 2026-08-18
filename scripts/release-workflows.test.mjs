@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -160,7 +160,7 @@ test("the manifest job only publishes when every platform succeeded", async () =
   assert.match(manifestJob, /--draft=false --latest/);
 });
 
-test("release workflow publishes Apple Silicon, Linux x64, and Windows x64 installers", async () => {
+test("release workflow publishes Apple Silicon, Linux x64, Linux ARM64, and Windows x64 installers", async () => {
   const workflow = await readFile(
     join(root, ".github", "workflows", "release.yml"),
     "utf8",
@@ -172,6 +172,8 @@ test("release workflow publishes Apple Silicon, Linux x64, and Windows x64 insta
   assert.match(workflow, /target: aarch64-apple-darwin/);
   assert.match(workflow, /runner: ubuntu-24\.04/);
   assert.match(workflow, /target: x86_64-unknown-linux-gnu/);
+  assert.match(workflow, /runner: ubuntu-24\.04-arm/);
+  assert.match(workflow, /target: aarch64-unknown-linux-gnu/);
   assert.match(workflow, /--bundles deb/);
   assert.match(workflow, /libwebkit2gtk-4\.1-dev/);
   assert.match(workflow, /libayatana-appindicator3-dev/);
@@ -182,6 +184,22 @@ test("release workflow publishes Apple Silicon, Linux x64, and Windows x64 insta
   assert.doesNotMatch(workflow, /macos-15-intel/);
   assert.match(workflow, /uploadUpdaterJson: true/);
   assert.match(workflow, /gh release edit "v\$version" --draft=false --latest/);
+});
+
+test("Linux ARM64 can build an unsigned deb without release credentials", async () => {
+  const workflowPath = join(root, ".github", "workflows", "linux-arm64-build.yml");
+  const workflowExists = await access(workflowPath).then(() => true, () => false);
+
+  assert.equal(workflowExists, true, "the Linux ARM64 validation workflow is missing");
+
+  const workflow = await readFile(workflowPath, "utf8");
+  assert.match(workflow, /runs-on: ubuntu-24\.04-arm/);
+  assert.match(workflow, /targets?: aarch64-unknown-linux-gnu/);
+  assert.match(workflow, /npm run desktop:prepare/);
+  assert.match(workflow, /playwright-cli open about:blank/);
+  assert.match(workflow, /--bundles deb/);
+  assert.match(workflow, /actions\/upload-artifact@v7/);
+  assert.doesNotMatch(workflow, /TAURI_SIGNING_PRIVATE_KEY|gh release|tauri-apps\/tauri-action/);
 });
 
 test("nothing reintroduces a literal homedir() into an fs call", async () => {
