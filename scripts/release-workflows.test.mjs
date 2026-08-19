@@ -188,16 +188,21 @@ test("release workflow publishes Apple Silicon, Linux x64, Linux ARM64, and Wind
 
 test("Linux ARM64 can build an unsigned deb without release credentials", async () => {
   const workflowPath = join(root, ".github", "workflows", "linux-arm64-build.yml");
+  const unsignedConfigPath = join(root, "src-tauri", "tauri.unsigned.conf.json");
   const workflowExists = await access(workflowPath).then(() => true, () => false);
+  const unsignedConfigExists = await access(unsignedConfigPath).then(() => true, () => false);
 
   assert.equal(workflowExists, true, "the Linux ARM64 validation workflow is missing");
+  assert.equal(unsignedConfigExists, true, "the unsigned Tauri configuration is missing");
 
   const workflow = await readFile(workflowPath, "utf8");
+  const unsignedConfig = JSON.parse(await readFile(unsignedConfigPath, "utf8"));
   assert.match(workflow, /runs-on: ubuntu-24\.04-arm/);
   assert.match(workflow, /targets?: aarch64-unknown-linux-gnu/);
   assert.match(workflow, /npm run desktop:prepare/);
   assert.match(workflow, /playwright-cli open about:blank/);
-  assert.match(workflow, /--bundles deb/);
+  assert.match(workflow, /--bundles deb --config src-tauri\/tauri\.unsigned\.conf\.json/);
+  assert.equal(unsignedConfig.bundle.createUpdaterArtifacts, false);
   assert.match(workflow, /actions\/upload-artifact@v7/);
   assert.doesNotMatch(workflow, /TAURI_SIGNING_PRIVATE_KEY|gh release|tauri-apps\/tauri-action/);
 });
