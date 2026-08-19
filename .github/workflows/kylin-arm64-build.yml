@@ -1,0 +1,97 @@
+name: Build Kylin ARM64 offline package
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Check out pi-agent-desktop
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Install Chromium smoke-test dependencies
+        run: sudo env "PATH=$PATH" node node_modules/playwright/cli.js install-deps chromium
+
+      - name: Prepare packaged server and offline tools
+        run: npm run desktop:prepare
+
+      - name: Test JavaScript and TypeScript
+        run: |
+          npm test
+          node_modules/.bin/tsc --noEmit
+          npm run lint
+
+      - name: Smoke test packaged Playwright CLI
+        run: |
+          src-tauri/resources/node/playwright-cli open about:blank
+          src-tauri/resources/node/playwright-cli snapshot
+          src-tauri/resources/node/playwright-cli close
+
+      - name: Build Kylin ARM64 Debian package
+        run: npm run kylin:package
+
+      - name: Inspect and extract Debian package
+        run: |
+          package_path="$(find src-tauri/target/kylin-arm64/deb -name '*.deb' -print -quit)"
+          test -n "$package_path"
+          test "$(dpkg-deb --field "$package_path" Architecture)" = "arm64"
+          test "$(dpkg-deb --field "$package_path" Depends)" = "libc6 (>= 2.28), libstdc++6, libgcc-s1"
+          mkdir -p "$RUNNER_TEMP/pi-agent-kylin-extracted"
+          dpkg-deb --extract "$package_path" "$RUNNER_TEMP/pi-agent-kylin-extracted"
+          dpkg-deb --info "$package_path"
+
+      - name: Verify extracted ARM64 executables and runtime libraries
+        run: |
+          extracted_root="$RUNNER_TEMP/pi-agent-kylin-extracted"
+          extracted_node="$extracted_root/opt/pi-agent/resources/node/node"
+          ldd "$extracted_root/opt/pi-agent/resources/node/node" | tee "$RUNNER_TEMP/pi-agent-node-ldd.txt"
+          ! grep -q "not found" "$RUNNER_TEMP/pi-agent-node-ldd.txt"
+          chromium_executable="$(find "$extracted_root/opt/pi-agent/resources/playwright-browsers" -path '*/chromium-*/chrome-linux/chrome' -print -quit)"
+          test -n "$chromium_executable"
+          test -x "$chromium_executable"
+          file "$chromium_executable" | grep -q "ARM aarch64"
+          file "$extracted_node" | grep -q "ARM aarch64"
+
+      - name: Smoke test extracted browser launcher
+        run: |
+          extracted_root="$RUNNER_TEMP/pi-agent-kylin-extracted"
+          smoke_root="$(mktemp -d)"
+          mkdir -p "$smoke_root/runtime" "$smoke_root/state" "$smoke_root/home" "$smoke_root/bin"
+          ln -s /usr/bin/true "$smoke_root/bin/xdg-open"
+          export XDG_RUNTIME_DIR="$smoke_root/runtime"
+          export XDG_STATE_HOME="$smoke_root/state"
+          export HOME="$smoke_root/home"
+          export PATH="$smoke_root/bin:$PATH"
+          extracted_node="$extracted_root/opt/pi-agent/resources/node/node"
+          "$extracted_node" "$extracted_root/opt/pi-agent/launcher/pi-agent-kylin.cjs" open
+          "$extracted_node" "$extracted_root/opt/pi-agent/launcher/pi-agent-kylin.cjs" status
+          "$extracted_node" "$extracted_root/opt/pi-agent/launcher/pi-agent-kylin.cjs" stop
+          ! "$extracted_node" "$extracted_root/opt/pi-agent/launcher/pi-agent-kylin.cjs" status
+          test ! -e "$XDG_RUNTIME_DIR/pi-agent/server.json"
+
+      - name: Smoke test extracted Playwright CLI
+        run: |
+          extracted_cli="$RUNNER_TEMP/pi-agent-kylin-extracted/opt/pi-agent/resources/node/playwright-cli"
+          "$extracted_cli" open about:blank
+          "$extracted_cli" snapshot
+          "$extracted_cli" close
+
+      - name: Upload Kylin Debian package
+        uses: actions/upload-artifact@v7
+        with:
+          name: pi-agent-kylin-arm64
+          path: src-tauri/target/kylin-arm64/deb/Pi-Agent_*_kylin_arm64.deb
+          if-no-files-found: error

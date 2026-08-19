@@ -207,6 +207,30 @@ test("Linux ARM64 can build an unsigned deb without release credentials", async 
   assert.doesNotMatch(workflow, /TAURI_SIGNING_PRIVATE_KEY|gh release|tauri-apps\/tauri-action/);
 });
 
+test("Kylin ARM64 builds a browser-shell deb without WebKitGTK", async () => {
+  const workflow = await readFile(
+    join(root, ".github", "workflows", "kylin-arm64-build.yml"),
+    "utf8",
+  );
+
+  assert.match(workflow, /runs-on: ubuntu-24\.04-arm/);
+  assert.match(workflow, /npm run desktop:prepare/);
+  assert.match(workflow, /npm run kylin:package/);
+  assert.match(workflow, /dpkg-deb --field.*Architecture/);
+  assert.match(workflow, /dpkg-deb --field.*Depends/);
+  assert.match(workflow, /dpkg-deb --extract/);
+  assert.match(workflow, /ldd .*resources\/node\/node/);
+  assert.match(workflow, /grep .*not found/);
+  assert.match(workflow, /chromium_executable=/);
+  assert.match(workflow, /test -x "\$chromium_executable"/);
+  assert.match(workflow, /file "\$chromium_executable".*ARM aarch64/);
+  assert.match(workflow, /playwright-cli open about:blank/);
+  assert.match(workflow, /pi-agent-kylin\.cjs"? status/);
+  assert.match(workflow, /pi-agent-kylin\.cjs"? stop/);
+  assert.match(workflow, /actions\/upload-artifact@v7/);
+  assert.doesNotMatch(workflow, /webkit|appindicator|fonts-/i);
+});
+
 test("nothing reintroduces a literal homedir() into an fs call", async () => {
   // This is what broke the Windows build for every release: @vercel/nft folds
   // homedir() at build time and globs the whole user profile, which dies on the

@@ -32,6 +32,7 @@ Builds are available from [GitHub Releases](https://github.com/abcwyc/pi-agent-d
 
 - Apple Silicon Mac: download the `aarch64.dmg`, open it, and drag the app into `Applications`. Official releases do not build for Intel Macs.
 - Linux x64: download the `.deb` package and install it with your distribution's package manager. A community-maintained Flatpak is also available at [flatpark.org](https://flatpark.org/apps/io.github.abcwyc.pi-agent-desktop/) — not an official release, but Flatpak works across most distributions and handles updates for you.
+- Kylin V10 SP1 ARM64 in an offline network: run the manual `Build Kylin ARM64 offline package` workflow and follow the [Kylin ARM64 offline installation guide](./docs/kylin-arm64-offline-install.md). This browser-shell package does not require WebKitGTK 4.1.
 
 - Windows x64: download the installer whose name ends in `x64-setup.exe` and run it. The installer pulls in Microsoft WebView2 when it is missing.
 
@@ -205,6 +206,7 @@ instrumentation.ts     Next.js server-side HTTP proxy initialization
 
 - [Ownership boundaries](./docs/ownership-boundaries.md) — the split with `pi-web` upstream, the rules for editing shared files, and how the automated sync decides
 - [Desktop updates and releases](./docs/desktop-updates.md)
+- [Kylin ARM64 offline installation](./docs/kylin-arm64-offline-install.md)
 - [Git worktrees](./docs/worktrees.md)
 - [Pi session and project architecture](./AGENTS.md)
 

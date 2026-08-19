@@ -36,6 +36,8 @@
     "desktop:dev": "node scripts/desktop-dev.mjs --config src-tauri/tauri.dev.conf.json",
     "desktop:prepare": "node scripts/prepare-desktop.mjs",
     "desktop:build": "npm run desktop:prepare && tauri build",
+    "kylin:package": "node scripts/build-kylin-deb.mjs",
+    "kylin:build": "npm run desktop:prepare && npm run kylin:package",
     "release:manifest": "node scripts/write-component-versions.mjs",
     "release:verify": "node scripts/verify-release-components.mjs",
     "drift": "node scripts/measure-fork-drift.mjs",
