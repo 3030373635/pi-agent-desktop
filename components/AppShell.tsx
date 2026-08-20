@@ -30,6 +30,7 @@ import { copyText } from "@/lib/clipboard";
 import { useDesktopConnection } from "@/lib/desktop-connection";
 import { isTauriDesktop, setCloseQuitsNative } from "@/lib/desktop-native";
 import { getFileName } from "@/lib/file-paths";
+import { getAppViewportHeightCss, getTranslucentColorCss } from "@/lib/browser-compat";
 import { buildAtMentionText, buildFileAtMentionsText, buildFileLineMentionText } from "@/lib/file-fuzzy";
 import { PRODUCT_NAME } from "@/lib/branding";
 import {
@@ -974,7 +975,7 @@ export function AppShell() {
         display: "flex",
         flexDirection: "column",
         width: "100%",
-        height: "var(--app-viewport-height, 100dvh)",
+        height: getAppViewportHeightCss(),
         paddingLeft: "env(safe-area-inset-left)",
         paddingRight: "env(safe-area-inset-right)",
         overflow: "hidden",
@@ -991,8 +992,8 @@ export function AppShell() {
             gap: 10,
             flexShrink: 0,
             padding: "7px 12px",
-            background: "color-mix(in srgb, var(--danger) 14%, var(--bg-panel))",
-            borderBottom: "1px solid color-mix(in srgb, var(--danger) 35%, var(--border))",
+            background: getTranslucentColorCss("danger", 0.14),
+            borderBottom: `1px solid ${getTranslucentColorCss("danger", 0.35)}`,
             color: "var(--text)",
             fontSize: 12,
             zIndex: 300,
@@ -1380,7 +1381,7 @@ export function AppShell() {
               top: topPanelPos.top,
               left: topPanelPos.left,
               width: topPanelPos.width,
-              maxHeight: `calc(100dvh - ${topPanelPos.top}px)`,
+              maxHeight: getAppViewportHeightCss(topPanelPos.top),
               overflowY: "auto",
               zIndex: 500,
             }}>

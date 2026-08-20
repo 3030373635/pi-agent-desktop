@@ -24,6 +24,7 @@ import {
 } from "@/lib/desktop-native";
 import type { ExtensionStatusItem } from "@/lib/types";
 import { ExtensionStatusBar } from "./ExtensionStatusBar";
+import { getTranslucentColorCss } from "@/lib/browser-compat";
 
 export interface AttachedImage {
   data: string;   // base64, no prefix
@@ -284,7 +285,7 @@ function QueuedMessageRow({ kind, label, text }: { kind: "steer" | "follow-up"; 
           fontFamily: "var(--font-mono)",
           padding: "1px 7px",
           borderRadius: 999,
-          border: `1px solid ${kind === "steer" ? "color-mix(in srgb, var(--accent) 45%, transparent)" : "var(--border)"}`,
+          border: `1px solid ${kind === "steer" ? "var(--accent-border)" : "var(--border)"}`,
           color: kind === "steer" ? "var(--accent)" : "var(--text-dim)",
         }}
       >
@@ -1308,7 +1309,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.background = "var(--bg-hover)";
-                    e.currentTarget.style.borderColor = "color-mix(in srgb, var(--accent) 45%, var(--border))";
+                    e.currentTarget.style.borderColor = "var(--accent-border)";
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.background = "transparent";
@@ -1595,7 +1596,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                                 color: "var(--text)",
                                 cursor: "pointer",
                                 textAlign: "left",
-                                boxShadow: active ? "0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent)" : "none",
+                                boxShadow: active ? "0 0 0 1px var(--focus-ring)" : "none",
                               }}
                             >
                               <span style={{
@@ -1751,7 +1752,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               background: "var(--bg)",
               border: `1px solid ${bashMode ? "var(--tool-bg)" : isStreaming && (onSteer || onFollowUp)
                 ? "rgba(234,179,8,0.4)"
-                : "color-mix(in srgb, var(--border) 70%, transparent)"}`,
+                : "var(--separator)"}`,
               borderRadius: 14,
               padding: "10px 10px 10px 14px",
               boxShadow: "0 1px 2px rgba(15,23,42,0.04), 0 8px 24px -12px rgba(15,23,42,0.10)",
@@ -2170,9 +2171,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 maxWidth: "calc(100vw - 32px)",
                 flexWrap: "nowrap",
                 justifyContent: "flex-end",
-                border: "1px solid color-mix(in srgb, var(--border) 72%, transparent)",
+                border: "1px solid var(--separator)",
                 borderRadius: 10,
-                background: "color-mix(in srgb, var(--bg-panel) 92%, var(--bg))",
+                background: "var(--bg-panel)",
                 boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
                 backdropFilter: "blur(10px)",
               } : null),
@@ -2365,7 +2366,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     padding: isMobile ? "0 6px" : "8px 12px",
                     width: isMobile ? "auto" : undefined,
                     height: 32,
-                    background: isCompacting ? "color-mix(in srgb, var(--danger) 8%, transparent)" : "none",
+                    background: isCompacting ? getTranslucentColorCss("danger", 0.08) : "none",
                     border: "none",
                     borderRadius: 9,
                     color: isCompacting ? "var(--danger)" : "var(--text-muted)",
@@ -2375,11 +2376,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   }}
                   onMouseEnter={(e) => {
                     if (isStreaming && !isCompacting) return;
-                    e.currentTarget.style.background = isCompacting ? "color-mix(in srgb, var(--danger) 16%, transparent)" : "var(--bg-hover)";
+                    e.currentTarget.style.background = isCompacting ? getTranslucentColorCss("danger", 0.16) : "var(--bg-hover)";
                     e.currentTarget.style.color = isCompacting ? "var(--danger)" : "var(--text)";
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.background = isCompacting ? "color-mix(in srgb, var(--danger) 8%, transparent)" : "none";
+                    e.currentTarget.style.background = isCompacting ? getTranslucentColorCss("danger", 0.08) : "none";
                     e.currentTarget.style.color = isCompacting ? "var(--danger)" : "var(--text-muted)";
                   }}
                    title={isCompacting ? t("chat.stopCompaction") : t("chat.compactContext")}
@@ -2405,8 +2406,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   display: "flex", alignItems: "center", gap: 6,
                   padding: "8px 14px",
                   height: 32,
-                  background: "color-mix(in srgb, var(--danger) 8%, transparent)",
-                  border: "1px solid color-mix(in srgb, var(--danger) 30%, transparent)",
+                  background: getTranslucentColorCss("danger", 0.08),
+                  border: `1px solid ${getTranslucentColorCss("danger", 0.3)}`,
                   borderRadius: 9,
                   color: "var(--danger)",
                   cursor: "pointer",
@@ -2414,8 +2415,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   whiteSpace: "nowrap", letterSpacing: "-0.01em",
                   transition: "background 0.12s",
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "color-mix(in srgb, var(--danger) 16%, transparent)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "color-mix(in srgb, var(--danger) 8%, transparent)"; }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = getTranslucentColorCss("danger", 0.16); }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = getTranslucentColorCss("danger", 0.08); }}
               >
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                   <rect x="1.5" y="1.5" width="7" height="7" rx="1.5" fill="currentColor" />
@@ -2490,7 +2491,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   marginLeft: 0,
                   background: "var(--bg-hover)",
                   border: "none",
-                  borderLeft: "1px solid color-mix(in srgb, var(--border) 72%, transparent)",
+                  borderLeft: "1px solid var(--separator)",
                   borderRadius: "0 9px 9px 0",
                   color: "var(--text)",
                   cursor: "pointer",

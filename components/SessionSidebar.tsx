@@ -13,6 +13,7 @@ import { isTauriDesktop } from "@/lib/desktop-updater";
 import { revealItemInDirNative } from "@/lib/desktop-native";
 import { getDesktopPlatform, type DesktopPlatform } from "@/lib/desktop-window";
 import { useWindowDrag } from "./desktop";
+import { getTranslucentColorCss } from "@/lib/browser-compat";
 
 function ToolbarIconButton({
   onClick,
@@ -927,7 +928,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                       if (wtConfirmRemove?.path === wt.path) {
                         const isForce = wtConfirmRemove.force;
                         return (
-                          <div key={wt.path} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", borderBottom: "1px solid var(--border)", background: "color-mix(in srgb, var(--danger) 6%, transparent)" }}>
+                          <div key={wt.path} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", borderBottom: "1px solid var(--border)", background: getTranslucentColorCss("danger", 0.06) }}>
                             <span style={{ flex: 1, fontSize: 11, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               {isForce ? t("sidebar.forceRemoveCheckout") : t("sidebar.confirmRemoveWorktree")}
                             </span>
@@ -1018,7 +1019,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, onNewSessio
                                 borderRadius: 5, flexShrink: 0,
                                 transition: "color 0.12s, background 0.12s",
                               }}
-                              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--danger)"; e.currentTarget.style.background = "color-mix(in srgb, var(--danger) 8%, transparent)"; }}
+                              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--danger)"; e.currentTarget.style.background = getTranslucentColorCss("danger", 0.08); }}
                               onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
                             >
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1776,7 +1777,7 @@ function SessionItem({
         paddingRight: 8,
         cursor: confirmDelete || renaming ? "default" : "pointer",
         background: confirmDelete
-          ? "color-mix(in srgb, var(--danger) 6%, transparent)"
+          ? getTranslucentColorCss("danger", 0.06)
           : isSelected ? "var(--bg-selected)" : (hovered || menuOpen) ? "var(--bg-hover)" : "transparent",
         borderLeft: confirmDelete
           ? "2px solid var(--danger)"

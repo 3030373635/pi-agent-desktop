@@ -33,6 +33,7 @@ import {
 } from "@/lib/desktop-native";
 import type { GitFileStatus, GitFileStatusKind, GitStatusResponse } from "@/lib/git-types";
 import { useI18n } from "@/hooks/useI18n";
+import { getTranslucentColorCss } from "@/lib/browser-compat";
 type Translate = ReturnType<typeof useI18n>["t"];
 
 interface FileEntry {
@@ -1277,7 +1278,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
         )}
 
         {pendingConflict && (
-          <div role="alert" style={{ padding: 7, border: "1px solid color-mix(in srgb, var(--warning) 55%, var(--border))", borderRadius: 4, background: "color-mix(in srgb, var(--warning) 9%, var(--bg-panel))" }}>
+          <div role="alert" style={{ padding: 7, border: `1px solid ${getTranslucentColorCss("warning", 0.55)}`, borderRadius: 4, background: getTranslucentColorCss("warning", 0.09) }}>
             <div style={{ fontSize: 11, color: "var(--text)", lineHeight: 1.35, overflowWrap: "anywhere" }}>
               {t("files.conflictSummary", { count: pendingConflict.conflicts.length, countSuffix: pendingConflict.conflicts.length === 1 ? "" : "s", files: pendingConflict.conflicts.join(", ") })}
             </div>

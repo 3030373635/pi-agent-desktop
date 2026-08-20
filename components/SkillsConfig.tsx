@@ -5,6 +5,7 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalDismiss } from "@/hooks/useModalDismiss";
 import { handleExternalLinkClick } from "@/lib/desktop-native";
+import { getAppViewportHeightCss } from "@/lib/browser-compat";
 import type {
   SkillInfo as Skill,
   SkillInstallScope,
@@ -931,8 +932,8 @@ export function SkillsConfig({
         style={{
           width: isMobile ? "calc(100vw - 16px)" : 860,
           maxWidth: "calc(100vw - 16px)",
-          height: isMobile ? "calc(100dvh - 16px)" : "78vh",
-          maxHeight: "calc(100dvh - 16px)",
+          height: isMobile ? getAppViewportHeightCss(16) : "78vh",
+          maxHeight: getAppViewportHeightCss(16),
           background: "var(--bg)",
           border: "1px solid var(--border)",
           borderRadius: 10,

@@ -3,7 +3,7 @@ import test from "node:test";
 import { createJiti } from "jiti";
 
 const jiti = createJiti(import.meta.url);
-const { shouldUseVisualViewportHeight } = await jiti.import("./useViewportHeight.ts");
+const { resolveViewportHeightValue, shouldUseVisualViewportHeight } = await jiti.import("./useViewportHeight.ts");
 
 test("uses the visual viewport for a focused editor when the keyboard shrinks it", () => {
   assert.equal(shouldUseVisualViewportHeight({
@@ -39,4 +39,34 @@ test("keeps the dynamic viewport height when the visual viewport is not reduced"
     viewportHeight: 844,
     viewportScale: 1,
   }), false);
+});
+
+test("falls back to the classic viewport height in Chrome 102", () => {
+  assert.equal(resolveViewportHeightValue({
+    hasFocusedEditable: false,
+    innerHeight: 900,
+    supportsDynamicViewport: false,
+    viewportHeight: 900,
+    viewportScale: 1,
+  }), "100vh");
+});
+
+test("uses the dynamic viewport height when the browser supports it", () => {
+  assert.equal(resolveViewportHeightValue({
+    hasFocusedEditable: false,
+    innerHeight: 900,
+    supportsDynamicViewport: true,
+    viewportHeight: 900,
+    viewportScale: 1,
+  }), "100dvh");
+});
+
+test("keeps the visual viewport pixel height above the browser unit choice", () => {
+  assert.equal(resolveViewportHeightValue({
+    hasFocusedEditable: true,
+    innerHeight: 900,
+    supportsDynamicViewport: false,
+    viewportHeight: 520,
+    viewportScale: 1,
+  }), "520px");
 });

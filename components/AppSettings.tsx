@@ -21,6 +21,7 @@ import {
 import { handleExternalLinkClick, openPathNative, quitAppNative, setCloseQuitsNative } from "@/lib/desktop-native";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
+import { getTranslucentColorCss } from "@/lib/browser-compat";
 
 const sectionCardStyle: CSSProperties = {
   padding: "13px 14px",
@@ -77,7 +78,7 @@ const metaChipStyle = (emphasized: boolean): CSSProperties => ({
   border: `1px solid ${emphasized ? "var(--accent)" : "var(--border)"}`,
   borderRadius: 7,
   background: emphasized
-    ? "color-mix(in srgb, var(--accent) 10%, transparent)"
+    ? getTranslucentColorCss("accent", 0.1)
     : "var(--bg)",
   color: emphasized ? "var(--accent)" : "var(--text-muted)",
   fontFamily: "var(--font-mono)",

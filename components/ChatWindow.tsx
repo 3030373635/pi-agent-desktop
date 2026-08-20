@@ -1127,7 +1127,7 @@ function NoticeShelf({ notices, floating = false, align = "left" }: { notices: N
               marginBottom: index === notices.length - 1 ? 0 : 6,
               overflow: "hidden",
               borderRadius: 10,
-              border: "1px solid color-mix(in srgb, var(--border) 70%, transparent)",
+              border: "1px solid var(--separator)",
               background: "var(--bg)",
               color: "var(--text-muted)",
               width: "fit-content",

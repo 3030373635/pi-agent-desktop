@@ -5,6 +5,7 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalDismiss } from "@/hooks/useModalDismiss";
 import { handleExternalLinkClick, openExternal } from "@/lib/desktop-native";
+import { getAppViewportHeightCss, getTranslucentColorCss } from "@/lib/browser-compat";
 import { ConfirmDangerButton } from "./ConfirmDangerButton";
 import type { ModelCatalogPreset, ModelCatalogRecommendation } from "@/lib/model-catalog";
 import type { DiscoveredModel } from "@/lib/model-discovery";
@@ -915,15 +916,15 @@ function ModelDetail({
                 height: 24,
                 padding: "0 8px",
                 border: `1px solid ${testState.phase === "error"
-                  ? "color-mix(in srgb, var(--danger) 40%, transparent)"
+                  ? getTranslucentColorCss("danger", 0.4)
                   : testState.phase === "success"
-                    ? "color-mix(in srgb, var(--success) 40%, transparent)"
+                    ? getTranslucentColorCss("success", 0.4)
                     : "var(--border)"}`,
                 borderRadius: 4,
                 background: testState.phase === "error"
-                  ? "color-mix(in srgb, var(--danger) 12%, var(--bg-panel))"
+                  ? getTranslucentColorCss("danger", 0.12)
                   : testState.phase === "success"
-                    ? "color-mix(in srgb, var(--success) 12%, var(--bg-panel))"
+                    ? getTranslucentColorCss("success", 0.12)
                     : "var(--bg-hover)",
                 color: "var(--text)",
                 fontSize: 11,
@@ -1872,7 +1873,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
     <>
     <div className="native-modal-backdrop" style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}
       onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
-      <div ref={panelRef} role="dialog" aria-modal="true" className="native-modal settings-modal models-settings-modal" style={{ position: "relative", width: isMobile ? "calc(100vw - 16px)" : 860, maxWidth: "calc(100vw - 16px)", height: isMobile ? "calc(100dvh - 16px)" : "auto", minHeight: isMobile ? undefined : 560, maxHeight: isMobile ? "calc(100dvh - 16px)" : "min(680px, calc(100dvh - 48px))", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden" }}>
+      <div ref={panelRef} role="dialog" aria-modal="true" className="native-modal settings-modal models-settings-modal" style={{ position: "relative", width: isMobile ? "calc(100vw - 16px)" : 860, maxWidth: "calc(100vw - 16px)", height: isMobile ? getAppViewportHeightCss(16) : "auto", minHeight: isMobile ? undefined : 560, maxHeight: isMobile ? getAppViewportHeightCss(16) : `min(680px, ${getAppViewportHeightCss(48)})`, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden" }}>
 
         {/* Header */}
         <div className="native-modal-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>

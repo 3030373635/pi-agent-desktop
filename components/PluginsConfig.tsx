@@ -8,6 +8,7 @@ import { isTauriDesktop, selectDirectoryNative } from "@/lib/desktop-native";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalDismiss } from "@/hooks/useModalDismiss";
 import { ConfirmDangerButton } from "./ConfirmDangerButton";
+import { getAppViewportHeightCss, getTranslucentColorCss } from "@/lib/browser-compat";
 
 type PluginScope = PluginPackageInfo["scope"];
 type PluginAction = "install" | "remove" | "update" | "disable" | "enable";
@@ -178,7 +179,7 @@ function ScopeTag({ scope }: { scope: PluginScope }) {
 function buttonStyle(disabled?: boolean, danger?: boolean): React.CSSProperties {
   return {
     padding: "6px 12px",
-    background: danger ? "color-mix(in srgb, var(--danger) 8%, transparent)" : "none",
+    background: danger ? getTranslucentColorCss("danger", 0.08) : "none",
     border: "1px solid var(--border)",
     borderRadius: 6,
     color: danger ? "var(--danger)" : "var(--text-muted)",
@@ -820,8 +821,8 @@ export function PluginsConfig({
         style={{
           width: isMobile ? "calc(100vw - 16px)" : 860,
           maxWidth: "calc(100vw - 16px)",
-          height: isMobile ? "calc(100dvh - 16px)" : "76vh",
-          maxHeight: "calc(100dvh - 16px)",
+          height: isMobile ? getAppViewportHeightCss(16) : "76vh",
+          maxHeight: getAppViewportHeightCss(16),
           background: "var(--bg)",
           border: "1px solid var(--border)",
           borderRadius: 8,
